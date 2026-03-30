@@ -226,7 +226,7 @@ Công thức chuyển đổi sang thang Mel:
 
 \textbf{Đầu ra:} 40 hệ số MFCC được tính, chỉ giữ 10 đầu tiên (theo Rusci et al.).
 Quy trình: MFCC(40) $(1, 40, 49)$ $\rightarrow$ narrow(10) $(1, 10, 49)$ $\rightarrow$
-transpose $(1, 49, 10)$ = (channel, $T$, features). Tensor đầu vào DSCNN: $(B, 1, 49, 10)$.
+transpose $(1, 47, 10)$ = (channel, $T$, features). Tensor đầu vào DSCNN: $(B, 1, 47, 10)$.
 
 
 \section{Mạng Tích chập Phân tách theo Chiều sâu (DSCNN)}

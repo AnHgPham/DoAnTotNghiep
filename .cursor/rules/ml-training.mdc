@@ -9,13 +9,14 @@ alwaysApply: false
 ## Model Architecture
 
 - DSCNN-L: 276 channels, 1 initial conv + 5 DS blocks, embedding_dim=276
-- DS blocks: DepthwiseConv -> BatchNorm -> ReLU -> PointwiseConv -> BatchNorm -> ReLU
-- Last DS block (Block 5): DW still uses BN+ReLU, only post-PW uses LayerNorm(elementwise_affine=False)
+- All padding via nn.ZeroPad2d (asymmetric), Conv2d padding=0, bias=True
+- DS blocks 1-4: DW -> BN -> ReLU -> PW -> BN -> ReLU
+- DS Block 5: DW -> BN -> ReLU -> PW -> LayerNorm([C,H,W], elementwise_affine=False)
 - Initial conv: Conv2d(1, 276, kernel=(10,4), stride=(2,1))
 - DS Block 1 stride=(2,2), DS Blocks 2-5 stride=(1,1)
 - Final layers: AvgPool -> Flatten -> output (B, 276). NO Linear projection.
 - L2-normalization applied EXTERNALLY (F.normalize in ReprModel wrapper)
-- DSCNN-S (64ch, 22K params): optional for ablation only
+- DSCNN-S (64ch, 4 DS blocks, initial stride=(2,2)): optional for ablation only
 
 ## Training Protocol
 

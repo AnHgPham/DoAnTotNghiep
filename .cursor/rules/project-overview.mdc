@@ -17,8 +17,8 @@ This is a graduation thesis project building a Few-Shot Open-Set Keyword Spottin
 ## Key Parameters
 
 - Audio: 16kHz sample rate, 1-second windows, WAV format
-- MFCC: 40 computed, 10 used (narrow first 10 + transpose), 40ms window, 20ms stride
-- Input to DSCNN: (B, 1, 49, 10) = (batch, channel, T_frames, n_features)
+- MFCC: 40 computed, 10 used (narrow first 10 + transpose), n_fft=1024, center=False, mel_scale='slaney', norm='slaney'
+- Input to DSCNN: (B, 1, 47, 10) = (batch, channel, T_frames, n_features). T=47 with n_fft=1024
 - Training: Episodic with Triplet Loss, margin=0.5, Adam lr=0.001, StepLR(step_size=20, gamma=0.5)
 - Noise augmentation: DEMAND, prob=0.95, fixed SNR=5dB
 - Datasets: GSC v2 (test), MSWC English (train), DEMAND (noise augmentation)

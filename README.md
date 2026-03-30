@@ -57,7 +57,7 @@ pytest tests/ -v
 ## Architecture
 
 - **Encoder**: DSCNN-L (276 channels, 5 DS blocks, embedding_dim=276)
-- **Features**: MFCC (40 computed, 10 used) -> input shape (B, 1, 49, 10)
+- **Features**: MFCC (40 computed, 10 used, n_fft=1024, center=False) -> input shape (B, 1, 47, 10)
 - **Training**: Triplet Loss, episodic batching, StepLR(step_size=20, gamma=0.5)
 - **Classification**: Direct L2 distance with acceptance radius threshold
 - **Datasets**: GSC v2 (eval), MSWC English (train), DEMAND (noise)

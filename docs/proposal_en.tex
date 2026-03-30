@@ -273,7 +273,7 @@ where $\beta = \sqrt{1/4F}$ if $k=0$, else $\beta = \sqrt{1/2F}$.
 
 \textbf{In our system:} 40 MFCC coefficients are computed with 40ms window and 20ms stride.
 Following Rusci et al., only the first 10 coefficients are retained via \texttt{torch.narrow},
-and the result is transposed to produce shape $(B, 1, 49, 10)$ = (batch, channel, $T$, features)
+and the result is transposed to produce shape $(B, 1, 47, 10)$ = (batch, channel, $T$, features)
 for 1-second audio at 16kHz sampling rate.
 
 
@@ -678,7 +678,7 @@ and applies the open-set decision rule (\cref{eq:direct_classify}).
 \Require Audio sample $x_q$, prototypes $\{c_k\}_{k=1}^N$, threshold $\gamma$
 \Ensure Predicted keyword or ``unknown''
 \State $\text{mfcc} \gets \text{MFCCExtract}(x_q)$
-    \Comment{10 features, shape $(B, 1, 49, 10)$}
+    \Comment{10 features, shape $(B, 1, 47, 10)$}
 \State $e_q \gets f_\theta(\text{mfcc})$
     \Comment{DSCNN embedding, L2-normalized}
 \For{$k = 1$ to $N$}

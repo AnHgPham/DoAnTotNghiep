@@ -11,7 +11,7 @@ This directory contains the neural network architectures: DSCNN encoder and Prot
 - Last DS block (Block 5): DW still uses BN+ReLU, only post-PW uses LayerNorm(elementwise_affine=False)
 - L2-normalization is applied OUTSIDE the model (in ReprModel / training wrapper via `F.normalize`)
 - Three feature extraction modes: CONV (raw conv output), RELU (after ReLU), NORM (after L2-norm externally)
-- Input shape: `(batch, 1, T, n_features)` = `(B, 1, 49, 10)` -- MFCC after narrow(10) + transpose
+- Input shape: `(batch, 1, T, n_features)` = `(B, 1, 47, 10)` -- MFCC after narrow(10) + transpose. T=47 with n_fft=1024, center=False
 - Output shape: `(batch, embedding_dim)` where embedding_dim=276 for DSCNN-L
 
 ```python
@@ -23,7 +23,7 @@ class DSCNN(nn.Module):
         # DSCNN-S: self.embedding_dim = 64
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Input: (B, 1, 49, 10). Returns: (B, 276) for DSCNN-L.
+        # Input: (B, 1, 47, 10). Returns: (B, 276) for DSCNN-L.
         # L2-norm is NOT applied inside forward() -- caller applies F.normalize.
 ```
 
@@ -40,12 +40,12 @@ Padding: ALL convolutions use padding=0. Padding is applied via nn.ZeroPad2d BEF
 Padding is asymmetric, computed dynamically to achieve "SAME" output (ceil(input/stride)).
 All Conv2d use bias=True (default).
 
-Shape propagation (input 49x10):
-- Init: (49,10) -> pad -> Conv s(2,1) -> (25,10)
-- DS1:  (25,10) -> pad -> DW s(2,2) -> (13,5) -> PW -> (13,5)
-- DS2-5: (13,5) -> pad -> DW s(1,1) -> (13,5) -> PW -> (13,5)
-- LayerNorm on Block 5: nn.LayerNorm([276, 13, 5])
-- AvgPool(13,5) -> (1,1) -> Flatten -> (276,)
+Shape propagation (input 47x10):
+- Init: (47,10) -> pad -> Conv k(10,4) s(2,1) -> (24,10)
+- DS1:  (24,10) -> pad -> DW k(3,3) s(2,2) -> (12,5) -> PW -> (12,5)
+- DS2-5: (12,5) -> pad -> DW k(3,3) s(1,1) -> (12,5) -> PW -> (12,5)
+- LayerNorm on Block 5: nn.LayerNorm([276, 12, 5])
+- AvgPool(12,5) -> (1,1) -> Flatten -> (276,)
 
 DSCNN-S architecture (optional, for ablation only):
 - 64 channels, 4 DS blocks, embedding_dim=64
@@ -76,20 +76,20 @@ def train_one_epoch(encoder, dataloader, optimizer, loss_fn) -> dict:
 ```python
 def test_dscnn_l_output_shape():
     model = DSCNN(model_size="L", feature_mode="CONV")
-    x = torch.randn(4, 1, 49, 10)  # (batch, channel, T, n_features)
+    x = torch.randn(4, 1, 47, 10)  # (batch, channel, T, n_features)
     out = model(x)
     assert out.shape == (4, 276)  # embedding_dim=276 for DSCNN-L
 
 def test_dscnn_l_l2_norm_external():
     model = DSCNN(model_size="L", feature_mode="NORM")
-    x = torch.randn(4, 1, 49, 10)
+    x = torch.randn(4, 1, 47, 10)
     out = model(x)  # raw output, not yet L2-normalized
     out_normed = F.normalize(out, p=2, dim=-1)  # L2-norm applied externally
     assert torch.allclose(out_normed.norm(dim=-1), torch.ones(4), atol=1e-5)
 
 def test_dscnn_s_output_shape():
     model = DSCNN(model_size="S", feature_mode="CONV")
-    x = torch.randn(4, 1, 49, 10)
+    x = torch.randn(4, 1, 47, 10)
     out = model(x)
     assert out.shape == (4, 64)  # embedding_dim=64 for DSCNN-S
 

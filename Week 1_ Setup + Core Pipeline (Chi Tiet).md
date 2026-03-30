@@ -1,5 +1,5 @@
 # Week 1: Setup + Core Pipeline
-Muc tieu: Tu zero den pipeline `WAV -> MFCC -> DSCNN-L -> embedding (1,276)` chay duoc cho 1 file.
+Muc tieu: Tu zero den pipeline `WAV -> MFCC(47,10) -> DSCNN-L -> embedding (1,276)` chay duoc cho 1 file.
 ## Trang thai hien tai
 * Co: 9 `.cursor/rules/*.mdc`, 7 `src/*/AGENTS.md`, master plan (`Untitled-1.md`), thesis PDF
 * Chua co: bat ky file Python nao, `requirements.txt`, `configs/`, `README.md`, `__init__.py`
@@ -97,14 +97,14 @@ class MFCCExtractor:
         # Pad zeros right neu < target_length
         # Truncate right neu > target_length
     def extract(self, waveform: torch.Tensor) -> torch.Tensor:
-        # Input: (1, T) -> pad/trim -> MFCC(40) -> narrow(10) -> .mT -> (1, 49, 10)
+        # Input: (1, T) -> pad/trim -> MFCC(40) -> narrow(10) -> .mT -> (1, 47, 10)
     def extract_batch(self, waveforms: torch.Tensor) -> torch.Tensor:
-        # Input: (B, 1, T) -> extract tung cai -> stack -> (B, 1, 49, 10)
+        # Input: (B, 1, T) -> extract tung cai -> stack -> (B, 1, 47, 10)
 ```
 Preprocessing flow chinh xac:
-1. `self.mfcc_transform(waveform)` -> `(1, 40, 49)` (voi center=False)
-2. `.narrow(dim=-2, start=0, length=self.num_features)` -> `(1, 10, 49)`
-3. `.mT` -> `(1, 49, 10)`
+1. `self.mfcc_transform(waveform)` -> `(1, 40, 47)` (voi n_fft=1024, center=False)
+2. `.narrow(dim=-2, start=0, length=self.num_features)` -> `(1, 10, 47)`
+3. `.mT` -> `(1, 47, 10)`
 Chi tiet quan trong:
 * `center=False` trong melkwargs (Rusci dung `center=False`)
 * mel_scale va norm: dung default cua torchaudio (torchaudio mac dinh `mel_scale='htk'`, Rusci dung `'slaney'` voi `norm='slaney'` — can kiem tra lai khi implement xem `torchaudio.transforms.MFCC` co ho tro `mel_scale` va `norm` khong, co the can dung `MelSpectrogram` rieng)
@@ -112,10 +112,10 @@ Chi tiet quan trong:
 * `extract_batch` co the dung vong for hoac vectorize
 ### Unit tests cho MFCC
 File: `tests/test_mfcc.py`
-* `test_mfcc_shape`: input `(1, 16000)` -> output `(1, 49, 10)`
-* `test_mfcc_short_audio`: input `(1, 8000)` -> output `(1, 49, 10)` (auto pad)
-* `test_mfcc_long_audio`: input `(1, 24000)` -> output `(1, 49, 10)` (auto truncate)
-* `test_mfcc_batch`: input `(4, 1, 16000)` -> output `(4, 1, 49, 10)`
+* `test_mfcc_shape`: input `(1, 16000)` -> output `(1, 47, 10)`
+* `test_mfcc_short_audio`: input `(1, 8000)` -> output `(1, 47, 10)` (auto pad)
+* `test_mfcc_long_audio`: input `(1, 24000)` -> output `(1, 47, 10)` (auto truncate)
+* `test_mfcc_batch`: input `(4, 1, 16000)` -> output `(4, 1, 47, 10)`
 * `test_mfcc_num_features`: output last dim = 10
 * `test_mfcc_deterministic`: 2 lan extract cung input -> cung output
 ## Day 3: NoiseAugmenter (`src/features/augmentation.py`)
@@ -182,14 +182,14 @@ class DSCNN(nn.Module):
         # AvgPool global
         # self.embedding_dim = channels (276 or 64)
     def forward(self, x):
-        # x: (B, 1, 49, 10)
+        # x: (B, 1, 47, 10)
         # Initial conv -> DS blocks -> AvgPool -> Flatten -> (B, 276)
         # L2-norm NOT applied here
 ```
 DSCNN-L architecture chi tiet:
 * Initial Conv2d(1, 276, kernel_size=(10,4), stride=(2,1), padding=SAME equiv) + BN + ReLU
     * Padding can tinh: `padding=((10-1)//2, (4-1)//2)` = `(4, 1)` hoac theo Rusci `(kernel-1)//2`
-    * Kiem tra output shape sau initial conv: tu (B,1,49,10) -> cac dim giam theo stride
+    * Kiem tra output shape sau initial conv: tu (B,1,47,10) -> cac dim giam theo stride
 * DS Block 1: stride=(2,2) — spatial downsampling
 * DS Blocks 2-5: stride=(1,1) — giu nguyen spatial size
 * Block 5 khac biet: sau PW dung `LayerNorm(elementwise_affine=False)` thay vi BN+ReLU
@@ -212,8 +212,8 @@ Feature mode:
 * Ca 3 mode deu return raw output tu model, su khac biet nam o cach training/inference wrapper su dung
 ### Unit tests cho DSCNN
 File: `tests/test_dscnn.py`
-* `test_dscnn_l_output_shape`: input (4,1,49,10) -> output (4,276)
-* `test_dscnn_s_output_shape`: input (4,1,49,10) -> output (4,64)
+* `test_dscnn_l_output_shape`: input (4,1,47,10) -> output (4,276)
+* `test_dscnn_s_output_shape`: input (4,1,47,10) -> output (4,64)
 * `test_dscnn_l_l2_norm_external`: F.normalize(output) co norm=1
 * `test_dscnn_l_param_count`: in ra param count de verify (khong assert cu the, chi log)
 * `test_dscnn_forward_backward`: chay forward + backward, dam bao gradients khong None
@@ -228,9 +228,9 @@ def test_full_pipeline():
     # 2. Extract MFCC
     extractor = MFCCExtractor()
     mfcc = extractor.extract(wav)
-    assert mfcc.shape == (1, 49, 10)
+    assert mfcc.shape == (1, 47, 10)
     # 3. Add batch dim cho DSCNN
-    mfcc_batch = mfcc.unsqueeze(0)  # (1, 1, 49, 10)
+    mfcc_batch = mfcc.unsqueeze(0)  # (1, 1, 47, 10)
     # 4. Chay DSCNN
     model = DSCNN(model_size='L')
     embedding = model(mfcc_batch)
@@ -241,7 +241,7 @@ def test_full_pipeline():
 ```
 ### Milestone criteria
 * `pytest tests/` passes tat ca tests
-* Pipeline `WAV (1,16000) -> MFCC (1,49,10) -> DSCNN-L (1,276) -> L2-norm (1,276)` chay thanh cong
+* Pipeline `WAV (1,16000) -> MFCC (1,47,10) -> DSCNN-L (1,276) -> L2-norm (1,276)` chay thanh cong
 * Data download scripts ton tai va chay duoc (it nhat GSC script)
 * `configs/default.yaml` co day du hyperparameters
 * Tat ca `__init__.py` da tao

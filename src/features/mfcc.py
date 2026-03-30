@@ -1,6 +1,6 @@
 """MFCC feature extraction following Rusci et al. preprocessing pipeline.
 
-Flow: waveform -> pad/trim -> MFCC(40) -> narrow(10) -> transpose -> (1, 49, 10)
+Flow: waveform -> pad/trim -> MFCC(40) -> narrow(10) -> transpose -> (1, 47, 10)
 """
 
 import torch
@@ -42,7 +42,7 @@ class MFCCExtractor:
             n_mfcc=n_mfcc,
             log_mels=False,
             melkwargs={
-                "n_fft": win_length,
+                "n_fft": 1024,  # next_power_of_2(win_length=640) per Rusci
                 "win_length": win_length,
                 "hop_length": hop_length,
                 "n_mels": 40,
@@ -83,7 +83,7 @@ class MFCCExtractor:
 
         Returns:
             (1, T_frames, num_features) tensor.
-            For 1-sec audio: (1, 49, 10).
+            For 1-sec audio: (1, 47, 10).
         """
         waveform = self._pad_or_trim(waveform)
         mfcc = self.mfcc_transform(waveform)  # (1, n_mfcc, T_frames)
@@ -99,7 +99,7 @@ class MFCCExtractor:
 
         Returns:
             (B, 1, T_frames, num_features) tensor.
-            For 1-sec audio: (B, 1, 49, 10).
+            For 1-sec audio: (B, 1, 47, 10).
         """
         batch_size = waveforms.shape[0]
         results = []

@@ -9,7 +9,7 @@ todos:
     content: "[CORE] Download GSC v2 + MSWC English (top 500 for training + 263 for eval = 763+ words) + DEMAND noise"
     status: pending
   - id: mfcc
-    content: "[CORE] src/features/mfcc.py: MFCCExtractor (40 computed -> narrow 10 -> transpose, output B,1,49,10)"
+    content: "[CORE] src/features/mfcc.py: MFCCExtractor (40 computed -> narrow 10 -> transpose, output B,1,47,10)"
     status: pending
   - id: augmentation
     content: "[CORE] src/features/augmentation.py: NoiseAugmenter (DEMAND, p=0.95, fixed SNR=5dB)"
@@ -54,7 +54,7 @@ isProject: false
 
 **Co so khoa hoc**: Luan van "Enhanced Evaluation Protocols for Few-Shot Open-Set KWS Systems" (Phan Thanh Binh, USTH 2025), xay tren bai bao cua Rusci et al. (2023).
 
-**Code tham khao**: [mrusci/ondevice-fewshot-kws](https://github.com/mrusci/ondevice-fewshot-kws)
+**Code tham khao**: [mrusci/ondevice-learning-kws](https://github.com/mrusci/ondevice-learning-kws)
 
 **Dong gop cot loi** (cau tra loi cho hoi dong khi hoi "Dong gop cua em la gi?"):
 
@@ -200,7 +200,7 @@ Cursor tu dong load rules khi ban lam viec voi files tuong ung.
 
 - Python 3.10+, PyTorch 2.0+, type hints, Google-style docstrings
 - Audio: 16kHz, 1-second, WAV | MFCC: 40 computed, 10 used (narrow + transpose), 40ms/20ms
-- DSCNN-L: 276ch, 5 DS blocks, embedding_dim=276 | Input: (B,1,49,10)
+- DSCNN-L: 276ch, 5 DS blocks, embedding_dim=276 | Input: (B,1,47,10)
 - Training: Triplet Loss, margin=0.5, Adam lr=0.001, StepLR(step_size=20, gamma=0.5)
 - Noise: DEMAND, p=0.95, fixed SNR=5dB
 - Datasets: GSC v2 (test), MSWC English (train), DEMAND (noise)
@@ -219,8 +219,8 @@ Cursor tu dong load rules khi ban lam viec voi files tuong ung.
 #### `audio-processing.mdc` -- Khi lam viec voi `src/features/`, `src/streaming/`
 
 - 16kHz mono, pad/truncate to 1 second, WAV format
-- MFCC: compute 40 -> narrow first 10 -> transpose -> (B, 1, 49, 10)
-- Flow: MFCC(40) `(1,40,49)` -> narrow(10) `(1,10,49)` -> .mT `(1,49,10)`
+- MFCC: compute 40 -> narrow first 10 -> transpose -> (B, 1, 47, 10)
+- Flow: MFCC(40) `(1,40,47)` -> narrow(10) `(1,10,47)` -> .mT `(1,47,10)`. T=47 with n_fft=1024, center=False
 - Noise: DEMAND, p=0.95, fixed SNR=5dB
 - Streaming: VAD chunk 512 samples (32ms), sliding window 1s/0.5s, ring buffer
 
@@ -275,7 +275,7 @@ Moi AGENTS.md cung cap: **API interface day du**, **error handling**, **test cas
 class DSCNN(nn.Module):
     def __init__(self, model_size: str = "L", feature_mode: str = "NORM"): ...
     def forward(self, x: torch.Tensor) -> torch.Tensor: ...
-    # Input: (B, 1, 49, 10) = (batch, channel, T, n_features)
+    # Input: (B, 1, 47, 10) = (batch, channel, T, n_features)
     # Output: (B, 276) for DSCNN-L | L2-norm applied externally
 
 # prototypical.py
@@ -293,8 +293,8 @@ def train_one_epoch(encoder, dataloader, optimizer, loss_fn) -> dict: ...
 class MFCCExtractor:
     def __init__(self, n_mfcc=40, num_features=10, sample_rate=16000,
                  win_length_ms=40, hop_length_ms=20): ...
-    def extract(self, waveform: torch.Tensor) -> torch.Tensor: ...      # (1,T) -> (1,49,10)
-    def extract_batch(self, waveforms: torch.Tensor) -> torch.Tensor: ... # (B,1,T) -> (B,1,49,10)
+    def extract(self, waveform: torch.Tensor) -> torch.Tensor: ...      # (1,T) -> (1,47,10)
+    def extract_batch(self, waveforms: torch.Tensor) -> torch.Tensor: ... # (B,1,T) -> (B,1,47,10)
     # Flow: MFCC(40) -> narrow(10) -> transpose -> (channel, T, n_features)
 
 # augmentation.py
@@ -398,8 +398,8 @@ def settings_tab() -> gr.Tab: ...     # Threshold, denoising, shot count, speake
 
 - Compute **40** Mel coefficients, keep only first **10** (via `torch.narrow`)
 - Window: **40ms** (640 samples) | Hop: **20ms** (320 samples)
-- Preprocessing flow: MFCC(40) `(1,40,49)` -> narrow(10) `(1,10,49)` -> transpose `(1,49,10)`
-- Final output: **(1, 49, 10)** = (channel, T_frames, n_features) cho 1-second audio
+- Preprocessing flow: MFCC(40) `(1,40,47)` -> narrow(10) `(1,10,47)` -> transpose `(1,47,10)`. T=47 with n_fft=1024
+- Final output: **(1, 47, 10)** = (channel, T_frames, n_features) cho 1-second audio
 
 ### DSCNN-L (theo Rusci et al. `model_size_info_DSCNNL`)
 
@@ -411,7 +411,7 @@ def settings_tab() -> gr.Tab: ...     # Threshold, denoising, shot count, speake
 - Final: AvgPool -> Flatten -> output **(B, 276)** -- **KHONG co Linear projection**
 - L2-norm applied EXTERNALLY: `F.normalize(embedding, p=2, dim=-1)` trong ReprModel
 - 3 modes: CONV, RELU, **NORM** (tot nhat, L2-normalized externally)
-- Input: **(B, 1, 49, 10)** = (batch, channel, T, n_features) -- khop MFCCExtractor output
+- Input: **(B, 1, 47, 10)** = (batch, channel, T, n_features) -- khop MFCCExtractor output
 - Output: **(B, 276)** embedding
 
 ### Training
@@ -525,7 +525,7 @@ Neu bi tre tien do, cat theo thu tu tu duoi len:
 - Implement `src/features/mfcc.py` (MFCCExtractor: compute 40 -> narrow 10 -> transpose)
 - Implement `src/features/augmentation.py` (NoiseAugmenter, fixed SNR=5dB)
 - Implement `src/models/dscnn.py` (DSCNN-L: 276ch, 5 DS blocks, embedding=276)
-- Viet unit tests: MFCC shape (1,49,10), DSCNN output shape (B,276), L2 normalization external
+- Viet unit tests: MFCC shape (1,47,10), DSCNN output shape (B,276), L2 normalization external
 - **Milestone**: Co the chay `mfcc -> dscnn -> embedding` cho 1 file WAV, output shape (1,276)
 
 **Tuan 2: Training + Classifier** (todos: training, classifier)

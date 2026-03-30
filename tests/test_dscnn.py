@@ -8,21 +8,21 @@ from src.models.dscnn import DSCNN
 
 def test_dscnn_l_output_shape():
     model = DSCNN(model_size="L", feature_mode="CONV")
-    x = torch.randn(4, 1, 49, 10)
+    x = torch.randn(4, 1, 47, 10)
     out = model(x)
     assert out.shape == (4, 276)
 
 
 def test_dscnn_s_output_shape():
     model = DSCNN(model_size="S", feature_mode="CONV")
-    x = torch.randn(4, 1, 49, 10)
+    x = torch.randn(4, 1, 47, 10)
     out = model(x)
     assert out.shape == (4, 64)
 
 
 def test_dscnn_l_l2_norm_external():
     model = DSCNN(model_size="L", feature_mode="NORM")
-    x = torch.randn(4, 1, 49, 10)
+    x = torch.randn(4, 1, 47, 10)
     out = model(x)
     out_normed = F.normalize(out, p=2, dim=-1)
     norms = out_normed.norm(dim=-1)
@@ -45,7 +45,7 @@ def test_dscnn_s_param_count():
 
 def test_dscnn_forward_backward():
     model = DSCNN(model_size="L")
-    x = torch.randn(2, 1, 49, 10, requires_grad=True)
+    x = torch.randn(2, 1, 47, 10, requires_grad=True)
     out = model(x)
     loss = out.sum()
     loss.backward()
@@ -58,7 +58,7 @@ def test_dscnn_forward_backward():
 def test_dscnn_feature_modes():
     for mode in ["CONV", "RELU", "NORM"]:
         model = DSCNN(model_size="L", feature_mode=mode)
-        x = torch.randn(2, 1, 49, 10)
+        x = torch.randn(2, 1, 47, 10)
         out = model(x)
         assert out.shape == (2, 276)
 
@@ -80,6 +80,6 @@ def test_dscnn_embedding_dim():
 
 def test_dscnn_single_sample():
     model = DSCNN(model_size="L")
-    x = torch.randn(1, 1, 49, 10)
+    x = torch.randn(1, 1, 47, 10)
     out = model(x)
     assert out.shape == (1, 276)

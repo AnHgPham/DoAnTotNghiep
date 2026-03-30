@@ -21,32 +21,35 @@ alwaysApply: false
 - Use `torchaudio.transforms.MFCC` as primary implementation
 
 Preprocessing flow (matches Rusci et al. `preprocessing.py`):
-1. MFCC(n_mfcc=40): `(1, 40, 49)`
-2. narrow(dim=-2, start=0, length=10): `(1, 10, 49)` -- discard higher-order coefficients
-3. transpose `.mT`: `(1, 49, 10)` = `(channel, T, n_features)`
+1. MFCC(n_mfcc=40, n_fft=1024): `(1, 40, 47)` -- T=47 with n_fft=1024, center=False
+2. narrow(dim=-2, start=0, length=10): `(1, 10, 47)` -- discard higher-order coefficients
+3. transpose `.mT`: `(1, 47, 10)` = `(channel, T, n_features)`
 
 Shape convention (consistent across entire project):
-- torchaudio MFCC raw output: `(channel, n_mfcc, T)` = `(1, 40, ~49)`
-- After narrow(10): `(1, 10, 49)`
-- After transpose: `(1, 49, 10)` = `(channel, T_frames, n_features)`
-- MFCCExtractor output: `(batch, 1, T, n_features)` = `(B, 1, 49, 10)` with batch dim
-- DSCNN input: `(batch, 1, T, n_features)` = `(B, 1, 49, 10)` -- SAME as MFCCExtractor output
+- torchaudio MFCC raw output: `(channel, n_mfcc, T)` = `(1, 40, 47)`
+- After narrow(10): `(1, 10, 47)`
+- After transpose: `(1, 47, 10)` = `(channel, T_frames, n_features)`
+- MFCCExtractor output: `(batch, 1, T, n_features)` = `(B, 1, 47, 10)` with batch dim
+- DSCNN input: `(batch, 1, T, n_features)` = `(B, 1, 47, 10)` -- SAME as MFCCExtractor output
 
 ```python
 mfcc_transform = torchaudio.transforms.MFCC(
     sample_rate=16000,
     n_mfcc=40,
+    log_mels=False,
     melkwargs={
-        "n_fft": 640,           # = win_length (NOT 1024) to get exactly 49 frames
+        "n_fft": 1024,          # = next_power_of_2(win_length=640) per Rusci
         "win_length": 640,
         "hop_length": 320,
         "n_mels": 40,
+        "power": 2,
         "center": False,        # REQUIRED -- Rusci uses center=False
+        "pad_mode": "constant",
         "mel_scale": "slaney",  # Rusci uses slaney scale + norm
         "norm": "slaney",
     }
 )
-# output: (1, 40, 49) -> narrow(10) -> (1, 10, 49) -> .mT -> (1, 49, 10) -> batch -> (B, 1, 49, 10)
+# output: (1, 40, 47) -> narrow(10) -> (1, 10, 47) -> .mT -> (1, 47, 10) -> batch -> (B, 1, 47, 10)
 ```
 
 ## Noise Augmentation

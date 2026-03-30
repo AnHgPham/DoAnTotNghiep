@@ -1,6 +1,6 @@
 """End-to-end pipeline integration test.
 
-Tests: WAV (1,16000) -> MFCC (1,49,10) -> DSCNN-L (1,276) -> L2-norm (1,276)
+Tests: WAV (1,16000) -> MFCC (1,47,10) -> DSCNN-L (1,276) -> L2-norm (1,276)
 """
 
 import torch
@@ -15,9 +15,9 @@ def test_full_pipeline():
 
     extractor = MFCCExtractor()
     mfcc = extractor.extract(wav)
-    assert mfcc.shape == (1, 49, 10)
+    assert mfcc.shape == (1, 47, 10)
 
-    mfcc_batch = mfcc.unsqueeze(0)  # (1, 1, 49, 10)
+    mfcc_batch = mfcc.unsqueeze(0)  # (1, 1, 47, 10)
 
     model = DSCNN(model_size="L")
     model.eval()
@@ -36,7 +36,7 @@ def test_full_pipeline_batch():
 
     extractor = MFCCExtractor()
     mfcc = extractor.extract_batch(wavs)
-    assert mfcc.shape == (4, 1, 49, 10)
+    assert mfcc.shape == (4, 1, 47, 10)
 
     model = DSCNN(model_size="L")
     model.eval()
@@ -66,7 +66,7 @@ def test_pipeline_different_audio_lengths():
         wav = torch.randn(1, length)
         extractor = MFCCExtractor()
         mfcc = extractor.extract(wav).unsqueeze(0)
-        assert mfcc.shape == (1, 1, 49, 10)
+        assert mfcc.shape == (1, 1, 47, 10)
 
         model = DSCNN(model_size="L")
         model.eval()

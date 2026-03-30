@@ -80,14 +80,14 @@ class DSCNN(nn.Module):
         model_size: "L" (276ch, 5 DS blocks) or "S" (64ch, 4 DS blocks).
         feature_mode: "CONV", "RELU", or "NORM". Metadata for caller;
             all modes return raw output (L2-norm applied externally).
-        input_shape: (H, W) of input feature map. Default (49, 10) for MFCC.
+        input_shape: (H, W) of input feature map. Default (47, 10) for MFCC with n_fft=1024.
     """
 
     def __init__(
         self,
         model_size: str = "L",
         feature_mode: str = "NORM",
-        input_shape: tuple[int, int] = (49, 10),
+        input_shape: tuple[int, int] = (47, 10),
     ):
         super().__init__()
 
@@ -167,7 +167,7 @@ class DSCNN(nn.Module):
         """Forward pass.
 
         Args:
-            x: (B, 1, H, W) MFCC features. Default (B, 1, 49, 10).
+            x: (B, 1, H, W) MFCC features. Default (B, 1, 47, 10).
 
         Returns:
             (B, embedding_dim) raw embedding. L2-norm NOT applied.
