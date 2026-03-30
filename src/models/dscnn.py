@@ -57,10 +57,11 @@ def _compute_padding(
     pad_h = max((out_h - 1) * stride_h + kernel_h - input_h, 0)
     pad_w = max((out_w - 1) * stride_w + kernel_w - input_w, 0)
 
-    pad_top = pad_h // 2
-    pad_bottom = pad_h - pad_top
-    pad_left = pad_w // 2
+    # Rusci uses ceil for left/top (matching TensorFlow SAME padding convention)
+    pad_left = math.ceil(pad_w / 2)
     pad_right = pad_w - pad_left
+    pad_top = math.ceil(pad_h / 2)
+    pad_bottom = pad_h - pad_top
 
     return (pad_left, pad_right, pad_top, pad_bottom)
 

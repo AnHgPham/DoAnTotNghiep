@@ -12,6 +12,12 @@ mfcc:
   win_length: 640
   hop_length: 320
   n_mels: 40
+  center: false
+  mel_scale: "slaney"
+  norm: "slaney"
+  log_mels: false
+  power: 2
+  pad_mode: "constant"
 
 model:
   architecture: "DSCNN-L"
