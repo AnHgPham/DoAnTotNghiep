@@ -1,0 +1,700 @@
+\documentclass[12pt,a4paper]{report}
+
+% ============================================================
+% PACKAGES
+% ============================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[vietnamese,english]{babel}
+\usepackage{lmodern}
+\usepackage[top=2.5cm, bottom=2.5cm, left=3cm, right=2.5cm]{geometry}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, calc, backgrounds}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{cleveref}
+\usepackage{enumitem}
+\usepackage{caption}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{fancyhdr}
+
+\onehalfspacing
+
+\definecolor{corecolor}{HTML}{2E86AB}
+\definecolor{ext1color}{HTML}{A23B72}
+\definecolor{ext2color}{HTML}{F18F01}
+\definecolor{optcolor}{HTML}{6B8E23}
+
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\leftmark}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\hypersetup{colorlinks=true, linkcolor=corecolor, citecolor=corecolor, urlcolor=corecolor}
+
+% ============================================================
+\title{
+    \vspace{-1cm}
+    \textbf{Đề Cương Đồ Án Tốt Nghiệp} \\[0.5cm]
+    \Large\textbf{Hệ Thống Nhận Dạng Từ Khóa Thoại Few-Shot Open-Set \\
+    với Phân Lớp Prototype Kháng Nhiễu \\
+    và Suy Luận Streaming Thời Gian Thực} \\[1cm]
+    \large Khoa Công nghệ Thông tin \\
+    \large Năm học 2025--2026
+}
+\author{Họ tên sinh viên \\ Giảng viên hướng dẫn: [Tên GVHD]}
+\date{\today}
+
+\begin{document}
+
+\selectlanguage{vietnamese}
+\maketitle
+\thispagestyle{empty}
+
+% ============================================================
+\begin{abstract}
+Đề cương này trình bày thiết kế và kế hoạch triển khai một hệ thống Nhận dạng
+Từ khóa Thoại (Keyword Spotting -- KWS) theo phương pháp Few-Shot Open-Set, giải
+quyết ba thách thức chính: (1) cho phép người dùng tùy chỉnh từ khóa chỉ với
+3--5 mẫu âm thanh mà không cần huấn luyện lại mô hình, (2) hoạt động ổn định
+trong môi trường có tiếng ồn, và (3) suy luận trực tuyến theo thời gian thực.
+
+Hệ thống sử dụng mạng tích chập phân tách theo chiều sâu (DSCNN) được huấn luyện
+bằng Triplet Loss trên bộ dữ liệu MSWC để học các biểu diễn âm thanh phân biệt.
+Chúng tôi đề xuất phương pháp phân lớp dựa trên khoảng cách L2 trực tiếp (Direct
+L2 Distance), loại bỏ bước chuẩn hóa xác suất nhân tạo, kết hợp với module khử
+nhiễu âm thanh và bộ suy luận streaming tích hợp VAD (Voice Activity Detection).
+Module xác thực người nói (Speaker Verification) sử dụng ECAPA-TDNN được cung cấp
+như tính năng tùy chọn để cá nhân hóa hệ thống.
+
+\textbf{Từ khóa:} Nhận dạng Từ khóa Thoại, Học Few-Shot, Nhận dạng Open-Set,
+Mạng Prototypical, DSCNN, Suy luận Streaming, Phát hiện Hoạt động Giọng nói.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ============================================================
+\chapter{Giới Thiệu}
+
+\section{Bối cảnh và Động lực}
+
+Nhận dạng Từ khóa Thoại (Keyword Spotting -- KWS) là bài toán cơ bản trong xử lý
+tiếng nói, yêu cầu hệ thống tự động phát hiện các từ khóa mục tiêu được định nghĩa
+trước trong luồng âm thanh liên tục. Công nghệ này là nền tảng cho nhiều ứng dụng
+thực tế:
+
+\begin{itemize}
+    \item Trợ lý ảo kích hoạt bằng giọng nói (Amazon Alexa, Google Assistant)
+    \item Hệ thống điều khiển rảnh tay trong ô tô
+    \item Thiết bị nhà thông minh với từ đánh thức (``Hey Siri'', ``OK Google'')
+\end{itemize}
+
+Các hệ thống KWS truyền thống được huấn luyện trên bộ từ vựng cố định, lớn và
+yêu cầu huấn luyện lại toàn bộ khi người dùng muốn thêm từ khóa mới. Hạn chế
+này đặc biệt nghiêm trọng khi:
+
+\begin{enumerate}
+    \item \textbf{Nhu cầu cá nhân hóa:} Người dùng mong muốn thiết bị phản hồi
+          các lệnh giọng nói tùy chỉnh theo nhu cầu riêng.
+    \item \textbf{Ràng buộc tài nguyên:} Việc huấn luyện lại trên thiết bị biên
+          (edge device) tốn kém về tính toán và không thực tế cho các thiết bị
+          có bộ nhớ và năng lực xử lý hạn chế.
+\end{enumerate}
+
+Phương pháp \textbf{Few-shot Learning} giải quyết vấn đề này bằng cách cho phép
+hệ thống học từ khóa mới chỉ từ 3--5 mẫu, mà không cần huấn luyện lại mô hình.
+Kết hợp với \textbf{Open-set Recognition} --- khả năng từ chối các từ không xác
+định (không thuộc bất kỳ từ khóa nào đã đăng ký) --- tạo nên hệ thống KWS có
+khả năng triển khai thực tế.
+
+\section{Mục tiêu Nghiên cứu}
+
+Đồ án này giải quyết các câu hỏi nghiên cứu sau:
+
+\begin{enumerate}
+    \item Làm thế nào xây dựng hệ thống KWS có thể học từ khóa mới từ ít mẫu
+          (few-shot) đồng thời từ chối đúng các từ lạ (open-set)?
+    \item Phương pháp phân lớp dựa trên khoảng cách L2 trực tiếp có vượt trội
+          so với phương pháp dựa trên xác suất không?
+    \item Việc tích hợp khử nhiễu âm thanh ảnh hưởng thế nào đến độ chính xác
+          KWS trong các điều kiện nhiễu khác nhau?
+    \item Hệ thống có duy trì được độ chính xác chấp nhận được khi mở rộng từ
+          offline sang suy luận streaming không?
+\end{enumerate}
+
+\section{Đóng góp Cốt lõi}
+
+\begin{enumerate}
+    \item \textbf{Đề xuất cơ chế phân lớp prototype dựa trên khoảng cách L2
+          trực tiếp} cho bài toán KWS few-shot open-set, loại bỏ ràng buộc
+          chuẩn hóa xác suất, cung cấp diễn giải ngưỡng trực quan như ``bán
+          kính chấp nhận'' quanh mỗi prototype.
+    \item \textbf{Đánh giá tác động của noise robustness} thông qua kết hợp
+          noise augmentation khi huấn luyện và denoising preprocessing khi
+          suy luận.
+    \item \textbf{Mở rộng hệ thống từ offline sang streaming} với VAD và
+          sliding-window detection.
+    \item \textbf{(Tùy chọn) Tích hợp speaker verification gate} để cá nhân
+          hóa hệ thống KWS.
+\end{enumerate}
+
+% ============================================================
+\chapter{Cơ Sở Lý Thuyết}
+
+\section{Tổng quan Keyword Spotting}
+
+KWS biến bài toán phát hiện từ khóa trong luồng âm thanh liên tục thành bài
+toán phân lớp thời gian thực thông qua \textbf{phương pháp cửa sổ}: luồng âm
+thanh được chia thành các đoạn ngắn, chồng lấp (thường 1 giây), và mỗi đoạn
+được phân lớp độc lập.
+
+Pipeline KWS tiêu chuẩn gồm:
+\begin{enumerate}
+    \item \textbf{Tiền xử lý âm thanh:} Tín hiệu thô $\rightarrow$ trích
+          xuất đặc trưng (MFCC)
+    \item \textbf{Mã hóa đặc trưng:} Mạng neural ánh xạ đặc trưng vào không
+          gian embedding
+    \item \textbf{Phân lớp:} Xác định từ khóa nào (nếu có) xuất hiện
+\end{enumerate}
+
+\section{Trích xuất Đặc trưng Âm thanh: MFCC}
+\label{sec:mfcc_vi}
+
+MFCC (Mel-Frequency Cepstral Coefficients) là phương pháp biểu diễn đặc trưng
+âm thanh phổ biến nhất cho KWS. Quy trình trích xuất gồm các bước:
+
+\subsection{Tiền nhấn mạnh (Pre-emphasis)}
+
+Khuếch đại thành phần tần số cao của tín hiệu:
+\begin{equation}
+    x[n] = y[n] - \alpha \cdot y[n-1], \quad \alpha = 0.97
+\end{equation}
+
+\subsection{Phân khung và Cửa sổ (Framing \& Windowing)}
+
+Tín hiệu được chia thành các khung chồng lấp:
+\begin{equation}
+    x_m[n] = x[n + m \cdot H], \quad 0 \leq n < N, \quad 0 \leq m < M
+\end{equation}
+
+\textbf{Trong hệ thống của chúng tôi:}
+\begin{itemize}
+    \item Chiều dài khung $N = 640$ mẫu (40ms tại 16kHz)
+    \item Bước nhảy $H = 320$ mẫu (20ms)
+    \item Số khung $M \approx 49$ cho âm thanh 1 giây
+\end{itemize}
+
+Mỗi khung được làm mịn bằng cửa sổ Hamming:
+\begin{equation}
+    w[n] = 0.54 - 0.46 \cos\left(\frac{2\pi n}{N-1}\right)
+\end{equation}
+
+\subsection{Biến đổi Fourier Rời rạc}
+
+Chuyển đổi từ miền thời gian sang miền tần số:
+\begin{equation}
+    X[k] = \sum_{n=0}^{N-1} x_m[n] \cdot e^{-j2\pi kn/N}
+\end{equation}
+
+Phổ công suất: $P[k] = |X[k]|^2 / N$
+
+\subsection{Bộ lọc Mel}
+
+Phổ công suất được lọc qua $F = 40$ bộ lọc tam giác trên thang Mel:
+\begin{equation}
+    S_m = \sum_{k=f_{m-1}}^{f_{m+1}} P[k] \cdot H_m[k]
+\end{equation}
+
+Công thức chuyển đổi sang thang Mel:
+\begin{equation}
+    \mathcal{M}(f) = 2595 \cdot \log_{10}\left(1 + \frac{f}{700}\right)
+\end{equation}
+
+\subsection{DCT và MFCC}
+
+Áp dụng Biến đổi Cosine Rời rạc lên log Mel-spectrogram:
+\begin{equation}
+    C[k] = 2\beta \sum_{f=0}^{F-1} S_f \cdot \cos\left(\frac{\pi k(2f+1)}{2F}\right)
+\end{equation}
+
+\textbf{Đầu ra:} 40 hệ số MFCC được tính, chỉ giữ 10 đầu tiên (theo Rusci et al.).
+Quy trình: MFCC(40) $(1, 40, 49)$ $\rightarrow$ narrow(10) $(1, 10, 49)$ $\rightarrow$
+transpose $(1, 49, 10)$ = (channel, $T$, features). Tensor đầu vào DSCNN: $(B, 1, 49, 10)$.
+
+
+\section{Mạng Tích chập Phân tách theo Chiều sâu (DSCNN)}
+\label{sec:dscnn_vi}
+
+DSCNN phân tách phép tích chập 3D tiêu chuẩn thành hai phép toán nhẹ hơn:
+
+\subsection{Tích chập theo Chiều sâu (Depthwise Convolution)}
+
+Áp dụng một bộ lọc duy nhất cho mỗi kênh đầu vào:
+\begin{equation}
+    Y^{(c)} = X^{(c)} * K^{(c)}
+\end{equation}
+
+\subsection{Tích chập theo Điểm (Pointwise Convolution)}
+
+Kết hợp thông tin giữa các kênh bằng tích chập $1 \times 1$:
+\begin{equation}
+    Z_k = \sum_{c=1}^{C} Y^{(c)} * W_k^{(c)}
+\end{equation}
+
+\subsection{Kiến trúc DSCNN-L}
+
+Mô hình DSCNN-L (276 kênh, theo Rusci et al.\ \texttt{model\_size\_info\_DSCNNL})
+gồm 1 lớp conv ban đầu + 5 khối DS:
+
+\begin{itemize}
+    \item \textbf{Conv ban đầu:} Conv2d$(1, 276, \text{kernel}=(10,4), \text{stride}=(2,1))$ + BN + ReLU
+    \item \textbf{Khối DS 1:} stride $(2,2)$; \textbf{Khối DS 2--5:} stride $(1,1)$
+    \item \textbf{Khối DS 1--4:} DW + BN + ReLU + PW + BN + ReLU
+    \item \textbf{Khối DS 5 (cuối):} DW vẫn dùng BN+ReLU; chỉ sau PW dùng LayerNorm(\texttt{elementwise\_affine=False})
+    \item \textbf{Average Pooling} $\rightarrow$ Flatten $\rightarrow$ đầu ra $(B, 276)$
+    \item \textbf{Không có Linear projection:} embedding\_dim = số kênh = 276
+    \item \textbf{Chuẩn hóa L2:} áp dụng \emph{bên ngoài} model (\texttt{F.normalize} trong ReprModel)
+\end{itemize}
+
+\begin{equation}
+    \hat{e} = \frac{e}{\|e\|_2}
+\end{equation}
+
+\textbf{Lưu ý quan trọng:} Chuẩn hóa L2 đảm bảo tất cả embedding nằm trên
+siêu cầu đơn vị, giúp khoảng cách L2 tương đương khoảng cách cosine (sai khác
+hằng số).
+
+
+\section{Mạng Prototypical (Prototypical Networks)}
+\label{sec:protonet_vi}
+
+Mạng Prototypical học một không gian embedding nơi phân lớp được thực hiện
+bằng cách tính khoảng cách đến các \textbf{prototype} của lớp.
+
+\subsection{Ý tưởng Cốt lõi}
+
+Cho mạng neural $f_\theta : \mathbb{R}^D \rightarrow \mathbb{R}^M$ (DSCNN
+encoder). Với mỗi lớp $k$ có tập hỗ trợ $S_k$, \textbf{prototype} $c_k$
+là trung bình embedding của các mẫu hỗ trợ:
+
+\begin{equation}
+    c_k = \frac{1}{|S_k|} \sum_{(x_i, y_i) \in S_k} f_\theta(x_i)
+\end{equation}
+
+\textbf{Cách hiểu trực quan:} Prototype là ``dấu vân tay đại diện'' của mỗi
+lớp trong không gian embedding. Mẫu mới được phân lớp dựa trên prototype
+gần nhất.
+
+\subsection{Huấn luyện theo Tập (Episodic Training)}
+
+Huấn luyện mô phỏng kịch bản few-shot qua các \textbf{episode}:
+
+\begin{enumerate}
+    \item Chọn ngẫu nhiên $N$ lớp từ tập huấn luyện
+    \item Mỗi lớp: lấy $K$ mẫu hỗ trợ + $Q$ mẫu truy vấn
+    \item Tính prototype từ tập hỗ trợ
+    \item Phân lớp mẫu truy vấn và tính hàm mất mát
+\end{enumerate}
+
+
+\section{Hàm Mất mát Triplet (Triplet Loss)}
+\label{sec:triplet_vi}
+
+Hệ thống sử dụng \textbf{Triplet Loss} thay vì loss prototypical tiêu chuẩn:
+
+\begin{equation}
+    \mathcal{L}_{TL} = \frac{1}{N_t} \sum_{i=1}^{N_t}
+    \max\left(0, \; d(x_i, x_i^+) - d(x_i, x_i^-) + m\right)
+\end{equation}
+
+trong đó:
+\begin{itemize}
+    \item $x_i$: mẫu \textbf{neo} (anchor)
+    \item $x_i^+$: mẫu \textbf{dương} (positive -- cùng lớp với neo)
+    \item $x_i^-$: mẫu \textbf{âm} (negative -- khác lớp)
+    \item $m = 0.5$: \textbf{biên} (margin)
+    \item $d(\cdot, \cdot)$: khoảng cách L2
+\end{itemize}
+
+\textbf{Trực giác:} Loss đẩy neo lại gần mẫu dương và ra xa mẫu âm ít nhất
+một khoảng biên $m$. Khi ràng buộc đã thỏa mãn, loss bằng 0 (hành vi
+hinge loss).
+
+\textbf{Cấu hình huấn luyện:}
+\begin{itemize}
+    \item Batch: 20 mẫu $\times$ 80 lớp, margin $m = 0.5$
+    \item Optimizer: Adam, lr = 0.001, StepLR(step\_size=20, $\gamma_{\text{decay}}=0.5$)
+    \item 40 epoch $\times$ 400 episode
+    \item Dữ liệu: MSWC English (top 500 từ)
+    \item Augmentation: Nhiễu DEMAND, $p = 0.95$, SNR cố định $= 5$\,dB
+\end{itemize}
+
+
+\section{Phân lớp Open-Set}
+\label{sec:openset_vi}
+
+Phân lớp open-set mở rộng phân lớp tiêu chuẩn bằng khả năng \textbf{từ chối
+mẫu không xác định} --- mẫu không thuộc bất kỳ lớp từ khóa nào đã đăng ký.
+
+\subsection{Phương pháp Khoảng cách L2 Trực tiếp (Đề xuất của chúng tôi)}
+
+Thay vì chuẩn hóa xác suất, sử dụng khoảng cách L2 trực tiếp:
+
+\begin{equation}
+    d_k = \|f_\theta(x_q) - c_k\|_2, \quad k = 1, \ldots, N
+\end{equation}
+
+\begin{equation}
+    \hat{y} = \begin{cases}
+        \displaystyle\arg\min_k d_k & \text{nếu } \min_k d_k \leq \gamma \\
+        \text{unknown} & \text{ngược lại}
+    \end{cases}
+\end{equation}
+
+trong đó $\gamma$ là ngưỡng chấp nhận (bán kính).
+
+\textbf{Ưu điểm so với phương pháp xác suất:}
+\begin{itemize}
+    \item Ngưỡng $\gamma$ có ý nghĩa hình học (bán kính chấp nhận quanh prototype)
+    \item Không phụ thuộc vào prototype ``unknown'' ảo
+    \item Hiệu năng tốt hơn: AUC 0.95 vs 0.94, ACC@5\%FAR 0.81 vs 0.76
+          (kết quả tham chiếu)
+\end{itemize}
+
+
+\section{Phát hiện Hoạt động Giọng nói (VAD)}
+
+VAD xác định đoạn âm thanh nào chứa tiếng người nói. Hệ thống sử dụng
+\textbf{Silero VAD} --- mô hình pre-trained nhẹ, xử lý chunk 32ms (512 mẫu
+tại 16kHz), đầu ra xác suất tiếng nói $p \in [0, 1]$.
+
+Tiếng nói được phát hiện khi $p > \tau_{vad}$ (mặc định $\tau_{vad} = 0.5$).
+
+
+\section{Xác thực Người nói với ECAPA-TDNN}
+
+ECAPA-TDNN tạo biểu diễn người nói 192 chiều. Xác thực bằng cosine similarity:
+
+\begin{equation}
+    \text{similarity}(e_{owner}, e_{query}) =
+    \frac{e_{owner} \cdot e_{query}}
+         {\|e_{owner}\|_2 \cdot \|e_{query}\|_2}
+\end{equation}
+
+
+% ============================================================
+\chapter{Thiết Kế Hệ Thống}
+
+\section{Tổng quan Kiến trúc}
+
+Hệ thống theo kiến trúc pipeline module hóa với ba tầng phân rõ:
+
+\begin{itemize}
+    \item \textcolor{corecolor}{\textbf{CORE:}} KWS engine (MFCC + DSCNN +
+          OpenNCM) --- \textit{bắt buộc}
+    \item \textcolor{ext1color}{\textbf{EXT-1:}} Kháng nhiễu (denoising) ---
+          \textit{mở rộng 1}
+    \item \textcolor{ext2color}{\textbf{EXT-2:}} Streaming inference (VAD +
+          sliding window) --- \textit{mở rộng 2}
+    \item \textcolor{optcolor}{\textbf{OPTIONAL:}} Speaker verification ---
+          \textit{tùy chọn}
+\end{itemize}
+
+\textbf{Nguyên tắc thiết kế:} Mỗi module tùy chọn có thể bằng \texttt{None}
+trong pipeline. Nếu module lỗi, hệ thống tiếp tục hoạt động bình thường
+(fail-open).
+
+
+\section{Quy trình Ba Giai đoạn}
+
+\subsection{Giai đoạn A: Huấn luyện (Offline, Một lần)}
+
+DSCNN encoder $f_\theta$ được huấn luyện trên MSWC English bằng Triplet Loss.
+Sau huấn luyện, trọng số encoder được \textbf{đóng băng} (frozen).
+
+\subsection{Giai đoạn B: Đăng ký (Few-shot, Mỗi người dùng)}
+
+Người dùng cung cấp $K$ mẫu âm thanh (thường $K = 3$--$5$) cho mỗi từ khóa.
+Mẫu được đưa qua encoder đóng băng để tính prototype:
+
+\begin{equation}
+    c_k = \frac{1}{K} \sum_{i=1}^{K} f_\theta(x_i^{(k)})
+\end{equation}
+
+\subsection{Giai đoạn C: Suy luận}
+
+Mỗi mẫu truy vấn được tính khoảng cách L2 đến tất cả prototype và áp dụng
+quy tắc quyết định open-set.
+
+
+\section{Mở rộng 1: Kháng Nhiễu}
+
+\subsection{Khi huấn luyện: Noise Augmentation}
+
+Trộn âm thanh sạch với nhiễu nền từ DEMAND (SNR cố định 5\,dB, theo \texttt{noise\_snr=5}):
+\begin{equation}
+    x_{noisy} = x_{clean} + \alpha \cdot x_{noise}, \quad
+    \alpha = \frac{\text{RMS}(x_{clean})}{\text{RMS}(x_{noise}) \cdot 10^{\text{SNR}/20}}
+\end{equation}
+
+\subsection{Khi suy luận: Khử nhiễu (Denoising)}
+
+Hai phương pháp:
+\begin{itemize}
+    \item \textbf{Spectral Gating} (nhanh, CPU): Khử nhiễu thống kê
+    \item \textbf{SepformerSeparation} (chính xác, GPU): Khử nhiễu neural
+\end{itemize}
+
+\textbf{Kế hoạch benchmark:} So sánh accuracy KWS tại SNR 0, 5, 10, 20 dB
+và sạch, trước và sau khử nhiễu.
+
+
+\section{Mở rộng 2: Suy luận Streaming}
+
+\subsection{Phát hiện Cửa sổ Trượt}
+
+\begin{itemize}
+    \item Kích thước cửa sổ: 16,000 mẫu (1 giây tại 16kHz)
+    \item Bước trượt: 8,000 mẫu (0.5 giây, chồng lấp 50\%)
+    \item Buffer: Ring buffer (\texttt{collections.deque})
+\end{itemize}
+
+\subsection{Tích hợp VAD}
+
+Silero VAD lọc trước các chunk âm thanh (512 mẫu = 32ms). KWS chỉ được kích
+hoạt khi phát hiện tiếng nói, tiết kiệm tài nguyên tính toán.
+
+\subsection{Ngân sách Độ trễ}
+
+\begin{table}[h]
+\centering
+\caption{Độ trễ mục tiêu cho mỗi thành phần pipeline}
+\begin{tabular}{lr}
+\toprule
+\textbf{Thành phần} & \textbf{Mục tiêu} \\
+\midrule
+VAD mỗi chunk (32ms) & $< 5$ ms \\
+Khử nhiễu (1 giây) & $< 30$ ms \\
+Trích xuất MFCC & $< 5$ ms \\
+Suy luận DSCNN & $< 10$ ms \\
+Phân lớp & $< 1$ ms \\
+Xác thực người nói & $< 20$ ms \\
+\midrule
+\textbf{Tổng cộng} & $\mathbf{< 71}$ \textbf{ms} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+
+\section{Tùy chọn: Speaker Verification Gate}
+
+Sau khi KWS phát hiện từ khóa, gate xác thực người nói kiểm tra danh tính:
+
+\begin{equation}
+    \hat{y}_{final} = \begin{cases}
+        \hat{y}_{kws} & \text{nếu } \text{sim}(e_{owner}, e_{query}) > \tau_{spk} \\
+        \text{từ chối} & \text{ngược lại}
+    \end{cases}
+\end{equation}
+
+Module này hoàn toàn \textbf{tùy chọn} --- hệ thống hoạt động bình thường
+khi không bật.
+
+
+% ============================================================
+\chapter{Kế Hoạch Đánh Giá}
+
+\section{Bộ Dữ liệu}
+
+\subsection{Google Speech Commands v2 (GSC)}
+
+\begin{itemize}
+    \item 105,829 phát ngôn của 35 từ tiếng Anh bởi 2,618 người nói
+    \item File WAV 1 giây, tần số lấy mẫu 16kHz
+    \item Dùng cho \textbf{đánh giá} (enrollment + evaluation)
+\end{itemize}
+
+\textbf{Phân vùng từ (Fixed protocol):}
+\begin{itemize}
+    \item \textbf{GSC+ (10 positive):} yes, no, up, down, left, right, on,
+          off, stop, go
+    \item \textbf{GSC$-$ (20 negative):} các từ còn lại (lớp unknown)
+    \item \textbf{Loại trừ (5):} backward, forward, visual, follow, learn
+\end{itemize}
+
+\subsection{MSWC (Multilingual Spoken Words Corpus)}
+
+\begin{itemize}
+    \item $\sim$22.5 triệu phát ngôn, 50 ngôn ngữ
+    \item Dùng cho \textbf{huấn luyện} DSCNN encoder
+    \item Subset English: top 500 từ theo số phát ngôn
+    \item Subset đánh giá: 263 từ (min 1000 phát ngôn, loại trừ 500 từ huấn luyện)
+\end{itemize}
+
+\section{Chỉ số Đánh giá}
+
+\begin{itemize}
+    \item \textbf{Đường cong DET trung bình:} FAR vs FRR trung bình trên
+          tất cả lớp từ khóa
+    \item \textbf{AUC:} Diện tích dưới đường cong ROC (keyword vs non-keyword)
+    \item \textbf{ACC@5\%FAR:} Accuracy tại điểm FAR = 5\%
+\end{itemize}
+
+\section{Giao thức Đánh giá}
+
+\begin{table}[h]
+\centering
+\caption{Giao thức đánh giá theo mức ưu tiên}
+\begin{tabular}{llll}
+\toprule
+\textbf{Ưu tiên} & \textbf{Giao thức} & \textbf{Positive} & \textbf{Negative} \\
+\midrule
+Bắt buộc & GSC Fixed & 10 từ cố định & 20 từ cố định \\
+Bắt buộc & GSC Randomized & 10 ngẫu nhiên/lần & 20 ngẫu nhiên/lần \\
+Mở rộng & MSWC Randomized & 5 ngẫu nhiên & 50 ngẫu nhiên \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Đảm bảo Không Data Leakage}
+
+\begin{itemize}
+    \item Encoder huấn luyện trên MSWC English (top 500 từ)
+    \item Đánh giá trên GSC (35 từ hoàn toàn khác)
+    \item Enrollment, calibration, và test sử dụng split tách biệt
+    \item Query test không bao giờ dùng để tạo prototype hoặc chọn threshold
+\end{itemize}
+
+
+% ============================================================
+\chapter{Kế Hoạch Triển Khai}
+
+\section{Lộ trình}
+
+\begin{table}[h]
+\centering
+\caption{Lộ trình triển khai với milestone và mức ưu tiên}
+\begin{tabular}{clll}
+\toprule
+\textbf{Tuần} & \textbf{Giai đoạn} & \textbf{Sản phẩm} & \textbf{Ưu tiên} \\
+\midrule
+1 & Setup + Pipeline & MFCC $\to$ DSCNN $\to$ embedding &
+    \textcolor{corecolor}{\textbf{CORE}} \\
+2 & Huấn luyện + Classifier & Model + enroll/predict &
+    \textcolor{corecolor}{\textbf{CORE}} \\
+3 & Đánh giá & Bảng kết quả + DET curves &
+    \textcolor{corecolor}{\textbf{CORE}} \\
+\midrule
+\multicolumn{4}{c}{\textit{--- Điểm dừng an toàn: đủ để bảo vệ đồ án ---}} \\
+\midrule
+4 & Khử nhiễu & Bảng benchmark SNR &
+    \textcolor{ext1color}{\textbf{EXT-1}} \\
+5 & Streaming + VAD & Sliding window demo &
+    \textcolor{ext2color}{\textbf{EXT-2}} \\
+6 & Speaker Verify & Demo ``chỉ chủ nhân'' &
+    \textcolor{optcolor}{\textbf{TÙY CHỌN}} \\
+7 & Demo & Gradio web app 3 tab &
+    DEMO \\
+8 & Tài liệu & Báo cáo + slides &
+    DOCS \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Chiến lược Cắt Lỗ}
+
+Nếu chậm tiến độ, cắt theo thứ tự từ dưới lên:
+\begin{enumerate}
+    \item \textbf{Cắt đầu tiên:} Speaker verification
+    \item \textbf{Cắt tiếp:} Streaming realtime mic (giữ sliding window offline)
+    \item \textbf{Cắt cuối:} Denoising (giữ noise augmentation khi train)
+    \item \textbf{KHÔNG BAO GIỜ cắt:} Core KWS + Evaluation + Offline demo
+\end{enumerate}
+
+
+% ============================================================
+\chapter{Kết Quả Kỳ Vọng}
+
+Dựa trên kết quả tham chiếu từ luận văn gốc, chúng tôi kỳ vọng kết quả
+cùng xu hướng tương tự:
+
+\begin{table}[h]
+\centering
+\caption{Mốc hiệu năng tham chiếu}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Phương pháp} & \textbf{AUC} $\uparrow$ &
+\textbf{ACC@5\%FAR} $\uparrow$ & \textbf{FRR@5\%FAR} $\downarrow$ \\
+\midrule
+Dựa trên xác suất & 0.94 & 0.76 & 0.21 \\
+Khoảng cách L2 trực tiếp & 0.95 & 0.81 & 0.17 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Dự kiến phát hiện:}
+\begin{enumerate}
+    \item Phương pháp L2 trực tiếp vượt trội so với xác suất tại mọi
+          điểm hoạt động
+    \item Giao thức chọn từ ngẫu nhiên cho kết quả thực tế hơn (thấp hơn)
+          so với cố định
+    \item Khử nhiễu cải thiện accuracy rõ rệt nhất tại SNR thấp (0--5 dB)
+    \item Hiệu năng few-shot ổn định từ 5 mẫu enrollment trở lên
+    \item Streaming có thể giảm nhẹ accuracy so với offline do hiệu ứng
+          biên cửa sổ
+\end{enumerate}
+
+
+% ============================================================
+\begin{thebibliography}{9}
+
+\bibitem{lopez2021deep}
+I.~L{\'o}pez-Espejo et al.,
+``Deep spoken keyword spotting: An overview,''
+\textit{IEEE Access}, vol.~10, pp.~4169--4199, 2021.
+
+\bibitem{snell2017prototypical}
+J.~Snell, K.~Swersky, and R.~Zemel,
+``Prototypical networks for few-shot learning,''
+\textit{NeurIPS}, vol.~30, 2017.
+
+\bibitem{rusci2023}
+M.~Rusci and T.~Tuytelaars,
+``Few-shot open-set learning for on-device customization of keyword spotting
+systems,''
+\textit{arXiv:2306.02161}, 2023.
+
+\bibitem{zhang2017hello}
+Y.~Zhang et al.,
+``Hello edge: Keyword spotting on microcontrollers,''
+\textit{arXiv:1711.07128}, 2017.
+
+\bibitem{binh2025}
+P.~T.~Binh,
+``Enhanced evaluation protocols for few-shot open-set keyword spotting systems,''
+Luận văn Thạc sĩ, USTH, 2025.
+
+\bibitem{warden2018}
+P.~Warden,
+``Speech commands: A dataset for limited-vocabulary speech recognition,''
+\textit{arXiv:1804.03209}, 2018.
+
+\bibitem{mazumder2021mswc}
+M.~Mazumder et al.,
+``Multilingual spoken words corpus,''
+\textit{NeurIPS Datasets and Benchmarks}, 2021.
+
+\bibitem{speechbrain}
+SpeechBrain Team,
+``SpeechBrain: A general-purpose speech toolkit,'' 2021.
+
+\end{thebibliography}
+
+\end{document}

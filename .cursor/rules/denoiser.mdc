@@ -1,0 +1,37 @@
+---
+description: Audio denoising module specifications
+globs: src/enhancements/denoiser.py
+alwaysApply: false
+---
+
+# Denoiser Module Rules
+
+## Interface
+
+```python
+class AudioDenoiser:
+    def __init__(self, method: str = "spectral_gating", device: str = "cpu"):
+        """method: 'spectral_gating' | 'speechbrain' | 'none'"""
+
+    def denoise(self, waveform: torch.Tensor, sr: int = 16000) -> torch.Tensor:
+        """Input/output: (1, T) tensor at given sample rate."""
+
+    def benchmark(self, clean: torch.Tensor, noisy: torch.Tensor) -> dict:
+        """Return {'snr_improvement_db': float, 'processing_time_ms': float}"""
+```
+
+## Methods (in order of complexity)
+
+1. **spectral_gating**: `noisereduce.reduce_noise()` -- fast, no GPU needed
+2. **speechbrain**: `SepformerSeparation` pre-trained model -- better quality, needs GPU
+
+## Testing Matrix
+
+Benchmark at SNR levels: 0dB, 5dB, 10dB, 20dB, clean
+Measure KWS accuracy before/after denoising at each level.
+
+## Error Handling
+
+- If speechbrain model fails to load, fallback to spectral_gating with warning
+- Never modify input tensor in-place; always return new tensor
+- Clamp output to [-1, 1] range after denoising

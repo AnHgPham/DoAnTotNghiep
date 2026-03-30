@@ -1,0 +1,590 @@
+\documentclass[12pt,a4paper]{article}
+
+% ============================================================
+% PACKAGES
+% ============================================================
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{lmodern}
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm]{geometry}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows.meta, positioning, fit, calc, decorations.pathreplacing}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{setspace}
+\usepackage{fancyhdr}
+\usepackage{mdframed}
+
+\onehalfspacing
+
+% Mau sac
+\definecolor{core}{HTML}{2E86AB}
+\definecolor{ext1}{HTML}{A23B72}
+\definecolor{ext2}{HTML}{F18F01}
+\definecolor{opt}{HTML}{6B8E23}
+\definecolor{lightgray}{HTML}{F5F5F5}
+\definecolor{accepted}{HTML}{27AE60}
+\definecolor{rejected}{HTML}{E74C3C}
+
+% Header/Footer
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small\textit{Giải thích Pipeline -- Hệ thống nhận dạng từ khóa thoại}}
+\fancyhead[R]{\small\thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+\hypersetup{colorlinks=true, linkcolor=core, urlcolor=core}
+
+% Box cho vi du
+\newmdenv[
+  backgroundcolor=lightgray,
+  linecolor=core,
+  linewidth=1pt,
+  roundcorner=5pt,
+  innertopmargin=8pt,
+  innerbottommargin=8pt,
+  innerleftmargin=10pt,
+  innerrightmargin=10pt,
+  skipabove=10pt,
+  skipbelow=10pt
+]{examplebox}
+
+% ============================================================
+\title{
+    \vspace{-1cm}
+    {\Large\textbf{Hệ Thống Nhận Dạng Từ Khóa Thoại}} \\[0.3cm]
+    {\large Giải thích toàn bộ quy trình} \\[0.2cm]
+    {\normalsize\textit{Dành cho người không có nền tảng kỹ thuật}}
+}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{fancy}
+
+\tableofcontents
+\newpage
+
+
+% ============================================================
+\section{Dự án này làm gì?}
+% ============================================================
+
+Bạn đã bao giờ nói ``Hey Siri'' với iPhone, hoặc ``OK Google'' với điện thoại Android
+chưa? Khi bạn nói câu đó, điện thoại \textbf{nhận ra từ khóa} trong giọng nói của bạn
+và ``thức dậy'' để lắng nghe tiếp. Đó chính là \textbf{Keyword Spotting} (KWS) --
+nhận dạng từ khóa thoại.
+
+Dự án của chúng ta xây dựng một hệ thống tương tự, nhưng có \textbf{ba điểm đặc biệt}:
+
+\begin{enumerate}[leftmargin=2cm]
+    \item \textbf{Học nhanh (Few-Shot):}
+    Các hệ thống thông thường cần hàng nghìn mẫu giọng nói để học một từ khóa mới.
+    Hệ thống của chúng ta chỉ cần \textbf{3 đến 5 mẫu}. Giống như bạn chỉ cần nghe
+    tên một người vài lần là nhớ được, không cần nghe hàng nghìn lần.
+
+    \item \textbf{Biết nói ``Tôi không biết'' (Open-Set):}
+    Nếu ai đó nói một từ mà hệ thống chưa từng được dạy, thay vì đoán bừa,
+    hệ thống sẽ trả lời: ``\textit{Đây là từ lạ, tôi không biết}.'' Điều này rất
+    quan trọng trong thực tế -- bạn không muốn loa thông minh bật nhạc khi bạn
+    chỉ đang nói chuyện bình thường.
+
+    \item \textbf{Hoạt động trong môi trường ồn:}
+    Hệ thống được huấn luyện để nghe được từ khóa ngay cả khi xung quanh có
+    tiếng ồn -- quán cà phê, đường phố, văn phòng. Giống như bạn vẫn nghe được
+    tên mình dù đang ở nơi đông đúc.
+\end{enumerate}
+
+\begin{examplebox}
+\textbf{Ví dụ thực tế:} Bạn có một loa thông minh ở nhà. Bạn dạy nó từ khóa
+``bật đèn'' bằng cách nói từ đó 5 lần. Từ đó về sau, mỗi khi bạn nói ``bật đèn'',
+hệ thống nhận ra và thực hiện lệnh. Nhưng nếu bạn nói ``bật quạt'' (chưa được dạy),
+hệ thống sẽ nói: ``Tôi chưa biết từ này'' thay vì bật đèn.
+\end{examplebox}
+
+
+% ============================================================
+\section{Âm thanh được xử lý như thế nào?}
+% ============================================================
+
+Máy tính không thể ``nghe'' giọng nói giống con người. Nó chỉ hiểu các con số.
+Vì vậy, bước đầu tiên là \textbf{chuyển âm thanh thành các con số} mà máy tính
+có thể làm việc được.
+
+\subsection{Từ sóng âm đến ``ảnh chụp'' âm thanh}
+
+Khi bạn nói một từ, micro thu lại sóng âm -- đó là một đường cong lên xuống
+liên tục. Nhưng đường cong này quá phức tạp để máy tính hiểu trực tiếp.
+
+Chúng ta dùng một kỹ thuật gọi là \textbf{MFCC} để ``chụp ảnh'' âm thanh.
+Quá trình này giống như \textbf{chuyển một bài hát thành bản nhạc (sheet music)}:
+bài hát thì liên tục và phức tạp, nhưng bản nhạc ghi lại các nốt nhạc rời rạc,
+dễ đọc hơn rất nhiều.
+
+\begin{center}
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, rounded corners, minimum height=1.2cm,
+                  minimum width=3cm, align=center, font=\small},
+    arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+    \node[block, fill=core!15] (wav) {Sóng âm thanh\\(giọng nói thô)};
+    \node[block, fill=core!25, right=1.5cm of wav] (mfcc) {Tính MFCC\\(40 đặc trưng)};
+    \node[block, fill=core!35, right=1.5cm of mfcc] (narrow) {Giữ 10 đặc trưng\\quan trọng nhất};
+    \node[block, fill=core!45, right=1.5cm of narrow, text=white] (out) {``Ảnh chụp''\\âm thanh};
+
+    \draw[arrow] (wav) -- (mfcc);
+    \draw[arrow] (mfcc) -- (narrow);
+    \draw[arrow] (narrow) -- (out);
+
+    \node[below=0.3cm of wav, font=\scriptsize, text=gray] {1 giây, 16.000 mẫu};
+    \node[below=0.3cm of mfcc, font=\scriptsize, text=gray] {40 nét, 49 khung};
+    \node[below=0.3cm of narrow, font=\scriptsize, text=gray] {10 nét, 49 khung};
+    \node[below=0.3cm of out, font=\scriptsize, text=gray] {Ma trận số};
+\end{tikzpicture}
+\end{center}
+
+\subsection{Tại sao chỉ giữ 10 đặc trưng?}
+
+Kỹ thuật MFCC ban đầu tính ra 40 ``nét đặc trưng'' cho mỗi khung thời gian.
+Nhưng giống như khi bạn mô tả một người cho ai đó, bạn chỉ cần nói vài đặc
+điểm nổi bật (cao, tóc ngắn, đeo kính) chứ không cần mô tả từng sợi tóc.
+
+Chúng ta \textbf{chỉ giữ 10 đặc trưng đầu tiên} vì chúng chứa hầu hết thông
+tin quan trọng. 30 đặc trưng còn lại chủ yếu là chi tiết thừa, bỏ đi giúp hệ
+thống chạy nhanh hơn mà không mất độ chính xác.
+
+\begin{examplebox}
+\textbf{So sánh dễ hiểu:} 1 giây âm thanh được chuyển thành một bảng số có
+49 cột (49 ``lát cắt'' thời gian) và 10 hàng (10 đặc trưng). Tổng cộng 490
+con số -- đủ để máy tính ``hiểu'' bạn vừa nói gì.
+\end{examplebox}
+
+
+% ============================================================
+\section{Bộ não của hệ thống -- Mạng DSCNN}
+% ============================================================
+
+Sau khi có ``ảnh chụp'' âm thanh (490 con số), chúng ta cần một \textbf{bộ não}
+để hiểu ý nghĩa của nó. Bộ não này là một \textbf{mạng nơ-ron} (neural network)
+có tên DSCNN.
+
+\subsection{Mạng nơ-ron là gì?}
+
+Hãy tưởng tượng bạn đang dạy một đứa trẻ phân biệt các loại quả:
+
+\begin{itemize}[leftmargin=1.5cm]
+    \item Lần đầu, đứa trẻ nhìn thấy quả táo đỏ, tròn. Nó ghi nhớ: đỏ + tròn = táo.
+    \item Lần sau, nó thấy quả táo xanh. Nó học thêm: à, táo không nhất thiết phải đỏ.
+    \item Sau nhiều lần, nó biết nhận ra táo dựa trên hình dáng, kích thước, cuống quả...
+          chứ không chỉ dựa vào màu sắc.
+\end{itemize}
+
+Mạng nơ-ron hoạt động tương tự. Nó \textbf{học từ rất nhiều ví dụ} để tìm ra
+các đặc điểm quan trọng nhất giúp phân biệt các từ khóa.
+
+\subsection{DSCNN -- nhẹ và nhanh}
+
+DSCNN là viết tắt của ``Depthwise Separable CNN'' -- nhưng bạn không cần nhớ
+tên dài dòng đó. Điều quan trọng là:
+
+\begin{itemize}[leftmargin=1.5cm]
+    \item Nó \textbf{rất nhẹ} -- có thể chạy trên điện thoại hoặc thiết bị nhỏ.
+    \item Nó \textbf{rất nhanh} -- xử lý 1 giây âm thanh trong chưa đầy 10 mili-giây
+          (nhanh hơn một cái chớp mắt).
+    \item Nó biến ``ảnh chụp'' âm thanh (490 con số) thành \textbf{một điểm
+          trong không gian} (276 con số). Điểm này gọi là \textbf{embedding}.
+\end{itemize}
+
+\begin{examplebox}
+\textbf{Hình dung đơn giản:} Tưởng tượng bạn có rất nhiều bản ghi âm khác nhau.
+DSCNN giống như một cỗ máy ``ép'' mỗi bản ghi thành \textbf{một chấm nhỏ trên bản đồ}.
+Các bản ghi cùng từ khóa sẽ có chấm gần nhau, các bản ghi khác từ khóa sẽ có
+chấm xa nhau.
+\end{examplebox}
+
+\begin{center}
+\begin{tikzpicture}[scale=0.9]
+    % Truoc khi qua DSCNN
+    \node[font=\small\bfseries] at (-4, 3) {Trước DSCNN};
+    \node[font=\small\bfseries] at (4, 3) {Sau DSCNN};
+
+    % Left side - raw audio
+    \draw[thick, gray, rounded corners] (-6.5, -2.5) rectangle (-1.5, 2.5);
+    \node[font=\scriptsize, text=gray] at (-4, 2) {490 con số -- rối rắm};
+    \foreach \i in {1,...,15}{
+        \pgfmathsetmacro{\x}{-6.2 + rand*4.2}
+        \pgfmathsetmacro{\y}{-2.0 + rand*3.5}
+        \fill[gray!60] (\x, \y) circle (2pt);
+    }
+
+    % Arrow
+    \draw[-{Stealth[length=4mm]}, very thick, core] (-1, 0) -- (1, 0)
+        node[midway, above, font=\small] {DSCNN};
+
+    % Right side - embeddings
+    \draw[thick, gray, rounded corners] (1.5, -2.5) rectangle (6.5, 2.5);
+    \node[font=\scriptsize, text=gray] at (4, 2) {276 số -- có trật tự};
+
+    % Cluster "yes"
+    \fill[core] (2.5, 1.0) circle (3pt);
+    \fill[core] (2.8, 0.7) circle (3pt);
+    \fill[core] (2.6, 0.5) circle (3pt);
+    \node[font=\scriptsize, core] at (2.6, 1.5) {``yes''};
+
+    % Cluster "stop"
+    \fill[ext1] (5.0, 1.2) circle (3pt);
+    \fill[ext1] (5.3, 0.9) circle (3pt);
+    \fill[ext1] (5.1, 0.7) circle (3pt);
+    \node[font=\scriptsize, ext1] at (5.1, 1.7) {``stop''};
+
+    % Cluster "go"
+    \fill[ext2] (3.8, -1.5) circle (3pt);
+    \fill[ext2] (4.1, -1.2) circle (3pt);
+    \fill[ext2] (3.9, -1.8) circle (3pt);
+    \node[font=\scriptsize, ext2] at (3.9, -0.7) {``go''};
+\end{tikzpicture}
+\end{center}
+
+
+% ============================================================
+\section{Học từ 3--5 mẫu -- Few-Shot Learning}
+% ============================================================
+
+Đây là phần thú vị nhất của dự án. Hệ thống thông thường cần hàng nghìn mẫu
+để học một từ mới. Hệ thống của chúng ta chỉ cần \textbf{3 đến 5 mẫu}.
+
+\subsection{Cách hoạt động}
+
+Giả sử bạn muốn dạy hệ thống nhận ra từ ``bật đèn'':
+
+\begin{enumerate}[leftmargin=2cm]
+    \item Bạn nói ``bật đèn'' \textbf{5 lần}. Mỗi lần, hệ thống thu âm và
+          chuyển thành một ``chấm'' trên bản đồ (thông qua MFCC + DSCNN).
+    \item Hệ thống tính \textbf{điểm trung tâm} của 5 chấm đó. Điểm trung tâm
+          này gọi là \textbf{prototype} -- ``đại diện'' cho từ ``bật đèn''.
+    \item Khi có ai nói một từ mới, hệ thống chuyển nó thành chấm, rồi xem
+          chấm đó \textbf{gần prototype nào nhất}.
+\end{enumerate}
+
+\begin{center}
+\begin{tikzpicture}[scale=1.1]
+    % 5 samples
+    \fill[core!70] (0.0, 0.3) circle (3pt);
+    \fill[core!70] (0.4, -0.2) circle (3pt);
+    \fill[core!70] (-0.3, -0.1) circle (3pt);
+    \fill[core!70] (0.2, 0.5) circle (3pt);
+    \fill[core!70] (-0.1, -0.4) circle (3pt);
+
+    % Labels
+    \node[font=\scriptsize, core!70, right] at (0.5, 0.3) {mẫu 1};
+    \node[font=\scriptsize, core!70, right] at (0.5, -0.2) {mẫu 2};
+
+    % Prototype (center)
+    \fill[core, thick] (0.04, 0.02) circle (5pt);
+    \node[font=\small\bfseries, core, below right] at (0.2, -0.1) {Prototype};
+
+    % Arrow from samples to prototype
+    \draw[dashed, gray, thin] (0.0, 0.3) -- (0.04, 0.02);
+    \draw[dashed, gray, thin] (0.4, -0.2) -- (0.04, 0.02);
+    \draw[dashed, gray, thin] (-0.3, -0.1) -- (0.04, 0.02);
+    \draw[dashed, gray, thin] (0.2, 0.5) -- (0.04, 0.02);
+    \draw[dashed, gray, thin] (-0.1, -0.4) -- (0.04, 0.02);
+
+    % Annotation
+    \draw[decorate, decoration={brace, amplitude=8pt, mirror}, thick]
+        (-0.8, -0.7) -- (-0.8, 0.7) node[midway, left=10pt, font=\small, align=right]
+        {5 mẫu\\``bật đèn''};
+    \node[font=\small, align=center] at (2.5, -0.8) {Prototype = trung bình\\của 5 mẫu};
+\end{tikzpicture}
+\end{center}
+
+\begin{examplebox}
+\textbf{So sánh:} Hãy nghĩ về ``khuôn mặt trung bình''. Nếu bạn chụp 5 tấm
+ảnh của cùng một người ở các góc khác nhau rồi ``trộn'' lại, bạn sẽ có một
+hình ảnh đại diện cho khuôn mặt người đó. Prototype hoạt động tương tự --
+nó là ``giọng nói trung bình'' của một từ khóa.
+\end{examplebox}
+
+\subsection{Quá trình huấn luyện}
+
+Trước khi hệ thống có thể học nhanh từ 3--5 mẫu, bộ não DSCNN cần được
+\textbf{huấn luyện trước} trên một tập dữ liệu lớn (khoảng 450 từ tiếng Anh,
+mỗi từ hàng nghìn mẫu). Quá trình này giống như:
+
+\begin{examplebox}
+\textbf{Ví dụ:} Trước khi bạn có thể nhận ra một giống chim mới chỉ sau vài lần
+nhìn, bạn đã có \textbf{nhiều năm kinh nghiệm nhìn các loại chim khác nhau}.
+Não bạn đã biết cách chú ý vào mỏ, cánh, màu lông... DSCNN cũng vậy -- nó
+``nhìn'' hàng trăm từ khác nhau để học cách tập trung vào các đặc trưng
+giọng nói quan trọng.
+\end{examplebox}
+
+
+% ============================================================
+\section{Nhận diện và từ chối -- Open-Set}
+% ============================================================
+
+Sau khi có prototype cho mỗi từ khóa, việc nhận diện rất đơn giản:
+
+\subsection{Đo khoảng cách}
+
+Khi ai đó nói một từ, hệ thống chuyển nó thành ``chấm'' (embedding), rồi
+\textbf{đo khoảng cách} từ chấm đó đến tất cả các prototype.
+
+\begin{itemize}[leftmargin=1.5cm]
+    \item \textbf{Gần nhất} = dự đoán đó là từ khóa tương ứng.
+          Ví dụ: chấm gần prototype ``bật đèn'' nhất $\rightarrow$ ``bật đèn''.
+    \item \textbf{Quá xa tất cả} = ``\textit{Từ lạ, tôi không biết.}''
+          Ví dụ: chấm ở rất xa mọi prototype $\rightarrow$ từ chối.
+\end{itemize}
+
+\subsection{Vòng tròn chấp nhận}
+
+Chúng ta đặt một ``vòng tròn'' quanh mỗi prototype. Nếu chấm nằm \textbf{trong}
+vòng tròn, hệ thống chấp nhận. Nếu nằm \textbf{ngoài} tất cả các vòng tròn,
+hệ thống từ chối.
+
+\begin{center}
+\begin{tikzpicture}[scale=1.0]
+    % Prototype 1: "yes"
+    \fill[core] (-2.5, 0.8) circle (5pt);
+    \node[font=\small\bfseries, core, above=6pt] at (-2.5, 0.8) {``yes''};
+    \draw[core, thick, dashed] (-2.5, 0.8) circle (1.2cm);
+
+    % Prototype 2: "stop"
+    \fill[ext1] (2.0, 1.0) circle (5pt);
+    \node[font=\small\bfseries, ext1, above=6pt] at (2.0, 1.0) {``stop''};
+    \draw[ext1, thick, dashed] (2.0, 1.0) circle (1.2cm);
+
+    % Prototype 3: "go"
+    \fill[ext2] (0.0, -1.5) circle (5pt);
+    \node[font=\small\bfseries, ext2, above=6pt] at (0.0, -1.5) {``go''};
+    \draw[ext2, thick, dashed] (0.0, -1.5) circle (1.2cm);
+
+    % Query 1 - accepted (inside "yes" circle)
+    \fill[accepted] (-2.0, 0.3) circle (4pt);
+    \node[font=\scriptsize, accepted, right=3pt] at (-2.0, 0.3) {%
+        ``yes'' $\checkmark$};
+
+    % Query 2 - rejected (outside all circles)
+    \fill[rejected] (0.0, 0.5) circle (4pt);
+    \node[font=\scriptsize, rejected, right=3pt] at (0.0, 0.5) {%
+        Từ lạ $\times$};
+
+    % Threshold annotation
+    \draw[gray, thin, |->] (-2.5, 0.8) -- (-1.3, 0.8);
+    \node[font=\scriptsize, gray, above] at (-1.9, 0.8) {bán kính};
+\end{tikzpicture}
+\end{center}
+
+\begin{examplebox}
+\textbf{So sánh:} Hãy tưởng tượng bạn đứng giữa sân, quanh bạn có 3 vòng tròn
+được vẽ trên mặt đất, mỗi vòng có một bảng tên (``yes'', ``stop'', ``go'').
+Khi ai đó ném một quả bóng vào sân:
+\begin{itemize}
+    \item Nếu bóng rơi \textbf{trong} vòng ``yes'' $\rightarrow$ ``Đó là từ YES!''
+    \item Nếu bóng rơi \textbf{ngoài} mọi vòng $\rightarrow$ ``Không biết từ này.''
+\end{itemize}
+Bán kính vòng tròn chính là ``ngưỡng chấp nhận'' -- to quá thì dễ nhận nhầm,
+nhỏ quá thì hay bỏ sót.
+\end{examplebox}
+
+\subsection{Tại sao cách này hay hơn?}
+
+Nhiều hệ thống khác dùng ``xác suất'' để quyết định (ví dụ: 80\% là ``yes'',
+15\% là ``stop'', 5\% là ``go''). Nhưng cách đó có vấn đề: hệ thống buộc phải
+chọn một đáp án ngay cả khi từ đó hoàn toàn lạ.
+
+Cách ``vòng tròn chấp nhận'' của chúng ta đơn giản hơn và trực quan hơn:
+\textbf{gần thì nhận, xa thì từ chối.}
+
+
+% ============================================================
+\section{Chống nhiễu -- Nghe rõ trong môi trường ồn}
+% ============================================================
+
+Trong thực tế, hiếm khi bạn nói trong phòng im lặng hoàn toàn. Xung quanh
+luôn có tiếng ồn: xe cộ, quạt máy, người nói chuyện... Hệ thống cần phải
+nghe được từ khóa \textbf{ngay cả khi có nhiễu}.
+
+\subsection{Khi huấn luyện: ``tập nghe'' trong ồn ào}
+
+Khi dạy bộ não DSCNN, chúng ta \textbf{cố ý trộn thêm tiếng ồn} vào mẫu
+âm thanh sạch. Như vậy, DSCNN ``quen'' với việc nghe trong môi trường ồn
+ngay từ khi còn đang học.
+
+\begin{center}
+\begin{tikzpicture}[
+    block/.style={rectangle, draw, rounded corners, minimum height=1cm,
+                  minimum width=2.5cm, align=center, font=\small},
+    arrow/.style={-{Stealth[length=3mm]}, thick}
+]
+    \node[block, fill=accepted!15] (clean) {Giọng nói sạch\\``bật đèn''};
+    \node[block, fill=rejected!15, below=0.8cm of clean] (noise) {Tiếng ồn\\(quán cà phê)};
+    \node[font=\Huge] at (3.5, -0.5) {+};
+    \node[block, fill=ext2!20, right=3cm of clean, yshift=-0.5cm] (mixed) {Giọng nói\\+ nhiễu};
+
+    \draw[arrow] (clean.east) -- ++(0.5,0) |- (mixed.west);
+    \draw[arrow] (noise.east) -- ++(0.5,0) |- (mixed.west);
+\end{tikzpicture}
+\end{center}
+
+\begin{examplebox}
+\textbf{Ví dụ:} Giống như sinh viên học tiếng Anh trong phòng im lặng sẽ gặp
+khó khăn khi giao tiếp ở sân bay ồn ào. Nhưng nếu \textbf{luyện tập nghe trong
+quán cà phê} ngay từ đầu, họ sẽ quen và nghe tốt hơn trong mọi tình huống.
+\end{examplebox}
+
+\subsection{Khi sử dụng: lọc nhiễu trước khi nhận diện}
+
+Ngoài việc ``tập nghe'' trong ồn ào, hệ thống còn có thêm một bước \textbf{lọc nhiễu}
+trước khi phân tích âm thanh. Bước này giống như đeo tai nghe chống ồn --
+loại bỏ phần lớn tiếng ồn nền trước khi bạn nghe.
+
+
+% ============================================================
+\section{Nghe liên tục -- Streaming}
+% ============================================================
+
+Các phần trước giả định bạn đưa cho hệ thống \textbf{một file âm thanh ngắn}
+(1 giây) để phân tích. Nhưng trong thực tế, hệ thống phải \textbf{lắng nghe
+liên tục} và phát hiện từ khóa bất kỳ lúc nào.
+
+\subsection{Bước 1: Kiểm tra ``có ai nói không?'' (VAD)}
+
+Hệ thống không chạy nhận diện từ khóa 100\% thời gian -- điều đó quá tốn năng lượng.
+Thay vào đó, nó có một ``bảo vệ'' đứng ở cổng, gọi là \textbf{VAD}
+(Voice Activity Detection):
+
+\begin{itemize}[leftmargin=1.5cm]
+    \item Nếu \textbf{không có giọng nói} (im lặng hoặc chỉ có tiếng ồn nền):
+          không làm gì cả, tiết kiệm pin.
+    \item Nếu \textbf{có giọng nói}: ``Có người nói! Kích hoạt nhận diện!''
+\end{itemize}
+
+\begin{examplebox}
+\textbf{Ví dụ:} Giống bảo vệ ở cổng công ty. Bảo vệ chỉ kiểm tra thẻ khi
+\textbf{có người đến}. Nếu không ai đến, bảo vệ không cần làm gì. Nhờ vậy,
+hệ thống tiết kiệm rất nhiều năng lượng.
+\end{examplebox}
+
+\subsection{Bước 2: Cửa sổ trượt}
+
+Khi VAD phát hiện giọng nói, hệ thống cắt ra \textbf{1 giây âm thanh} để
+phân tích. Sau đó, cửa sổ ``trượt'' về phía trước 0,5 giây và cắt tiếp
+1 giây nữa. Quá trình lặp lại liên tục.
+
+\begin{center}
+\begin{tikzpicture}[scale=0.85]
+    % Timeline
+    \draw[thick, gray] (0, 0) -- (12, 0);
+    \foreach \x in {0, 1, ..., 12} {
+        \draw[gray] (\x, -0.1) -- (\x, 0.1);
+    }
+    \node[font=\scriptsize, gray, below] at (0, -0.15) {0s};
+    \node[font=\scriptsize, gray, below] at (4, -0.15) {2s};
+    \node[font=\scriptsize, gray, below] at (8, -0.15) {4s};
+    \node[font=\scriptsize, gray, below] at (12, -0.15) {6s};
+
+    % Window 1
+    \draw[very thick, core, rounded corners=2pt] (0, 0.3) rectangle (2, 0.8);
+    \node[font=\scriptsize, core] at (1, 0.55) {Cửa sổ 1};
+
+    % Window 2
+    \draw[very thick, ext1, rounded corners=2pt] (1, 1.0) rectangle (3, 1.5);
+    \node[font=\scriptsize, ext1] at (2, 1.25) {Cửa sổ 2};
+
+    % Window 3
+    \draw[very thick, ext2, rounded corners=2pt] (2, 1.7) rectangle (4, 2.2);
+    \node[font=\scriptsize, ext2] at (3, 1.95) {Cửa sổ 3};
+
+    % Annotation
+    \draw[{Stealth[length=2mm]}-{Stealth[length=2mm]}, thick] (0, -0.6) -- (2, -0.6)
+        node[midway, below, font=\scriptsize] {1 giây};
+    \draw[-{Stealth[length=2mm]}, thick, gray] (0.5, -1.1) -- (1.5, -1.1)
+        node[midway, below, font=\scriptsize] {trượt 0,5s};
+\end{tikzpicture}
+\end{center}
+
+Mỗi cửa sổ 1 giây được đưa qua toàn bộ quy trình: lọc nhiễu $\rightarrow$
+MFCC $\rightarrow$ DSCNN $\rightarrow$ so sánh prototype $\rightarrow$ kết quả.
+Toàn bộ quá trình này hoàn thành trong \textbf{dưới 100 mili-giây} --
+nhanh hơn một cái chớp mắt, nên người dùng không cảm thấy độ trễ.
+
+
+% ============================================================
+\section{Tổng kết -- Toàn bộ quy trình}
+% ============================================================
+
+Bây giờ, hãy ghép tất cả lại thành bức tranh toàn cảnh:
+
+\begin{center}
+\begin{tikzpicture}[
+    step/.style={rectangle, draw, rounded corners=5pt, minimum height=1.4cm,
+                 minimum width=2.8cm, align=center, font=\small, thick},
+    arrow/.style={-{Stealth[length=3mm]}, very thick},
+    note/.style={font=\scriptsize, text=gray, align=center}
+]
+    % Steps
+    \node[step, fill=ext2!20] (s1) at (0, 0) {\textbf{1. Nghe}\\Thu âm\\liên tục};
+    \node[step, fill=ext2!30] (s2) at (3.5, 0) {\textbf{2. Lọc}\\Có giọng nói?\\(VAD)};
+    \node[step, fill=ext1!20] (s3) at (7, 0) {\textbf{3. Sạch}\\Lọc nhiễu\\nền};
+    \node[step, fill=core!20] (s4) at (0, -3) {\textbf{4. Chụp}\\MFCC\\(ảnh âm thanh)};
+    \node[step, fill=core!30] (s5) at (3.5, -3) {\textbf{5. Hiểu}\\DSCNN\\(embedding)};
+    \node[step, fill=core!40, text=white] (s6) at (7, -3) {\textbf{6. Quyết định}\\Gần prototype?\\Nhận / Từ chối};
+
+    % Arrows
+    \draw[arrow, ext2] (s1) -- (s2);
+    \draw[arrow, ext2] (s2) -- (s3) node[midway, above, font=\scriptsize] {có};
+    \draw[arrow, ext1] (s3) -- (s3 |- s4.north) -- (s4);
+    \draw[arrow, core] (s4) -- (s5);
+    \draw[arrow, core] (s5) -- (s6);
+
+    % Reject path from VAD
+    \node[note, below=0.2cm of s2] {không $\rightarrow$ bỏ qua};
+
+    % Output
+    \node[step, fill=accepted!20, right=1cm of s6] (out) {\textbf{Kết quả}\\``bật đèn''\\hoặc ``?''};
+    \draw[arrow] (s6) -- (out);
+
+    % Notes
+    \node[note, below=0.15cm of s1] {micro / file};
+    \node[note, below=0.15cm of s4] {490 con số};
+    \node[note, below=0.15cm of s5] {276 con số};
+\end{tikzpicture}
+\end{center}
+
+\vspace{0.5cm}
+
+\begin{center}
+\begin{tabular}{clll}
+\toprule
+\textbf{Bước} & \textbf{Tên} & \textbf{Làm gì} & \textbf{So sánh} \\
+\midrule
+1 & Nghe & Thu âm liên tục & Micro bật sẵn \\
+2 & Lọc giọng & Kiểm tra có người nói? & Bảo vệ ở cổng \\
+3 & Lọc nhiễu & Bỏ tiếng ồn nền & Tai nghe chống ồn \\
+4 & Chụp ảnh & Chuyển sóng âm thành số & Chụp ảnh bài hát \\
+5 & Hiểu & Tìm ý nghĩa trong số & Não nhận ra ý nghĩa \\
+6 & Quyết định & Gần từ nào? Hay từ lạ? & Bóng rơi trong vòng? \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\vspace{1cm}
+
+\begin{examplebox}
+\textbf{Tóm tắt bằng một câu:}
+Hệ thống lắng nghe liên tục, lọc bỏ tiếng ồn, chuyển giọng nói thành con số,
+rồi so sánh với các ``mẫu đại diện'' đã học trước đó. Nếu giống -- nhận ra.
+Nếu khác hết -- từ chối. Tất cả diễn ra trong chưa đầy 1/10 giây.
+\end{examplebox}
+
+
+\end{document}

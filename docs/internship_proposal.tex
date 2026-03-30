@@ -1,0 +1,178 @@
+\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese,english]{babel}
+\usepackage{lmodern}
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm]{geometry}
+\usepackage{enumitem}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{setspace}
+\usepackage{xcolor}
+\usepackage{tabularx}
+
+\onehalfspacing
+\pagestyle{empty}
+
+\begin{document}
+
+% ============================================================
+% HEADER
+% ============================================================
+\noindent
+\begin{minipage}[c]{0.15\textwidth}
+    \includegraphics[width=\linewidth]{Logo.png}
+\end{minipage}%
+\hfill
+\begin{minipage}[c]{0.82\textwidth}
+    \begin{center}
+        {\normalsize\textbf{UNIVERSITY OF SCIENCE \& TECHNOLOGY OF HANOI}} \\
+        {\normalsize\textbf{TRƯỜNG ĐẠI HỌC KHOA HỌC \& CÔNG NGHỆ HÀ NỘI}}
+    \end{center}
+\end{minipage}
+
+\vspace{0.8cm}
+\begin{center}
+    {\Large\textbf{INTERNSHIP TOPIC PROPOSAL}} \\[0.5cm]
+\end{center}
+
+\noindent
+\textbf{Specialty:} \quad $\boxtimes$ Information and Communication Technology \hfill $\square$ Cyber Security \\[0.3cm]
+\textbf{Academic year:} 2025--2026
+
+\vspace{0.5cm}
+\noindent\rule{\textwidth}{0.8pt}
+
+% ============================================================
+% STUDENT INFORMATION
+% ============================================================
+\section*{STUDENT INFORMATION}
+
+\begin{tabularx}{\textwidth}{@{}lX}
+    \textbf{Full name:} & Phạm Hoàng An \\[0.2cm]
+    \textbf{Student ID:} & 23BI14002 \\
+\end{tabularx}
+
+\vspace{0.5cm}
+\noindent\rule{\textwidth}{0.4pt}
+
+% ============================================================
+% TOPIC
+% ============================================================
+\section*{Topic}
+
+Enhanced Few-Shot Open-Set Keyword Spotting with Noise-Robust Prototype Classification and Real-Time Streaming Inference
+
+% ============================================================
+% DESCRIPTION
+% ============================================================
+\section*{Description}
+
+Keyword Spotting (KWS) is the task of detecting predefined spoken keywords in audio streams. It is the core technology behind voice-activated systems such as ``Hey Siri,'' ``OK Google,'' and smart home controllers. Traditional KWS systems require thousands of labeled audio samples per keyword and can only recognize a fixed set of words defined during training.
+
+This project builds a KWS system that overcomes these limitations by combining two key capabilities:
+
+\begin{itemize}[leftmargin=1.5cm]
+    \item \textbf{Few-Shot Learning:} The system can learn to recognize a new keyword from only 3--5 audio samples, without retraining the neural network. This is achieved through Prototypical Networks: each keyword is represented by a ``prototype'' (the average embedding of its few samples), and new audio is classified by measuring its distance to all prototypes.
+
+    \item \textbf{Open-Set Recognition:} The system can reject unknown words that do not belong to any enrolled keyword. Instead of forcing a classification among known classes, it uses an acceptance radius threshold around each prototype --- if the distance exceeds this threshold, the input is rejected as ``unknown.''
+\end{itemize}
+
+The main contribution is a \textbf{Direct L2 distance classification} method that replaces probability-based scoring, providing a more intuitive and effective open-set rejection mechanism where the threshold has a clear geometric meaning as an ``acceptance radius.''
+
+The system pipeline consists of:
+\begin{enumerate}[leftmargin=1.5cm]
+    \item \textbf{Audio preprocessing:} Raw audio (16\,kHz, 1-second segments) is converted to MFCC features (40 coefficients computed, 10 retained after narrowing and transposition).
+    \item \textbf{Feature encoding:} A lightweight Depthwise Separable CNN (DSCNN-L, 276 channels) maps MFCC features to a 276-dimensional embedding space, trained with Triplet Loss on the MSWC English dataset.
+    \item \textbf{Classification:} An Open Nearest Class Mean (openNCM) classifier with Direct L2 distance determines keyword identity or rejects unknown inputs.
+    \item \textbf{Noise robustness (Extension 1):} Noise augmentation during training (DEMAND dataset, fixed 5\,dB SNR) and optional audio denoising at inference time.
+    \item \textbf{Streaming inference (Extension 2):} Voice Activity Detection (Silero VAD) combined with a sliding-window mechanism enables continuous real-time keyword detection.
+\end{enumerate}
+
+
+% ============================================================
+% EXPECTED OUTCOMES
+% ============================================================
+\section*{Expected Outcomes}
+
+\begin{enumerate}[leftmargin=1.5cm]
+    \item A fully functional few-shot open-set KWS system capable of learning new keywords from 3--5 samples without retraining.
+
+    \item Quantitative evaluation comparing the proposed Direct L2 distance method against a probability-based baseline, using standard metrics: DET curves, AUC, and ACC@5\%FAR, across multiple evaluation protocols (GSC Fixed, GSC Randomized, MSWC Randomized).
+
+    \item A noise robustness benchmark showing KWS accuracy at different SNR levels (0, 5, 10, 20\,dB and clean), with and without denoising preprocessing.
+
+    \item A real-time streaming inference module with end-to-end latency under 100\,ms, integrating VAD and sliding-window detection.
+
+    \item Complete source code, trained model checkpoints, and a written thesis report.
+\end{enumerate}
+
+
+% ============================================================
+% USED METHODS AND TECHNIQUES
+% ============================================================
+\section*{Used Methods and Techniques}
+
+\begin{tabularx}{\textwidth}{@{}l X}
+    \toprule
+    \textbf{Category} & \textbf{Details} \\
+    \midrule
+    Feature extraction &
+        MFCC (40 coefficients $\rightarrow$ narrow to 10, transpose);
+        \texttt{torchaudio} library \\[0.3cm]
+    Neural network &
+        DSCNN-L (Depthwise Separable CNN, 276 channels, 5 DS blocks,
+        276-dim embeddings); lightweight architecture suitable for
+        on-device deployment \\[0.3cm]
+    Training method &
+        Episodic metric learning with Triplet Loss (margin=0.5);
+        Adam optimizer with StepLR scheduler ($\gamma=0.5$, step=20);
+        40 epochs $\times$ 400 episodes \\[0.3cm]
+    Classification &
+        Prototypical Networks with Direct L2 distance;
+        Open Nearest Class Mean (openNCM) for open-set rejection;
+        threshold-based acceptance radius \\[0.3cm]
+    Noise robustness &
+        Training-time noise augmentation (DEMAND dataset, $p=0.95$,
+        SNR=5\,dB); inference-time spectral gating denoising \\[0.3cm]
+    Streaming &
+        Silero VAD for voice activity detection;
+        sliding window (1\,s window, 0.5\,s stride) \\[0.3cm]
+    Demo (optional) &
+        Gradio web application for interactive keyword enrollment,
+        offline detection, and streaming demonstration \\[0.3cm]
+    Datasets &
+        Google Speech Commands v2 (GSC, 35 words -- evaluation);
+        Multilingual Spoken Words Corpus (MSWC English, 763 words -- training);
+        DEMAND (noise augmentation) \\[0.3cm]
+    Evaluation &
+        DET curves, AUC, ACC@5\%FAR, FRR@5\%FAR;
+        3 protocols (GSC Fixed, GSC Randomized, MSWC Randomized);
+        5--10 runs for statistical reliability \\[0.3cm]
+    Tools \& frameworks &
+        Python 3.10+, PyTorch 2.0+, torchaudio, SpeechBrain,
+        Gradio, matplotlib, TensorBoard \\[0.3cm]
+    Development &
+        GPU training on Google Colab / Kaggle;
+        Cursor IDE with AI-assisted coding rules \\
+    \bottomrule
+\end{tabularx}
+
+\vspace{1.5cm}
+
+% ============================================================
+% SIGNATURES
+% ============================================================
+\noindent
+\begin{tabularx}{\textwidth}{XX}
+    \centering\textbf{Student's Signature} & \centering\textbf{Supervisor's Signature} \tabularnewline
+    & \tabularnewline
+    & \tabularnewline
+    & \tabularnewline
+    \centering Phạm Hoàng An & \centering\arraybackslash \\
+\end{tabularx}
+
+\end{document}

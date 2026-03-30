@@ -1,0 +1,35 @@
+---
+description: Overall project context and conventions for Few-Shot Open-Set KWS system
+alwaysApply: true
+---
+
+# Few-Shot Open-Set Keyword Spotting Project
+
+This is a graduation thesis project building a Few-Shot Open-Set Keyword Spotting (KWS) system based on Prototypical Networks with DSCNN encoder.
+
+## Architecture
+
+- **Feature Encoder**: DSCNN-L (276ch, embedding_dim=276) with L2-normalized embeddings, trained with Triplet Loss on MSWC
+- **Classifier**: Direct L2 distance-based (no probability normalization) + openNCM for open-set rejection
+- **Enhancements**: Denoising (EXT-1), Streaming/VAD with Silero (EXT-2), Speaker Verification with ECAPA-TDNN (OPTIONAL)
+- **Demo**: Gradio web app
+
+## Key Parameters
+
+- Audio: 16kHz sample rate, 1-second windows, WAV format
+- MFCC: 40 computed, 10 used (narrow first 10 + transpose), 40ms window, 20ms stride
+- Input to DSCNN: (B, 1, 49, 10) = (batch, channel, T_frames, n_features)
+- Training: Episodic with Triplet Loss, margin=0.5, Adam lr=0.001, StepLR(step_size=20, gamma=0.5)
+- Noise augmentation: DEMAND, prob=0.95, fixed SNR=5dB
+- Datasets: GSC v2 (test), MSWC English (train), DEMAND (noise augmentation)
+
+## Conventions
+
+- Python 3.10+, PyTorch 2.0+
+- Type hints on all function signatures
+- Docstrings for public functions (Google style)
+- Config via YAML files in `configs/`
+- All audio processing uses `torchaudio` as primary, `librosa` as fallback
+- Use `pathlib.Path` instead of `os.path` for file paths
+- Every directory under `src/` must have `__init__.py` for Python package imports
+- Random seeds set via configs/default.yaml for reproducibility

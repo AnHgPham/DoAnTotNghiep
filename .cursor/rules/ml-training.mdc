@@ -1,0 +1,64 @@
+---
+description: ML training conventions for DSCNN and Prototypical Network training
+globs: src/models/**/*.py,src/features/**/*.py,scripts/train.py,notebooks/02_training.ipynb
+alwaysApply: false
+---
+
+# ML Training Rules
+
+## Model Architecture
+
+- DSCNN-L: 276 channels, 1 initial conv + 5 DS blocks, embedding_dim=276
+- DS blocks: DepthwiseConv -> BatchNorm -> ReLU -> PointwiseConv -> BatchNorm -> ReLU
+- Last DS block (Block 5): DW still uses BN+ReLU, only post-PW uses LayerNorm(elementwise_affine=False)
+- Initial conv: Conv2d(1, 276, kernel=(10,4), stride=(2,1))
+- DS Block 1 stride=(2,2), DS Blocks 2-5 stride=(1,1)
+- Final layers: AvgPool -> Flatten -> output (B, 276). NO Linear projection.
+- L2-normalization applied EXTERNALLY (F.normalize in ReprModel wrapper)
+- DSCNN-S (64ch, 22K params): optional for ablation only
+
+## Training Protocol
+
+- Episodic batching with Triplet Loss (NOT cross-entropy)
+- Batch: 20 samples x 80 classes, margin=0.5
+- Optimizer: Adam, lr=0.001
+- Scheduler: StepLR(step_size=20, gamma=0.5) -- halve LR every 20 epochs
+- Total: 40 epochs x 400 episodes
+- Train on MSWC (450 words from top 500; 50 held out for validation; 263 eval words never seen)
+- Augment with DEMAND noise: probability=0.95, SNR fixed 5 dB
+
+## Code Patterns
+
+```python
+# Always use torch.no_grad() for inference/enrollment
+with torch.no_grad():
+    embeddings = encoder(mfcc_features)
+
+# Prototypes = mean of support embeddings
+prototype = support_embeddings.mean(dim=0)
+
+# L2 normalize embeddings before distance computation
+embeddings = F.normalize(embeddings, p=2, dim=-1)
+```
+
+## Validation Strategy
+
+- Validation set: 50 words from MSWC top 500 (words ranked 451-500). Training uses remaining 450.
+- Run few-shot evaluation on validation words every 5 epochs
+- **Best metric**: validation AUC (binary keyword vs non-keyword) on 5-way 5-shot episodes
+- Use validation metric to select best checkpoint (not training loss)
+- No early stopping -- run all 40 epochs, pick best by val AUC
+
+## Checkpointing
+
+- Save model state_dict, optimizer state, epoch, val_auc, and training loss
+- Checkpoint path: `checkpoints/{model_name}_{epoch}.pt`
+- Keep best checkpoint by val_auc + latest checkpoint
+- Always log training loss and val_auc to TensorBoard
+
+## Reproducibility
+
+- Set random seeds at start: `torch.manual_seed(seed)`, `np.random.seed(seed)`, `random.seed(seed)`
+- Default seed in configs/default.yaml: 42
+- For N evaluation runs, use seeds [42, 43, ..., 42+N-1]
+- Set `torch.backends.cudnn.deterministic = True` for GPU reproducibility

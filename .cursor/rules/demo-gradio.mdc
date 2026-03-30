@@ -1,0 +1,34 @@
+---
+description: Gradio web demo conventions
+globs: src/demo/**/*.py,notebooks/04_demo.ipynb
+alwaysApply: false
+---
+
+# Gradio Demo Rules
+
+## Structure
+
+Use `gr.Blocks` with 3 tabs:
+1. **Offline Detection**: Upload audio file -> show detected keywords with L2 distance + MFCC spectrogram
+2. **Enrollment**: Record 3-5 samples per keyword to register new keywords (few-shot enrollment)
+3. **Settings + Streaming**: Threshold slider, denoising toggle, shot count, speaker gate toggle, optional streaming demo (upload long audio file for simulated streaming)
+
+## Audio Input
+
+- Accept WAV, MP3, FLAC uploads for offline mode
+- For streaming demo: upload a long audio file (10-30s), run StreamingKWS on it, display results over time (simulated streaming -- more stable than live mic)
+- Optional: `gr.Audio(sources=["microphone"], streaming=True)` for live mic (only if stable)
+- Always resample to 16kHz before processing
+
+## Display
+
+- Show detected keyword with L2 distance score
+- Visualize MFCC spectrogram of input audio
+- Show DET curve for enrolled keywords
+- Display "REJECTED (unknown)" clearly when open-set rejection triggers
+
+## Error Handling
+
+- Graceful fallback if no keywords enrolled yet
+- Show clear messages for audio too short/long
+- Handle microphone permission errors
