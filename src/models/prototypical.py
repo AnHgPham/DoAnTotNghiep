@@ -82,7 +82,7 @@ class TripletLoss(nn.Module):
     def forward(
         self, embeddings: torch.Tensor, labels: torch.Tensor
     ) -> torch.Tensor:
-        """Compute triplet loss over a batch.
+        """Compute triplet loss over a batch (vectorized).
 
         Args:
             embeddings: (N, D) L2-normalized embeddings.
@@ -92,44 +92,39 @@ class TripletLoss(nn.Module):
             Scalar loss value.
         """
         device = embeddings.device
-        unique_labels = labels.unique()
-        total_loss = torch.tensor(0.0, device=device)
-        n_triplets = 0
+        N = embeddings.shape[0]
 
-        for label in unique_labels:
-            mask_pos = labels == label
-            mask_neg = labels != label
+        # Pairwise distance matrix: (N, N)
+        dist_matrix = torch.cdist(embeddings, embeddings, p=2)
 
-            pos_indices = mask_pos.nonzero(as_tuple=True)[0]
-            neg_indices = mask_neg.nonzero(as_tuple=True)[0]
+        # Masks: (N, N)
+        labels_eq = labels.unsqueeze(0) == labels.unsqueeze(1)  # same class
+        labels_neq = ~labels_eq  # different class
 
-            if len(pos_indices) < 2 or len(neg_indices) < 1:
-                continue
+        # For each anchor i, pick random positive and random negative
+        # Positive: same class, different index
+        pos_mask = labels_eq.clone()
+        pos_mask.fill_diagonal_(False)  # exclude self
 
-            for i in range(len(pos_indices)):
-                anchor = embeddings[pos_indices[i]]
-
-                j = random.choice([k for k in range(len(pos_indices)) if k != i])
-                positive = embeddings[pos_indices[j]]
-
-                neg_idx = random.choice(range(len(neg_indices)))
-                negative = embeddings[neg_indices[neg_idx]]
-
-                d_pos = F.pairwise_distance(
-                    anchor.unsqueeze(0), positive.unsqueeze(0)
-                )
-                d_neg = F.pairwise_distance(
-                    anchor.unsqueeze(0), negative.unsqueeze(0)
-                )
-
-                loss = F.relu(d_pos - d_neg + self.margin)
-                total_loss = total_loss + loss.squeeze()
-                n_triplets += 1
-
-        if n_triplets == 0:
+        # Check valid anchors (at least 1 positive and 1 negative)
+        valid_anchor = pos_mask.any(dim=1) & labels_neq.any(dim=1)
+        if not valid_anchor.any():
             return torch.tensor(0.0, device=device, requires_grad=True)
 
-        return total_loss / n_triplets
+        # Random positive: sample one per anchor using Gumbel trick
+        pos_scores = torch.where(pos_mask, torch.rand(N, N, device=device), torch.tensor(-1.0, device=device))
+        pos_idx = pos_scores.argmax(dim=1)  # random positive index
+
+        neg_scores = torch.where(labels_neq, torch.rand(N, N, device=device), torch.tensor(-1.0, device=device))
+        neg_idx = neg_scores.argmax(dim=1)  # random negative index
+
+        d_pos = dist_matrix[torch.arange(N, device=device), pos_idx]
+        d_neg = dist_matrix[torch.arange(N, device=device), neg_idx]
+
+        losses = F.relu(d_pos - d_neg + self.margin)
+        losses = losses[valid_anchor]
+
+        return losses.mean() if losses.numel() > 0 else torch.tensor(0.0, device=device, requires_grad=True)
 
 
 def train_one_epoch(

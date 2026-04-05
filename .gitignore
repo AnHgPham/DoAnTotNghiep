@@ -1,0 +1,63 @@
+# ──────────────── Python ────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+*.egg
+
+# ──────────────── Virtual Environments ────────────────
+venv/
+.venv/
+env/
+
+# ──────────────── IDE / Editor ────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ──────────────── AI Agent / Cursor Rules ────────────────
+.cursor/
+AGENTS.md
+
+# ──────────────── Pytest / Testing ────────────────
+.pytest_cache/
+htmlcov/
+.coverage
+*.cover
+
+# ──────────────── Data & Checkpoints (large files) ────────────────
+data/gsc_v2/
+data/mswc_en/
+data/demand/
+data/*.tar.gz
+data/*.zip
+checkpoints/*.pt
+checkpoints/*.pth
+checkpoints/*.ckpt
+
+# ──────────────── Notebooks outputs ────────────────
+notebooks/*_result.ipynb
+.ipynb_checkpoints/
+
+# ──────────────── OS-specific ────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ──────────────── LaTeX aux files ────────────────
+docs/*.aux
+docs/*.log
+docs/*.out
+docs/*.synctex.gz
+docs/*.fls
+docs/*.fdb_latexmk
+docs/*.toc
+
+# ──────────────── Misc ────────────────
+*.log
+*.tmp

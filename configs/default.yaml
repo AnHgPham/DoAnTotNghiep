@@ -28,8 +28,8 @@ model:
 
 training:
   epochs: 40
-  episodes_per_epoch: 400
-  n_classes: 80
+  episodes_per_epoch: 100
+  n_classes: 30   # GSC has 30 usable words (35 - 5 excluded)
   n_samples: 20
   triplet_margin: 0.5
   optimizer:
