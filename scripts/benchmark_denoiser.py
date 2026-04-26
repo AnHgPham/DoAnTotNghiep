@@ -193,4 +193,9 @@ def main() -> None:
     print("=" * 90)
     output_path = Path("results/denoiser_ablation.json")
     output_path.parent.mkdir(parents=True, exist_ok=True)
- 
+    output_path.write_text(json.dumps(rows, indent=2), encoding="utf-8")
+    print(f"\nSaved {output_path}")
+
+
+if __name__ == "__main__":
+    main()
