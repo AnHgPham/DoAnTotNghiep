@@ -131,7 +131,7 @@ class NoisyMFCCProvider:
 def evaluate(
     encoder: torch.nn.Module,
     base_provider: GSCFewShotProvider,
-    snr_db: float,
+    snr_db: float | None,
     use_denoiser: bool,
     cfg: dict,
     device: torch.device,
