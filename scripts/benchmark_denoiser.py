@@ -176,17 +176,19 @@ def main() -> None:
     print("-" * 90)
 
     rows = []
-    for snr in SNR_LEVELS:
+    conditions: list[tuple[float | None, str]] = [(s, f"SNR={s}dB") for s in SNR_LEVELS]
+    conditions.append((None, "clean (no noise)"))
+    for snr, snr_label in conditions:
         for use_dn in (False, True):
-            label = f"SNR={snr}dB, dn={'on' if use_dn else 'off'}"
+            label = f"{snr_label}, dn={'on' if use_dn else 'off'}"
             res = evaluate(encoder, base_provider, snr, use_dn, cfg, device)
             rows.append({
-                "snr_db": snr,
+                "snr_db": snr if snr is not None else "clean",
                 "denoiser": "on" if use_dn else "off",
                 **{k: res[k] for k in ["auc", "eer", "frr_at_far", "open_set_acc_at_far", "keyword_acc", "f1"]},
             })
             print(
-                f"{label:<22} | {res['auc']:>8.4f} | {res['eer']:>8.4f} | "
+                f"{label:<26} | {res['auc']:>8.4f} | {res['eer']:>8.4f} | "
                 f"{res['open_set_acc_at_far']:>10.4f} | {res['keyword_acc']:>8.4f} | {res['f1']:>8.4f}"
             )
 
