@@ -1,0 +1,27 @@
+[
+  {
+    "step": "MFCC extraction (1 s window)",
+    "mean_ms": 1.4131959923543036,
+    "std_ms": 0.5542656346810625
+  },
+  {
+    "step": "DSCNN encode (1 s window)",
+    "mean_ms": 10.950560001656413,
+    "std_ms": 2.3177542889577176
+  },
+  {
+    "step": "Silero VAD (32 ms chunk)",
+    "mean_ms": 0.4651699960231781,
+    "std_ms": 0.24269049174030843
+  },
+  {
+    "step": "end_to_end_30s (no VAD)",
+    "mean_ms": 294.7979000164196,
+    "rtf": 0.009826596667213987
+  },
+  {
+    "step": "vad_only_30s",
+    "mean_ms": 452.1917999954894,
+    "rtf": 0.015073059999849647
+  }
+]

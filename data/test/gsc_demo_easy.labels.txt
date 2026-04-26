@@ -1,0 +1,1 @@
+yes,no,stop,go,up,down,left,right,on,off,stop,yes,go,no,up,down,off,on,left,right

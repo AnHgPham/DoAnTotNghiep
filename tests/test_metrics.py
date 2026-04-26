@@ -9,7 +9,10 @@ from src.evaluation.metrics import (
     compute_auc,
     compute_det_curve,
     compute_frr_at_far,
+    compute_keyword_accuracy,
     compute_mean_det,
+    compute_open_set_acc_at_far,
+    get_threshold_at_far,
     plot_det_curves,
 )
 
@@ -63,6 +66,32 @@ def test_frr_at_far_random():
     scores = rng.rand(500)
     frr = compute_frr_at_far(y_true, scores, target_far=0.05)
     assert 0.0 <= frr <= 1.0
+
+
+def test_get_threshold_at_far():
+    y_true = np.array([1, 1, 1, 0, 0, 0])
+    scores = np.array([0.9, 0.8, 0.7, 0.3, 0.2, 0.1])
+    threshold = get_threshold_at_far(y_true, scores, target_far=0.05)
+    assert 0.3 < threshold <= 0.7
+
+
+def test_open_set_acc_at_far():
+    y_true = np.array([1, 1, 0, 0])
+    y_true_labels = ["yes", "no", "unknown", "unknown"]
+    y_pred_labels = ["yes", "yes", "yes", "no"]
+    scores = np.array([0.9, 0.85, 0.3, 0.2])
+    acc = compute_open_set_acc_at_far(
+        y_true,
+        y_true_labels,
+        y_pred_labels,
+        scores,
+        target_far=0.05,
+    )
+    assert acc == 0.75
+
+
+def test_keyword_accuracy():
+    assert compute_keyword_accuracy(["yes", "no", "up"], ["yes", "up", "up"]) == (2 / 3)
 
 
 def test_mean_det():

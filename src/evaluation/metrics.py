@@ -1,6 +1,7 @@
 """Evaluation metrics for few-shot open-set keyword spotting.
 
-Provides DET curve computation, AUC, ACC@FAR, FRR@FAR, and DET plotting.
+Provides DET curve computation, AUC, EER, Precision/Recall/F1,
+ACC@FAR, FRR@FAR, and DET plotting.
 All metrics operate on binary (keyword vs non-keyword) decisions.
 """
 
@@ -8,7 +9,11 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.metrics import roc_auc_score, roc_curve
+from sklearn.metrics import (
+    precision_recall_fscore_support,
+    roc_auc_score,
+    roc_curve,
+)
 
 
 def compute_det_curve(
@@ -79,6 +84,26 @@ def compute_auc(y_true: np.ndarray, scores: np.ndarray) -> float:
     return float(roc_auc_score(y_true, scores))
 
 
+def get_threshold_at_far(
+    y_true: np.ndarray,
+    scores: np.ndarray,
+    target_far: float = 0.05,
+) -> float:
+    """Find the operating threshold whose FAR does not exceed target_far."""
+    if len(np.unique(y_true)) < 2:
+        return float("inf")
+
+    far, _, thresholds = roc_curve(y_true, scores)
+    valid = far <= target_far
+    if not np.any(valid):
+        return float("inf")
+
+    idx = np.where(valid)[0][-1]
+    if idx >= len(thresholds):
+        idx = len(thresholds) - 1
+    return float(thresholds[idx])
+
+
 def compute_acc_at_far(
     y_true: np.ndarray,
     y_pred: np.ndarray,
@@ -99,18 +124,7 @@ def compute_acc_at_far(
     Returns:
         Accuracy at the operating point.
     """
-    far, frr = compute_det_curve(y_true, scores)
-
-    valid = far <= target_far
-    if not np.any(valid):
-        return 0.0
-
-    idx = np.where(valid)[0][-1]
-
-    fpr, tpr, thresholds = roc_curve(y_true, scores)
-    if idx >= len(thresholds):
-        idx = len(thresholds) - 1
-    threshold = thresholds[idx]
+    threshold = get_threshold_at_far(y_true, scores, target_far)
 
     accepted = scores >= threshold
     correct = (y_pred == y_true) & accepted
@@ -118,6 +132,103 @@ def compute_acc_at_far(
 
     total_correct = np.sum(correct) + np.sum(rejected_correct)
     return float(total_correct / len(y_true))
+
+
+def compute_open_set_acc_at_far(
+    y_true: np.ndarray,
+    y_true_labels: list[str],
+    y_pred_labels: list[str],
+    scores: np.ndarray,
+    target_far: float = 0.05,
+) -> float:
+    """Open-set multiclass accuracy at a target FAR operating point."""
+    if len(y_true) == 0:
+        return 0.0
+
+    threshold = get_threshold_at_far(y_true, scores, target_far)
+    accepted = scores >= threshold
+
+    total_correct = 0
+    for is_known, true_label, pred_label, is_accepted in zip(
+        y_true,
+        y_true_labels,
+        y_pred_labels,
+        accepted,
+        strict=True,
+    ):
+        if is_known == 1:
+            total_correct += int(is_accepted and pred_label == true_label)
+        else:
+            total_correct += int(not is_accepted)
+
+    return float(total_correct / len(y_true))
+
+
+def compute_keyword_accuracy(
+    y_true_labels: list[str],
+    y_pred_labels: list[str],
+) -> float:
+    """Closed-set keyword identification accuracy."""
+    if not y_true_labels:
+        return 0.0
+
+    return float(
+        np.mean(
+            np.array(y_true_labels, dtype=object)
+            == np.array(y_pred_labels, dtype=object)
+        )
+    )
+
+
+def compute_eer(
+    y_true: np.ndarray, scores: np.ndarray
+) -> tuple[float, float]:
+    """Compute Equal Error Rate (EER).
+
+    EER is the operating point where FAR == FRR.
+
+    Args:
+        y_true: Binary labels (1=keyword, 0=non-keyword).
+        scores: Confidence scores (higher = more likely keyword).
+
+    Returns:
+        (eer, threshold_at_eer) tuple.
+    """
+    if len(np.unique(y_true)) < 2:
+        return 1.0, 0.0
+
+    fpr, tpr, thresholds = roc_curve(y_true, scores)
+    fnr = 1.0 - tpr
+
+    idx = np.nanargmin(np.abs(fpr - fnr))
+    eer = float((fpr[idx] + fnr[idx]) / 2.0)
+    thr = float(thresholds[min(idx, len(thresholds) - 1)])
+    return eer, thr
+
+
+def compute_precision_recall_f1(
+    y_true: np.ndarray,
+    y_pred: np.ndarray,
+    average: str = "binary",
+) -> dict[str, float]:
+    """Compute precision, recall, and F1 score.
+
+    Args:
+        y_true: True binary labels (1=keyword, 0=non-keyword).
+        y_pred: Predicted binary labels.
+        average: Averaging method ('binary', 'macro', 'micro', 'weighted').
+
+    Returns:
+        Dict with 'precision', 'recall', 'f1' keys.
+    """
+    precision, recall, f1, _ = precision_recall_fscore_support(
+        y_true, y_pred, average=average, zero_division=0.0
+    )
+    return {
+        "precision": float(precision),
+        "recall": float(recall),
+        "f1": float(f1),
+    }
 
 
 def compute_frr_at_far(

@@ -27,18 +27,43 @@ model:
   feature_mode: "NORM"
 
 training:
-  epochs: 40
-  episodes_per_epoch: 100
-  n_classes: 30   # GSC has 30 usable words (35 - 5 excluded)
+  epochs: 100
+  episodes_per_epoch: 600
+  n_classes: 30
   n_samples: 20
-  triplet_margin: 0.5
+  triplet_margin: 1.0          # increased from 0.5 -- L2-norm embeddings have max distance 2.0
+  mining: "semi_hard"          # random | hard | semi_hard (semi_hard recommended)
+  grad_clip: 5.0               # max L2 norm for gradient clipping (0 disables)
+  loss: "triplet"              # triplet | arcface | scaf
+  arcface:
+    scale: 30.0
+    margin: 0.5
+    sub_centers: 3
   optimizer:
     type: "Adam"
     lr: 0.001
+    weight_decay: 0.0001       # L2 regularization
   scheduler:
-    type: "StepLR"
+    type: "CosineAnnealingWarmRestarts"  # CosineAnnealingWarmRestarts | StepLR
+    T_0: 10
+    T_mult: 2
+    eta_min: 0.00001
+    # Legacy StepLR fields (kept for backward compatibility)
     step_size: 20
     gamma: 0.5
+
+augmentation:
+  noise_prob: 0.95
+  snr_range: [0, 10]
+  speed_perturb: [0.9, 1.1]
+  gain_db: [-6, 6]
+  time_shift_ms: 100
+  spec_augment:
+    enabled: true
+    freq_mask: 5               # increased from 3
+    time_mask: 12              # increased from 8
+    n_freq_masks: 2            # increased from 1
+    n_time_masks: 2            # increased from 1
 
 noise:
   demand_dir: "data/demand"
@@ -46,12 +71,14 @@ noise:
   snr_db: 5.0
 
 data:
-  gsc_dir: "data/gsc_v2"
-  mswc_dir: "data/mswc_en"
-  demand_dir: "data/demand"
+  train_dir: "data/mswc_en"  # primary training data (MSWC English)
+  gsc_dir: "data/gsc_v2"     # evaluation only (GSC v2)
+  mswc_dir: "data/mswc_en"   # same as train_dir
+  demand_dir: "data/demand"   # noise augmentation
   mswc_train_words: 450
   mswc_val_words: 50
-  mswc_eval_words: 263
+  mswc_eval_words: 485  # actual count from MSWC metadata (words ranked 501+ with >=1000 clips)
+  max_per_word: 500     # increased from 200 -- more diversity per word
 
 checkpoint:
   dir: "checkpoints"
@@ -68,3 +95,13 @@ streaming:
   min_speech_ms: 250
   window_size: 16000
   stride: 8000
+
+denoising:
+  enabled: true
+  backend: "spectral_gate"  # spectral_gate | speechbrain
+  prop_decrease: 0.9
+
+speaker_verification:
+  enabled: false
+  model: "speechbrain/spkrec-ecapa-voxceleb"
+  threshold: 0.25

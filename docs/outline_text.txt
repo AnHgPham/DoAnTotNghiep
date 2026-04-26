@@ -1,0 +1,61 @@
+=== PAGE 1 ===
+Phụlục 1
+Annex 1
+TRƯỜNG ĐẠI HỌC KHOA HỌC VÀ CÔNG NGHỆHÀ NỘI
+UNIVERSITY OF SCIENCE AND TECHNOLOGY OF HANOI
+INTERNSHIP OUTLINE FOR BACHELOR/ MASTER STUDENT
+Department: Department of Information and Communication Technology
+Topic:
+Enhanced Few-Shot Open-Set Keyword Spotting with Noise-Robust Prototype Classification and
+Real-Time Streaming Inference
+Description:
+Keyword Spotting (KWS) is the task of detecting predefined spoken keywords in audio streams — the
+core technology behind voice-activated systems such as “Hey Siri” and “OK Google.” Traditional
+KWS systems require thousands of labeled samples per keyword and can only recognize a fixed
+vocabulary defined during training.
+This project builds a KWS system that overcomes these limitations through:
+• Few-Shot Learning: Recognize new keywords from only 3–5 audio samples without retrain-
+ing, using Prototypical Networks where each keyword is represented by the average embedding
+(prototype) of its few samples.
+• Open-Set Recognition: Reject unknown words using an acceptance-radius threshold around
+each prototype — if the L2 distance exceeds this threshold, the input is classified as “unknown.”
+The main contribution is a Direct L2 distance classification method replacing probability-based
+scoring, providing a more intuitive open-set rejection mechanism with a clear geometric meaning.
+System pipeline:
+1. Audio preprocessing: raw audio (16 kHz, 1s) →MFCC features (40 computed, 10 retained).
+2. Feature encoding: DSCNN-L (276 channels) →276-dim embeddings, trained with Triplet Loss
+on MSWC English.
+3. Classification: Open Nearest Class Mean (openNCM) with Direct L2 distance.
+4. Noise robustness: DEMAND noise augmentation (SNR = 5 dB) + optional denoising at infer-
+ence.
+5. Streaming inference: Silero VAD + sliding window (1s window, 0.5s stride).
+Datasets: Google Speech Commands v2 (evaluation), MSWC English 763 words (training), DE-
+MAND (noise).
+Tools: Python 3.10+, PyTorch 2.0+, torchaudio, Gradio (demo), Google Colab (GPU training).
+Objectives:
+1
+
+
+=== PAGE 2 ===
+The tasks include:
+1. Build a fully functional few-shot open-set KWS system capable of learning new keywords from
+3–5 audio samples without retraining the neural network.
+2. Implement and evaluate the proposed Direct L2 distance classification method against a
+probability-based baseline, using DET curves, AUC, and ACC@5%FAR across multiple pro-
+tocols (GSC Fixed, GSC Randomized, MSWC Randomized).
+3. Develop a noise robustness module with training-time noise augmentation (DEMAND dataset)
+and benchmark KWS accuracy at different SNR levels (0, 5, 10, 20 dB, clean).
+4. Implement a real-time streaming inference module integrating Voice Activity Detection (Silero
+VAD) and sliding-window keyword detection with end-to-end latency under 100 ms.
+5. Build an interactive Gradio web demo supporting keyword enrollment, offline detection, and
+simulated streaming detection.
+6. Deliver complete source code, trained model checkpoints, evaluation results, and a written thesis
+report.
+Hà Nội, 3/ 4 / 2026
+Student
+(Full-name and signature)
+An
+Phạm Hoàng An
+2
+
+
