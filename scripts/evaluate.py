@@ -20,6 +20,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.classifiers.open_ncm import OpenNCMClassifier
+from src.classifiers.openmax import OpenMAXClassifier
 from src.evaluation.gsc import GSCFewShotProvider
 from src.evaluation.metrics import plot_det_curves
 from src.evaluation.protocols import EvaluationProtocol
@@ -68,9 +69,25 @@ def main() -> None:
     parser.add_argument("--n-way", type=int, default=None,
                         help="Override config evaluation.n_way")
     parser.add_argument("--scoring", type=str, default="l2",
-                        choices=["l2", "probability"],
+                        choices=["l2", "probability", "scaled_l2", "openmax"],
                         help="l2 = Direct L2 distance (proposed); "
-                             "probability = softmax over -distances (Rusci baseline)")
+                             "probability = softmax over -distances (Rusci baseline); "
+                             "scaled_l2 = per-prototype variance-normalized L2; "
+                             "openmax = Weibull tail-fit OpenMAX score")
+    parser.add_argument("--classifier", type=str, default="openncm",
+                        choices=["openncm", "openmax"],
+                        help="openncm = OpenNCMClassifier (L2-distance based); "
+                             "openmax = OpenMAXClassifier (Weibull tail-fit). "
+                             "Selecting openmax forces --scoring openmax.")
+    parser.add_argument("--tail-size", type=int, default=20,
+                        help="OpenMAX Weibull tail size (effective: min(tail_size, k_shot))")
+    parser.add_argument("--openmax-mode", type=str, default="per_class",
+                        choices=["per_class", "global"],
+                        help="OpenMAX Weibull mode. 'global' pools all support "
+                             "distances into a single Weibull (more stable for low-shot).")
+    parser.add_argument("--openmax-hybrid", type=float, default=0.0,
+                        help="OpenMAX hybrid score weight in [0,1]: "
+                             "score = (1-alpha)*(1-cdf) + alpha*exp(-d). 0 = pure Weibull.")
     parser.add_argument("--output-dir", type=str, default="results")
     parser.add_argument(
         "--plot-det",
@@ -84,6 +101,11 @@ def main() -> None:
         help="Optional output path for DET curve PNG.",
     )
     args = parser.parse_args()
+
+    if args.classifier == "openmax":
+        args.scoring = "openmax"
+    elif args.scoring == "openmax" and args.classifier != "openmax":
+        parser.error("--scoring openmax requires --classifier openmax")
 
     logging.basicConfig(
         level=logging.INFO,
@@ -121,10 +143,20 @@ def main() -> None:
         scoring_method=args.scoring,
     )
 
-    classifier = OpenNCMClassifier()
+    if args.classifier == "openmax":
+        classifier = OpenMAXClassifier(
+            tail_size=args.tail_size,
+            mode=args.openmax_mode,
+            hybrid_alpha=args.openmax_hybrid,
+        )
+    else:
+        classifier = OpenNCMClassifier()
 
     logger.info("=" * 60)
-    logger.info("Protocol: %s (dataset=%s, mode=%s, n_runs=%d)", args.protocol, dataset, mode, n_runs)
+    logger.info(
+        "Protocol: %s (dataset=%s, mode=%s, n_runs=%d, classifier=%s, scoring=%s)",
+        args.protocol, dataset, mode, n_runs, args.classifier, args.scoring,
+    )
     logger.info("=" * 60)
 
     if dataset == "gsc":
@@ -146,7 +178,9 @@ def main() -> None:
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     suffix = f"_k{k_shot}" if k_shot != cfg["evaluation"]["k_shot"] else ""
-    if args.scoring != "l2":
+    if args.classifier != "openncm":
+        suffix += f"_{args.classifier}"
+    elif args.scoring != "l2":
         suffix += f"_{args.scoring}"
     output_path = output_dir / f"{args.protocol}{suffix}_results.json"
     with output_path.open("w", encoding="utf-8") as f:

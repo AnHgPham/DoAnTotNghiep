@@ -1,0 +1,145 @@
+{
+  "sample_rate": 16000,
+  "words": [
+    {
+      "label": "zero",
+      "start_sample": 0,
+      "end_sample": 16000,
+      "start_sec": 0.0,
+      "end_sec": 1.0
+    },
+    {
+      "label": "one",
+      "start_sample": 27200,
+      "end_sample": 43200,
+      "start_sec": 1.7,
+      "end_sec": 2.7
+    },
+    {
+      "label": "two",
+      "start_sample": 54400,
+      "end_sample": 70400,
+      "start_sec": 3.4,
+      "end_sec": 4.4
+    },
+    {
+      "label": "three",
+      "start_sample": 81600,
+      "end_sample": 97600,
+      "start_sec": 5.1,
+      "end_sec": 6.1
+    },
+    {
+      "label": "four",
+      "start_sample": 108800,
+      "end_sample": 124800,
+      "start_sec": 6.8,
+      "end_sec": 7.8
+    },
+    {
+      "label": "five",
+      "start_sample": 136000,
+      "end_sample": 152000,
+      "start_sec": 8.5,
+      "end_sec": 9.5
+    },
+    {
+      "label": "six",
+      "start_sample": 163200,
+      "end_sample": 179200,
+      "start_sec": 10.2,
+      "end_sec": 11.2
+    },
+    {
+      "label": "seven",
+      "start_sample": 190400,
+      "end_sample": 206400,
+      "start_sec": 11.9,
+      "end_sec": 12.9
+    },
+    {
+      "label": "eight",
+      "start_sample": 217600,
+      "end_sample": 233600,
+      "start_sec": 13.6,
+      "end_sec": 14.6
+    },
+    {
+      "label": "nine",
+      "start_sample": 244800,
+      "end_sample": 260800,
+      "start_sec": 15.3,
+      "end_sec": 16.3
+    },
+    {
+      "label": "nine",
+      "start_sample": 272000,
+      "end_sample": 288000,
+      "start_sec": 17.0,
+      "end_sec": 18.0
+    },
+    {
+      "label": "zero",
+      "start_sample": 299200,
+      "end_sample": 315200,
+      "start_sec": 18.7,
+      "end_sec": 19.7
+    },
+    {
+      "label": "five",
+      "start_sample": 326400,
+      "end_sample": 342400,
+      "start_sec": 20.4,
+      "end_sec": 21.4
+    },
+    {
+      "label": "three",
+      "start_sample": 353600,
+      "end_sample": 369600,
+      "start_sec": 22.1,
+      "end_sec": 23.1
+    },
+    {
+      "label": "seven",
+      "start_sample": 380800,
+      "end_sample": 396800,
+      "start_sec": 23.8,
+      "end_sec": 24.8
+    },
+    {
+      "label": "one",
+      "start_sample": 408000,
+      "end_sample": 424000,
+      "start_sec": 25.5,
+      "end_sec": 26.5
+    },
+    {
+      "label": "two",
+      "start_sample": 435200,
+      "end_sample": 451200,
+      "start_sec": 27.2,
+      "end_sec": 28.2
+    },
+    {
+      "label": "eight",
+      "start_sample": 462400,
+      "end_sample": 478400,
+      "start_sec": 28.9,
+      "end_sec": 29.9
+    },
+    {
+      "label": "four",
+      "start_sample": 489600,
+      "end_sample": 505600,
+      "start_sec": 30.6,
+      "end_sec": 31.6
+    },
+    {
+      "label": "six",
+      "start_sample": 516800,
+      "end_sample": 532800,
+      "start_sec": 32.3,
+      "end_sec": 33.3
+    }
+  ]
+}

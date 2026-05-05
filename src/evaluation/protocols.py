@@ -73,8 +73,11 @@ class EvaluationProtocol:
         self.n_way = n_way
         self.k_shot = k_shot
         self.seed = seed
-        if scoring_method not in ("l2", "probability"):
-            raise ValueError(f"scoring_method must be 'l2' or 'probability', got {scoring_method!r}")
+        if scoring_method not in ("l2", "probability", "scaled_l2", "openmax"):
+            raise ValueError(
+                f"scoring_method must be 'l2' | 'probability' | 'scaled_l2' | 'openmax', "
+                f"got {scoring_method!r}"
+            )
         self.scoring_method = scoring_method
 
         if dataset == "gsc" and mode == "fixed":
@@ -253,23 +256,50 @@ class EvaluationProtocol:
                 proto_tensor = torch.stack(prototypes)
                 classifier.set_prototypes(proto_tensor, proto_labels)
 
-                # Calibrate threshold using intra-class distances of support set
-                support_dists: list[float] = []
+                # Calibrate per-prototype thresholds and intra-class std from support distances.
+                per_proto_thresholds: dict[str, float] = {}
+                proto_stds: dict[str, float] = {}
+                proto_means: dict[str, float] = {}
+                global_dists: list[float] = []
+                support_distances: dict[str, list[float]] = {}
+                alpha = 2.0
                 for word_idx, word in enumerate(positive_words):
                     sup_mfcc, _ = sample_provider.get_support_samples(
                         word, self.k_shot, seed=run_seed,
                     )
                     sup_mfcc = sup_mfcc.to(device)
                     sup_emb = F.normalize(encoder(sup_mfcc), p=2, dim=-1)
+                    proto_dists = []
                     for i in range(sup_emb.shape[0]):
                         d = torch.dist(sup_emb[i], prototypes[word_idx], p=2).item()
-                        support_dists.append(d)
+                        proto_dists.append(d)
+                        global_dists.append(d)
+                    support_distances[word] = proto_dists
+                    mean_d = float(np.mean(proto_dists))
+                    std_d = float(np.std(proto_dists)) if len(proto_dists) > 1 else 0.0
+                    proto_means[word] = mean_d
+                    proto_stds[word] = max(std_d, 1e-3)  # avoid divide-by-zero
+                    per_proto_thresholds[word] = mean_d + alpha * std_d
 
-                mean_d = float(np.mean(support_dists))
-                std_d = float(np.std(support_dists))
-                adaptive_threshold = mean_d + 2.0 * std_d
-                classifier.threshold = adaptive_threshold
-                logger.info("  Adaptive threshold: %.4f (mean=%.4f, std=%.4f)", adaptive_threshold, mean_d, std_d)
+                if self.scoring_method == "openmax":
+                    classifier.fit_weibull(support_distances)
+                    sample_w = ", ".join(
+                        f"{label}(shape={p[0]:.2f},scale={p[2]:.3f})"
+                        for label, p in list(classifier._weibull_params.items())[:3]
+                    )
+                    logger.info("  Weibull params (first 3): %s, ...", sample_w)
+                elif per_proto_thresholds:
+                    classifier.set_per_prototype_thresholds(per_proto_thresholds)
+                    classifier.threshold = float(
+                        np.mean(global_dists) + alpha * np.std(global_dists)
+                    )
+                    sample_thr = ", ".join(
+                        f"{label}={value:.3f}" for label, value in list(per_proto_thresholds.items())[:3]
+                    )
+                    logger.info(
+                        "  Per-prototype thresholds (first 3): %s, ... (global=%.4f)",
+                        sample_thr, classifier.threshold,
+                    )
 
                 # Query: evaluate on remaining samples
                 y_true_list = []
@@ -284,9 +314,28 @@ class EvaluationProtocol:
                     emb = F.normalize(emb, p=2, dim=-1)
                     for i in range(emb.shape[0]):
                         dists = classifier.get_distances(emb[i])
-                        min_dist = min(dists.values())
-                        pred_label = min(dists, key=dists.get)
-                        if self.scoring_method == "probability":
+                        if self.scoring_method == "openmax":
+                            scores = classifier.get_scores(emb[i])
+                            # Decouple classification (argmin distance) from
+                            # rejection score (Weibull-revised confidence).
+                            # Argmax-score classification confused classes
+                            # with wider Weibull scale; argmin-dist matches
+                            # the OpenMAX paper's modified-softmax behaviour.
+                            pred_label = min(dists, key=dists.get)
+                            score = scores[pred_label]
+                            min_dist = dists[pred_label]
+                        elif self.scoring_method == "scaled_l2":
+                            scaled = {
+                                label: (d - proto_means.get(label, 0.0)) / proto_stds.get(label, 1.0)
+                                for label, d in dists.items()
+                            }
+                            min_label = min(scaled, key=scaled.get)
+                            score = -scaled[min_label]
+                            min_dist = dists[min_label]
+                            pred_label = min_label
+                        elif self.scoring_method == "probability":
+                            min_dist = min(dists.values())
+                            pred_label = min(dists, key=dists.get)
                             dist_array = np.array(list(dists.values()), dtype=float)
                             logits = -dist_array
                             logits -= logits.max()
@@ -294,6 +343,8 @@ class EvaluationProtocol:
                             probs /= probs.sum()
                             score = float(probs.max())
                         else:
+                            min_dist = min(dists.values())
+                            pred_label = min(dists, key=dists.get)
                             score = -min_dist
                         y_true_list.append(is_known)
                         y_true_labels.append(true_label)

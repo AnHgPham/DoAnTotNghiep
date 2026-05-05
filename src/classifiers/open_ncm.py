@@ -20,6 +20,27 @@ class OpenNCMClassifier:
         self.threshold = threshold
         self.prototypes: torch.Tensor | None = None
         self.labels: list[str] = []
+        self.thresholds_per_prototype: dict[str, float] | None = None
+
+    def set_per_prototype_thresholds(self, thresholds: dict[str, float]) -> None:
+        """Register per-prototype acceptance radii (overrides global threshold).
+
+        Args:
+            thresholds: Mapping from label to L2 distance cutoff.
+        """
+        if self.prototypes is None:
+            raise RuntimeError("No prototypes set. Call set_prototypes() first.")
+        missing = [label for label in self.labels if label not in thresholds]
+        if missing:
+            raise ValueError(f"Missing thresholds for labels: {missing}")
+        self.thresholds_per_prototype = {label: float(thresholds[label]) for label in self.labels}
+
+    def _threshold_for(self, label: str) -> float:
+        if self.thresholds_per_prototype is not None:
+            return self.thresholds_per_prototype[label]
+        if self.threshold is None:
+            raise RuntimeError("No threshold set. Call calibrate() first.")
+        return float(self.threshold)
 
     def set_prototypes(
         self, prototypes: torch.Tensor, labels: list[str]
@@ -52,7 +73,7 @@ class OpenNCMClassifier:
         """
         if self.prototypes is None:
             raise RuntimeError("No prototypes set. Call set_prototypes() first.")
-        if self.threshold is None:
+        if self.threshold is None and self.thresholds_per_prototype is None:
             raise RuntimeError("No threshold set. Call calibrate() first.")
 
         if query_embedding.dim() == 2:
@@ -63,10 +84,12 @@ class OpenNCMClassifier:
         ).squeeze(0)  # (N,)
 
         min_dist, min_idx = distances.min(dim=0)
+        predicted_label = self.labels[min_idx.item()]
+        threshold = self._threshold_for(predicted_label)
 
-        if min_dist.item() > self.threshold:
+        if min_dist.item() > threshold:
             return ("unknown", min_dist.item())
-        return (self.labels[min_idx.item()], min_dist.item())
+        return (predicted_label, min_dist.item())
 
     def predict_batch(
         self, query_embeddings: torch.Tensor

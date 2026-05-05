@@ -8,7 +8,7 @@ Usage:
         --audio data/test/gsc_demo_20words.wav \
         --timings data/test/gsc_demo_20words.timings.json \
         --enroll yes,no,stop,go,up,down,left,right,on,off \
-        --k 20
+        --k 5
 """
 
 import argparse
@@ -59,7 +59,7 @@ def main() -> None:
     parser.add_argument("--checkpoint", type=Path, default=Path("checkpoints/best.pt"))
     parser.add_argument("--enroll", type=str,
                         default="yes,no,stop,go,up,down,left,right,on,off")
-    parser.add_argument("--k", type=int, default=20, help="Enrollment samples per word")
+    parser.add_argument("--k", type=int, default=5, help="Enrollment samples per word (thesis: k=5)")
     parser.add_argument("--threshold", type=float, default=0.65)
     parser.add_argument("--gsc-dir", type=Path, default=Path("data/gsc_v2"))
     args = parser.parse_args()

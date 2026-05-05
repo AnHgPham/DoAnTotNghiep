@@ -26,7 +26,7 @@ TARGET_WORDS  = ["yes", "no", "stop", "go", "up", "down", "left", "right", "on",
 # Unknown words (negative set) - cac word khong enroll
 UNKNOWN_WORDS = ["bed", "bird", "cat", "dog", "four", "five", "eight", "nine", "zero", "one",
                  "two", "three", "seven", "six", "tree", "happy", "house", "marvin", "sheila", "wow"]
-K_SHOT = 10  # Enroll 10 samples per target word
+K_SHOT = 5  # Align with thesis / evaluation: 5 samples per target word
 N_POS_TEST = 50  # Test samples per target word
 N_NEG_TEST = 20  # Unknown samples per unknown word
 SEED = 42

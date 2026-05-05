@@ -34,7 +34,8 @@ from src.models.dscnn import DSCNN
 SR = 16000
 NOISE_DIR = Path("data/gsc_v2/_background_noise_")
 SNR_LEVELS = [0, 5, 10, 20]  # plus clean baseline
-N_RUNS = 3
+N_RUNS = 2
+MAX_SAMPLES_PER_WORD = 15
 
 
 def load_noise_clips() -> list[torch.Tensor]:
@@ -92,7 +93,7 @@ class NoisyMFCCProvider:
     def get_support_samples(self, word: str, n_samples: int, seed: int = 42):
         return self.base.get_support_samples(word, n_samples, seed=seed)
 
-    def get_query_samples(self, word: str, max_samples: int = 50):
+    def get_query_samples(self, word: str, max_samples: int = MAX_SAMPLES_PER_WORD):
         paths = self.base._test_files.get(word, [])
         if not paths:
             return self.base.get_query_samples(word, max_samples=max_samples)
@@ -178,19 +179,26 @@ def main() -> None:
     rows = []
     conditions: list[tuple[float | None, str]] = [(s, f"SNR={s}dB") for s in SNR_LEVELS]
     conditions.append((None, "clean (no noise)"))
-    for snr, snr_label in conditions:
+
+    import time as _time
+    total_start = _time.perf_counter()
+    for cond_idx, (snr, snr_label) in enumerate(conditions, start=1):
         for use_dn in (False, True):
             label = f"{snr_label}, dn={'on' if use_dn else 'off'}"
+            t0 = _time.perf_counter()
             res = evaluate(encoder, base_provider, snr, use_dn, cfg, device)
+            dt = _time.perf_counter() - t0
             rows.append({
                 "snr_db": snr if snr is not None else "clean",
                 "denoiser": "on" if use_dn else "off",
                 **{k: res[k] for k in ["auc", "eer", "frr_at_far", "open_set_acc_at_far", "keyword_acc", "f1"]},
             })
             print(
-                f"{label:<26} | {res['auc']:>8.4f} | {res['eer']:>8.4f} | "
-                f"{res['open_set_acc_at_far']:>10.4f} | {res['keyword_acc']:>8.4f} | {res['f1']:>8.4f}"
+                f"[{cond_idx}/{len(conditions)}] {label:<26} | {res['auc']:>8.4f} | {res['eer']:>8.4f} | "
+                f"{res['open_set_acc_at_far']:>10.4f} | {res['keyword_acc']:>8.4f} | {res['f1']:>8.4f} | {dt:5.1f}s"
             )
+    total_dt = _time.perf_counter() - total_start
+    print(f"\nTotal time: {total_dt:.1f}s")
 
     print("=" * 90)
     output_path = Path("results/denoiser_ablation.json")
