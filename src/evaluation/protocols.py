@@ -66,6 +66,7 @@ class EvaluationProtocol:
         k_shot: int = 5,
         seed: int = 42,
         scoring_method: str = "l2",
+        normalize_embeddings: bool = True,
     ):
         self.dataset = dataset
         self.mode = mode
@@ -73,10 +74,11 @@ class EvaluationProtocol:
         self.n_way = n_way
         self.k_shot = k_shot
         self.seed = seed
-        if scoring_method not in ("l2", "probability", "scaled_l2", "openmax"):
+        self.normalize_embeddings = normalize_embeddings
+        if scoring_method not in ("l2", "probability", "scaled_l2", "openmax", "energy"):
             raise ValueError(
-                f"scoring_method must be 'l2' | 'probability' | 'scaled_l2' | 'openmax', "
-                f"got {scoring_method!r}"
+                f"scoring_method must be 'l2' | 'probability' | 'scaled_l2' | "
+                f"'openmax' | 'energy', got {scoring_method!r}"
             )
         self.scoring_method = scoring_method
 
@@ -248,7 +250,8 @@ class EvaluationProtocol:
                     )
                     support_mfcc = support_mfcc.to(device)
                     emb = encoder(support_mfcc)
-                    emb = F.normalize(emb, p=2, dim=-1)
+                    if self.normalize_embeddings:
+                        emb = F.normalize(emb, p=2, dim=-1)
                     prototype = emb.mean(dim=0)
                     prototypes.append(prototype)
                     proto_labels.append(word)
@@ -268,7 +271,9 @@ class EvaluationProtocol:
                         word, self.k_shot, seed=run_seed,
                     )
                     sup_mfcc = sup_mfcc.to(device)
-                    sup_emb = F.normalize(encoder(sup_mfcc), p=2, dim=-1)
+                    sup_emb = encoder(sup_mfcc)
+                    if self.normalize_embeddings:
+                        sup_emb = F.normalize(sup_emb, p=2, dim=-1)
                     proto_dists = []
                     for i in range(sup_emb.shape[0]):
                         d = torch.dist(sup_emb[i], prototypes[word_idx], p=2).item()
@@ -288,6 +293,11 @@ class EvaluationProtocol:
                         for label, p in list(classifier._weibull_params.items())[:3]
                     )
                     logger.info("  Weibull params (first 3): %s, ...", sample_w)
+                elif self.scoring_method == "energy":
+                    logger.info(
+                        "  Energy classifier (T=%.2f), no per-proto calibration",
+                        getattr(classifier, "temperature", float("nan")),
+                    )
                 elif per_proto_thresholds:
                     classifier.set_per_prototype_thresholds(per_proto_thresholds)
                     classifier.threshold = float(
@@ -311,7 +321,8 @@ class EvaluationProtocol:
                     query_mfcc, _ = sample_provider.get_query_samples(query_word)
                     query_mfcc = query_mfcc.to(device)
                     emb = encoder(query_mfcc)
-                    emb = F.normalize(emb, p=2, dim=-1)
+                    if self.normalize_embeddings:
+                        emb = F.normalize(emb, p=2, dim=-1)
                     for i in range(emb.shape[0]):
                         dists = classifier.get_distances(emb[i])
                         if self.scoring_method == "openmax":
@@ -323,6 +334,10 @@ class EvaluationProtocol:
                             # the OpenMAX paper's modified-softmax behaviour.
                             pred_label = min(dists, key=dists.get)
                             score = scores[pred_label]
+                            min_dist = dists[pred_label]
+                        elif self.scoring_method == "energy":
+                            pred_label = min(dists, key=dists.get)
+                            score = classifier.get_energy(emb[i])
                             min_dist = dists[pred_label]
                         elif self.scoring_method == "scaled_l2":
                             scaled = {

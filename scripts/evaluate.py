@@ -19,6 +19,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.classifiers.energy_ood import EnergyOODClassifier
 from src.classifiers.open_ncm import OpenNCMClassifier
 from src.classifiers.openmax import OpenMAXClassifier
 from src.evaluation.gsc import GSCFewShotProvider
@@ -69,16 +70,18 @@ def main() -> None:
     parser.add_argument("--n-way", type=int, default=None,
                         help="Override config evaluation.n_way")
     parser.add_argument("--scoring", type=str, default="l2",
-                        choices=["l2", "probability", "scaled_l2", "openmax"],
+                        choices=["l2", "probability", "scaled_l2", "openmax", "energy"],
                         help="l2 = Direct L2 distance (proposed); "
                              "probability = softmax over -distances (Rusci baseline); "
                              "scaled_l2 = per-prototype variance-normalized L2; "
-                             "openmax = Weibull tail-fit OpenMAX score")
+                             "openmax = Weibull tail-fit OpenMAX score; "
+                             "energy = T*logsumexp(-d/T) energy-based OOD score")
     parser.add_argument("--classifier", type=str, default="openncm",
-                        choices=["openncm", "openmax"],
-                        help="openncm = OpenNCMClassifier (L2-distance based); "
-                             "openmax = OpenMAXClassifier (Weibull tail-fit). "
-                             "Selecting openmax forces --scoring openmax.")
+                        choices=["openncm", "openmax", "energy"],
+                        help="openncm = OpenNCMClassifier (L2-distance baseline); "
+                             "openmax = OpenMAXClassifier (Weibull tail-fit); "
+                             "energy = EnergyOODClassifier (energy-based OOD). "
+                             "Selecting openmax/energy forces matching --scoring.")
     parser.add_argument("--tail-size", type=int, default=20,
                         help="OpenMAX Weibull tail size (effective: min(tail_size, k_shot))")
     parser.add_argument("--openmax-mode", type=str, default="per_class",
@@ -88,6 +91,12 @@ def main() -> None:
     parser.add_argument("--openmax-hybrid", type=float, default=0.0,
                         help="OpenMAX hybrid score weight in [0,1]: "
                              "score = (1-alpha)*(1-cdf) + alpha*exp(-d). 0 = pure Weibull.")
+    parser.add_argument("--energy-temperature", type=float, default=1.0,
+                        help="Energy softmin temperature T (>0). "
+                             "Lower T -> energy approaches -min(d) (= L2 baseline).")
+    parser.add_argument("--no-normalize", action="store_true",
+                        help="Skip L2 normalization of embeddings. Tests whether "
+                             "raw embedding magnitude carries OOD signal.")
     parser.add_argument("--output-dir", type=str, default="results")
     parser.add_argument(
         "--plot-det",
@@ -104,8 +113,12 @@ def main() -> None:
 
     if args.classifier == "openmax":
         args.scoring = "openmax"
+    elif args.classifier == "energy":
+        args.scoring = "energy"
     elif args.scoring == "openmax" and args.classifier != "openmax":
         parser.error("--scoring openmax requires --classifier openmax")
+    elif args.scoring == "energy" and args.classifier != "energy":
+        parser.error("--scoring energy requires --classifier energy")
 
     logging.basicConfig(
         level=logging.INFO,
@@ -141,6 +154,7 @@ def main() -> None:
         k_shot=k_shot,
         seed=cfg["seed"],
         scoring_method=args.scoring,
+        normalize_embeddings=not args.no_normalize,
     )
 
     if args.classifier == "openmax":
@@ -149,6 +163,8 @@ def main() -> None:
             mode=args.openmax_mode,
             hybrid_alpha=args.openmax_hybrid,
         )
+    elif args.classifier == "energy":
+        classifier = EnergyOODClassifier(temperature=args.energy_temperature)
     else:
         classifier = OpenNCMClassifier()
 
@@ -182,6 +198,8 @@ def main() -> None:
         suffix += f"_{args.classifier}"
     elif args.scoring != "l2":
         suffix += f"_{args.scoring}"
+    if args.no_normalize:
+        suffix += "_nonorm"
     output_path = output_dir / f"{args.protocol}{suffix}_results.json"
     with output_path.open("w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
