@@ -581,8 +581,14 @@ def get_model_info() -> str:
 
     vad_ok = False
     try:
-        torch.hub.list("snakers4/silero-vad", trust_repo=True)
-        vad_ok = True
+        # Fast check: look for cached Silero VAD instead of slow torch.hub.list()
+        hub_dir = Path(torch.hub.get_dir()) / "snakers4_silero-vad_master"
+        if hub_dir.exists():
+            vad_ok = True
+        else:
+            # Fallback: check if import works
+            from src.streaming.vad_engine import SileroVAD  # noqa: F401
+            vad_ok = True
     except Exception:
         pass
     info += f"| EXT-2: VAD (Silero) | {'Yes' if vad_ok else 'No'} |\n"
