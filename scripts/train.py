@@ -1,6 +1,6 @@
-"""Training script for DSCNN encoder with Triplet Loss or ArcFace.
+"""Training script for DSCNN/EdgeSpot-lite encoders with Triplet/ArcFace/SCAF.
 
-Trains on MSWC English (450 train words, 50 val words) by default.
+Trains on MSWC English using ``data/mswc_en/splits/{train,val}_words.json``.
 GSC v2 is used ONLY for evaluation, not for training.
 
 Usage:
@@ -34,6 +34,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.models.dscnn import DSCNN
+from src.models.edgespot_lite import EdgeSpotLite
 from src.models.prototypical import EpisodicBatchSampler, TripletLoss, train_one_epoch
 from src.models.arcface import ArcFaceLoss, SubCenterArcFaceLoss
 from src.data.mswc_dataset import MSWCDataset, build_episodic_loader
@@ -70,6 +71,9 @@ def save_checkpoint(
         "scheduler_state_dict": scheduler.state_dict(),
         "val_auc": val_auc,
         "loss": loss,
+        "model_family": getattr(encoder, "model_family", None),
+        "feature_type": getattr(encoder, "feature_type", None),
+        "embedding_dim": getattr(encoder, "embedding_dim", None),
     }
     if loss_head is not None:
         ckpt["loss_head_state_dict"] = loss_head.state_dict()
@@ -254,7 +258,7 @@ def discover_words(data_dir: Path) -> list[str]:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Train DSCNN encoder")
+    parser = argparse.ArgumentParser(description="Train KWS encoder")
     parser.add_argument("--config", type=str, default="configs/default.yaml")
     parser.add_argument("--data-dir", type=str, default=None,
                         help="Data directory (default: from config gsc_dir)")
@@ -279,6 +283,19 @@ def main() -> None:
                         help="Run validation every N epochs (default 1)")
     parser.add_argument("--ckpt-subdir", type=str, default=None,
                         help="Subdirectory under checkpoint.dir for this run")
+    parser.add_argument("--model-family", type=str, default=None,
+                        choices=["dscnn", "edgespot_lite"],
+                        help="Encoder family. Default: config model.family or dscnn")
+    parser.add_argument("--run-tag", type=str, default=None,
+                        help="Run directory under checkpoint.dir. Overrides loss-name subdir.")
+    parser.add_argument("--hard-pairs-path", type=str, default=None,
+                        help="Optional hard-pair JSON from scripts/analyze_confusion.py")
+    parser.add_argument("--hard-pair-prob", type=float, default=0.0,
+                        help="Probability of seeding an episode with a hard pair")
+    parser.add_argument("--early-stop-patience", type=int, default=0,
+                        help="Stop after N validation checks without val_auc improvement. 0 disables.")
+    parser.add_argument("--early-stop-min-delta", type=float, default=0.001,
+                        help="Minimum val_auc gain for early stopping")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -291,9 +308,23 @@ def main() -> None:
     logger.info("Device: %s", device)
 
     # Model
-    encoder = DSCNN(model_size=cfg["model"]["architecture"][-1]).to(device)
+    model_family = args.model_family or cfg.get("model", {}).get("family", "dscnn")
+    if model_family == "dscnn":
+        encoder = DSCNN(model_size=cfg["model"]["architecture"][-1]).to(device)
+        feature_type = "mfcc"
+    elif model_family == "edgespot_lite":
+        encoder = EdgeSpotLite(
+            width_mult=int(cfg.get("model", {}).get("edge_width_mult", 4)),
+            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
+            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
+        ).to(device)
+        feature_type = "mel"
+    else:
+        raise ValueError(f"Unsupported model_family: {model_family}")
+    encoder.model_family = model_family
+    encoder.feature_type = feature_type
     param_count = sum(p.numel() for p in encoder.parameters())
-    logger.info("DSCNN-%s: %d parameters", cfg["model"]["architecture"][-1], param_count)
+    logger.info("%s: %d parameters, feature_type=%s", model_family, param_count, feature_type)
 
     # Data: default to MSWC for training, GSC only for evaluation
     if args.data_dir:
@@ -324,7 +355,7 @@ def main() -> None:
     if train_words is None:
         all_words = discover_words(data_dir)
         logger.info("Discovered %d words in %s", len(all_words), data_dir)
-        val_count = cfg["data"].get("mswc_val_words", 50)
+        val_count = cfg["data"].get("mswc_val_words") or 50
         if len(all_words) > val_count + 30:
             train_words = all_words[:-val_count]
             val_word_list = all_words[-val_count:]
@@ -347,11 +378,14 @@ def main() -> None:
     spec_cfg = cfg.get("augmentation", {}).get("spec_augment", {}) or {}
     spec_aug = None
     if spec_cfg.get("enabled", True) and not args.no_spec_augment:
+        time_axis, freq_axis = (2, 1) if feature_type == "mel" else (1, 2)
         spec_aug = SpecAugment(
             freq_mask_width=int(spec_cfg.get("freq_mask", 5)),
             time_mask_width=int(spec_cfg.get("time_mask", 12)),
             n_freq_masks=int(spec_cfg.get("n_freq_masks", 2)),
             n_time_masks=int(spec_cfg.get("n_time_masks", 2)),
+            time_axis=time_axis,
+            freq_axis=freq_axis,
         )
         logger.info(
             "SpecAugment: freq=%d (x%d), time=%d (x%d)",
@@ -359,11 +393,15 @@ def main() -> None:
             spec_aug.time_mask_width, spec_aug.n_time_masks,
         )
 
-    max_per_word = args.max_per_word or cfg["data"].get("max_per_word", 200)
+    if args.max_per_word is not None:
+        max_per_word = args.max_per_word
+    else:
+        max_per_word = cfg["data"].get("max_per_word", 200)
     dataset = MSWCDataset(
         root_dir=data_dir, words=train_words, max_per_word=max_per_word,
         noise_augmenter=noise_aug, wave_augmenter=wave_aug,
         spec_augmenter=spec_aug,
+        feature_type=feature_type,
     )
 
     train_cfg = cfg["training"]
@@ -375,8 +413,16 @@ def main() -> None:
     train_loader = build_episodic_loader(
         dataset, n_classes=n_classes, n_samples=n_samples,
         n_episodes=n_episodes, num_workers=args.num_workers,
+        hard_pairs_path=args.hard_pairs_path,
+        hard_pair_prob=args.hard_pair_prob,
     )
     logger.info("DataLoader: %d classes x %d samples x %d episodes", n_classes, n_samples, n_episodes)
+    if args.hard_pairs_path and args.hard_pair_prob > 0:
+        logger.info(
+            "Hard-pair mining: path=%s, prob=%.2f",
+            args.hard_pairs_path,
+            args.hard_pair_prob,
+        )
 
     # Loss + Optimizer
     opt_cfg = train_cfg.get("optimizer", {})
@@ -456,11 +502,16 @@ def main() -> None:
     val_loader = None
     if val_word_list:
         logger.info("Building validation set from %d held-out words", len(val_word_list))
+        val_cap = int(cfg["data"].get("val_max_per_word", 200))
         val_dataset = MSWCDataset(
-            root_dir=data_dir, words=val_word_list, max_per_word=50,
+            root_dir=data_dir, words=val_word_list, max_per_word=val_cap,
+            feature_type=feature_type,
         )
         if len(val_dataset) > 0:
-            val_n_classes = min(5, len(val_dataset.word_to_idx))
+            val_n_classes = min(
+                int(train_cfg.get("n_classes", 30)),
+                len(val_dataset.word_to_idx),
+            )
             val_n_samples = min(20, min(
                 len([s for s in val_dataset.samples if s[1] == i])
                 for i in range(val_n_classes)
@@ -478,7 +529,7 @@ def main() -> None:
         logger.info("No validation words available, using training loss only")
 
     # TensorBoard / checkpoint dir
-    ckpt_subdir = args.ckpt_subdir or args.loss
+    ckpt_subdir = args.ckpt_subdir or args.run_tag or args.loss
     ckpt_dir = Path(cfg["checkpoint"]["dir"]) / ckpt_subdir
     ckpt_dir.mkdir(parents=True, exist_ok=True)
     writer = SummaryWriter(log_dir=str(ckpt_dir / "runs"))
@@ -489,6 +540,7 @@ def main() -> None:
     save_every = cfg["checkpoint"]["save_every"]
     best_metric = -float("inf")
     val_every = max(1, args.val_every)
+    stale_val_checks = 0
 
     logger.info("=" * 60)
     logger.info("Training: %s loss, %d epochs, %d episodes/epoch", args.loss, n_epochs, n_episodes)
@@ -558,7 +610,10 @@ def main() -> None:
                 ckpt_dir / f"epoch_{epoch+1:02d}.pt", loss_head,
             )
 
-        if current_metric > best_metric:
+        improved = current_metric > best_metric + (
+            args.early_stop_min_delta if val_auc > 0 else 0.0
+        )
+        if improved:
             best_metric = current_metric
             save_checkpoint(
                 encoder, optimizer, scheduler, epoch, val_auc, metrics["loss"],
@@ -568,9 +623,24 @@ def main() -> None:
                 logger.info("  * New best val AUC: %.4f", val_auc)
             else:
                 logger.info("  * New best loss: %.6f", metrics["loss"])
+            stale_val_checks = 0
+        elif val_loader is not None and (epoch + 1) % val_every == 0:
+            stale_val_checks += 1
+
+        if (
+            args.early_stop_patience > 0
+            and val_loader is not None
+            and stale_val_checks >= args.early_stop_patience
+        ):
+            logger.info(
+                "Early stopping after %d stale validation checks (best=%.4f)",
+                stale_val_checks,
+                best_metric,
+            )
+            break
 
     save_checkpoint(
-        encoder, optimizer, scheduler, n_epochs - 1, val_auc, metrics["loss"],
+        encoder, optimizer, scheduler, epoch, val_auc, metrics["loss"],
         ckpt_dir / "latest.pt", loss_head,
     )
     writer.close()

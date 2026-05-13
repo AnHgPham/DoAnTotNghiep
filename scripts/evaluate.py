@@ -1,8 +1,8 @@
 """Evaluation script for few-shot open-set KWS.
 
 Usage:
-    python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/best.pt
-    python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/best.pt --protocol gsc_random
+    python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/triplet/best_v2_margin1.0_colab.pt
+    python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/triplet/best_v2_margin1.0_colab.pt --protocol gsc_random
 """
 
 import argparse
@@ -26,6 +26,7 @@ from src.evaluation.gsc import GSCFewShotProvider
 from src.evaluation.metrics import plot_det_curves
 from src.evaluation.protocols import EvaluationProtocol
 from src.models.dscnn import DSCNN
+from src.models.edgespot_lite import EdgeSpotLite
 
 logger = logging.getLogger(__name__)
 
@@ -60,6 +61,9 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate KWS model")
     parser.add_argument("--config", type=str, default="configs/default.yaml")
     parser.add_argument("--checkpoint", type=str, required=True)
+    parser.add_argument("--model-family", type=str, default="auto",
+                        choices=["auto", "dscnn", "edgespot_lite"],
+                        help="Encoder family. 'auto' uses checkpoint metadata, then config.")
     parser.add_argument(
         "--protocol", type=str, default="gsc_fixed",
         choices=list(PROTOCOL_MAP.keys()),
@@ -131,14 +135,33 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Device: %s", device)
 
-    # Load model
-    model_size = cfg["model"]["architecture"][-1]
-    encoder = DSCNN(model_size=model_size).to(device)
-
     checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
+    model_family = args.model_family
+    if model_family == "auto":
+        model_family = checkpoint.get("model_family") or cfg.get("model", {}).get("family", "dscnn")
+    if model_family == "dscnn":
+        model_size = cfg["model"]["architecture"][-1]
+        encoder = DSCNN(model_size=model_size).to(device)
+        feature_type = "mfcc"
+    elif model_family == "edgespot_lite":
+        encoder = EdgeSpotLite(
+            width_mult=int(cfg.get("model", {}).get("edge_width_mult", 4)),
+            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
+            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
+        ).to(device)
+        feature_type = "mel"
+    else:
+        raise ValueError(f"Unsupported model_family: {model_family}")
+
     encoder.load_state_dict(checkpoint["model_state_dict"])
     encoder.eval()
-    logger.info("Loaded checkpoint: %s (epoch %d)", args.checkpoint, checkpoint["epoch"])
+    logger.info(
+        "Loaded checkpoint: %s (epoch %d, model_family=%s, feature_type=%s)",
+        args.checkpoint,
+        checkpoint["epoch"],
+        model_family,
+        feature_type,
+    )
 
     # Setup protocol
     dataset, mode = PROTOCOL_MAP[args.protocol]
@@ -176,10 +199,10 @@ def main() -> None:
     logger.info("=" * 60)
 
     if dataset == "gsc":
-        sample_provider = GSCFewShotProvider(cfg["data"]["gsc_dir"])
+        sample_provider = GSCFewShotProvider(cfg["data"]["gsc_dir"], feature_type=feature_type)
     elif dataset == "mswc":
         from src.evaluation.mswc import MSWCFewShotProvider
-        sample_provider = MSWCFewShotProvider(cfg["data"]["mswc_dir"])
+        sample_provider = MSWCFewShotProvider(cfg["data"]["mswc_dir"], feature_type=feature_type)
     else:
         raise ValueError(f"Unknown dataset: {dataset}")
 

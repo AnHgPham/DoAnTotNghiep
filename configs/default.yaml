@@ -20,11 +20,15 @@ mfcc:
   pad_mode: "constant"
 
 model:
+  family: "dscnn"          # dscnn | edgespot_lite
   architecture: "DSCNN-L"
   channels: 276
   num_ds_blocks: 5
   embedding_dim: 276
   feature_mode: "NORM"
+  edge_width_mult: 4
+  edge_embedding_dim: 64
+  edge_use_pcen: true
 
 training:
   epochs: 100
@@ -53,21 +57,21 @@ training:
     gamma: 0.5
 
 augmentation:
-  noise_prob: 0.95
+  noise_prob: 0.50
   snr_range: [0, 10]
   speed_perturb: [0.9, 1.1]
   gain_db: [-6, 6]
   time_shift_ms: 100
   spec_augment:
     enabled: true
-    freq_mask: 5               # increased from 3
-    time_mask: 12              # increased from 8
-    n_freq_masks: 2            # increased from 1
-    n_time_masks: 2            # increased from 1
+    freq_mask: 6               # EdgeSpot-style F=6
+    time_mask: 8               # EdgeSpot-style T=8
+    n_freq_masks: 1
+    n_time_masks: 1
 
 noise:
   demand_dir: "data/demand"
-  prob: 0.95
+  prob: 0.50
   snr_db: 5.0
 
 data:
@@ -75,10 +79,12 @@ data:
   gsc_dir: "data/gsc_v2"     # evaluation only (GSC v2)
   mswc_dir: "data/mswc_en"   # same as train_dir
   demand_dir: "data/demand"   # noise augmentation
-  mswc_train_words: 450
-  mswc_val_words: 50
-  mswc_eval_words: 485  # actual count from MSWC metadata (words ranked 501+ with >=1000 clips)
-  max_per_word: 500     # increased from 200 -- more diversity per word
+  # Word lists come from data/mswc_en/splits/*.json (see data/download_mswc.py).
+  mswc_train_words: null   # legacy; ignored when split JSONs exist
+  mswc_val_words: null
+  mswc_eval_words: null
+  max_per_word: 0          # 0 = use every WAV per word; set e.g. 500 to cap disk / epoch time
+  val_max_per_word: 200    # validation clip cap per word (speed / balance)
 
 checkpoint:
   dir: "checkpoints"

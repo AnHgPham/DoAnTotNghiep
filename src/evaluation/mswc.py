@@ -11,6 +11,7 @@ from pathlib import Path
 import torch
 import torchaudio
 
+from src.features.mel import MelSpectrogramExtractor
 from src.features.mfcc import MFCCExtractor
 
 logger = logging.getLogger(__name__)
@@ -45,9 +46,20 @@ class MSWCFewShotProvider:
         support_ratio: Fraction of samples used for support (default 0.1).
     """
 
-    def __init__(self, mswc_dir: str | Path, support_ratio: float = 0.1):
+    def __init__(
+        self,
+        mswc_dir: str | Path,
+        support_ratio: float = 0.1,
+        feature_type: str = "mfcc",
+    ):
         self.mswc_dir = Path(mswc_dir)
-        self.extractor = MFCCExtractor()
+        if feature_type == "mfcc":
+            self.extractor = MFCCExtractor()
+        elif feature_type == "mel":
+            self.extractor = MelSpectrogramExtractor()
+        else:
+            raise ValueError("feature_type must be 'mfcc' or 'mel'")
+        self.feature_type = feature_type
         self.support_ratio = support_ratio
 
         clips_dir = self.mswc_dir / "clips"

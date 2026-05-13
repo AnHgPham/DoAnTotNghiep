@@ -3,8 +3,10 @@
 Downloads tar.gz shards one by one, extracts only target words,
 then discards the shard. Audio is WAV@16kHz -- no conversion needed.
 
-This avoids needing the full 55GB dataset: only the ~763 target words
-are kept (max 200 clips each ≈ 5GB).
+This avoids needing the full 55GB dataset for a **small word list** (legacy
+top-500 pool + eval): only those target words are kept (e.g. max 200 clips
+each ≈ 5GB). For **full English vocabulary**, prefer ``download_mswc.py``
+with the MLCommons ``en.tar.gz`` mirror (iterate one archive; large disk).
 
 Usage:
     python data/download_mswc_hf.py

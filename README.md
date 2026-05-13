@@ -21,8 +21,13 @@ pip install -r requirements.txt
 
 ```bash
 python data/download_gsc.py
-python data/download_mswc.py
-python data/convert_opus.py
+
+# Local/manual MSWC path
+python data/download_mswc.py --top500-splits --max-per-word 200
+python data/convert_opus.py --delete-opus
+
+# Colab/Drive path used by notebooks/02_train_enhanced.ipynb
+python data/mswc_drive_cache.py --split-mode top500 --max-per-word 200
 ```
 
 ## Project Structure
@@ -53,6 +58,15 @@ docs/               # Thesis documents, proposals, reports
 # Triplet Loss (default)
 python scripts/train.py --config configs/default.yaml --data-dir data/gsc_v2
 
+# EdgeSpot-lite + mel/PCEN frontend
+python scripts/train.py --config configs/default.yaml --model-family edgespot_lite --loss scaf --run-tag edgespot_lite_top500_scaf
+
+# Clean DSCNN retrain with early stopping and a run tag
+python scripts/train.py --config configs/default.yaml --run-tag dscnn_top500_clean --early-stop-patience 8
+
+# Hard-pair ablation
+python scripts/train.py --config configs/default.yaml --run-tag dscnn_top500_hard02 --hard-pairs-path results/hard_pairs.json --hard-pair-prob 0.2
+
 # ArcFace
 python scripts/train.py --config configs/default.yaml --data-dir data/gsc_v2 --loss arcface
 
@@ -67,13 +81,13 @@ python scripts/train.py --config configs/default.yaml --resume checkpoints/lates
 
 ```bash
 # GSC Fixed protocol
-python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/best.pt
+python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/triplet/best_v2_margin1.0_colab.pt
 
 # GSC Random protocol
-python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/best.pt --protocol gsc_random
+python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/triplet/best_v2_margin1.0_colab.pt --protocol gsc_random
 
 # MSWC evaluation
-python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/best.pt --protocol mswc_random
+python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/triplet/best_v2_margin1.0_colab.pt --protocol mswc_random
 ```
 
 ## Demo
@@ -97,7 +111,8 @@ pytest tests/ -v
 ## Architecture
 
 - **Encoder**: DSCNN-L (276 channels, 5 DS blocks, embedding_dim=276)
-- **Features**: MFCC (40 computed, 10 used, n_fft=1024, center=False) -> input shape (B, 1, 47, 10)
+- **Alternative Encoder**: EdgeSpot-lite (mel 40x101 + trainable PCEN + temporal attention, embedding_dim=64)
+- **Features**: MFCC (40 computed, 10 used, n_fft=1024, center=False) -> input shape (B, 1, 47, 10); mel frontend -> (B, 1, 40, 101)
 - **Training**: Episodic batching, StepLR(step_size=20, gamma=0.5), validation every 5 epochs
 - **Loss**: Triplet (margin=0.5) | ArcFace (s=30, m=0.5) | SCAF (K=3)
 - **Classification**: Direct L2 distance with acceptance radius threshold

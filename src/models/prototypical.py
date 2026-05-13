@@ -28,6 +28,14 @@ class EpisodicBatchSampler(Sampler[list[int]]):
         n_classes: Number of classes per episode.
         n_samples: Number of samples per class per episode.
         n_episodes: Number of episodes per epoch.
+        hard_pairs: Optional list of ``(class_a, class_b)`` integer label pairs
+            to force-include in some episodes. Pairs whose classes are not in
+            ``available_classes`` are silently dropped.
+        hard_pair_prob: Probability per episode of seeding the episode with one
+            hard pair (then padding with random classes). Effective only when
+            ``hard_pairs`` is non-empty. Recommended: 0.3-0.5. Default 0.0.
+        pair_weights: Optional weights for hard pairs (same length as
+            ``hard_pairs``). If None, uniform over hard pairs.
     """
 
     def __init__(
@@ -36,6 +44,9 @@ class EpisodicBatchSampler(Sampler[list[int]]):
         n_classes: int = 80,
         n_samples: int = 20,
         n_episodes: int = 400,
+        hard_pairs: list[tuple[int, int]] | None = None,
+        hard_pair_prob: float = 0.0,
+        pair_weights: list[float] | None = None,
     ):
         if isinstance(labels, torch.Tensor):
             labels = labels.tolist()
@@ -59,9 +70,39 @@ class EpisodicBatchSampler(Sampler[list[int]]):
                 f"but only {len(self.available_classes)} classes qualify."
             )
 
+        available_set = set(self.available_classes)
+        cleaned_pairs: list[tuple[int, int]] = []
+        cleaned_weights: list[float] = []
+        if hard_pairs:
+            for i, (a, b) in enumerate(hard_pairs):
+                if a == b or a not in available_set or b not in available_set:
+                    continue
+                cleaned_pairs.append((int(a), int(b)))
+                w = pair_weights[i] if pair_weights is not None else 1.0
+                cleaned_weights.append(float(w))
+
+        self.hard_pairs = cleaned_pairs
+        if cleaned_weights:
+            total = float(sum(cleaned_weights)) or 1.0
+            self.pair_weights = [w / total for w in cleaned_weights]
+        else:
+            self.pair_weights = []
+        self.hard_pair_prob = float(hard_pair_prob) if cleaned_pairs else 0.0
+
     def __iter__(self) -> Iterator[list[int]]:
         for _ in range(self.n_episodes):
-            selected_classes = random.sample(self.available_classes, self.n_classes)
+            if self.hard_pairs and random.random() < self.hard_pair_prob:
+                if self.pair_weights:
+                    pair = random.choices(self.hard_pairs, weights=self.pair_weights, k=1)[0]
+                else:
+                    pair = random.choice(self.hard_pairs)
+                chosen = list(pair)
+                remaining = [c for c in self.available_classes if c not in chosen]
+                chosen.extend(random.sample(remaining, self.n_classes - 2))
+                random.shuffle(chosen)
+                selected_classes = chosen
+            else:
+                selected_classes = random.sample(self.available_classes, self.n_classes)
             batch_indices = []
             for cls in selected_classes:
                 indices = random.sample(self.class_to_indices[cls], self.n_samples)

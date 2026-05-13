@@ -11,6 +11,7 @@ from pathlib import Path
 import torch
 import torchaudio
 
+from src.features.mel import MelSpectrogramExtractor
 from src.features.mfcc import MFCCExtractor
 
 logger = logging.getLogger(__name__)
@@ -44,9 +45,15 @@ class GSCFewShotProvider:
         gsc_dir: Path to data/gsc_v2/ directory.
     """
 
-    def __init__(self, gsc_dir: str | Path):
+    def __init__(self, gsc_dir: str | Path, feature_type: str = "mfcc"):
         self.gsc_dir = Path(gsc_dir)
-        self.extractor = MFCCExtractor()
+        if feature_type == "mfcc":
+            self.extractor = MFCCExtractor()
+        elif feature_type == "mel":
+            self.extractor = MelSpectrogramExtractor()
+        else:
+            raise ValueError("feature_type must be 'mfcc' or 'mel'")
+        self.feature_type = feature_type
 
         val_list = self.gsc_dir / "validation_list.txt"
         test_list = self.gsc_dir / "testing_list.txt"
@@ -99,8 +106,8 @@ class GSCFewShotProvider:
         names = []
         for p in paths:
             wav = _load_wav(p)
-            mfcc = self.extractor.extract(wav)   # (1, 47, 10)
-            mfccs.append(mfcc.unsqueeze(0))       # (1, 1, 47, 10)
+            mfcc = self.extractor.extract(wav)
+            mfccs.append(mfcc.unsqueeze(0))
             names.append(p.name)
         return torch.cat(mfccs, dim=0), names     # (N, 1, 47, 10)
 

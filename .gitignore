@@ -36,9 +36,23 @@ data/mswc_en/
 data/demand/
 data/*.tar.gz
 data/*.zip
+*.zip
+*.rar
+*.7z
+*.tar
+*.gz
+*.pt
+*.pth
+*.ckpt
+checkpoints/
 checkpoints/*.pt
 checkpoints/*.pth
 checkpoints/*.ckpt
+results/
+outputs/
+runs/
+wandb/
+logs/
 
 # ──────────────── Notebooks outputs ────────────────
 notebooks/*_result.ipynb

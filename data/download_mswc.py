@@ -1,21 +1,28 @@
-"""Download MSWC English subset for training and evaluation.
+"""Download MSWC English for training and evaluation.
 
 Downloads the English-only audio (32.5GB OPUS) from MLCommons mirrors,
-then extracts only the ~985 words needed for training/evaluation.
+then extracts clips for the chosen word split.
+
+**Default split (full vocabulary):** every English word in metadata with at least
+``--min-clips`` utterances, shuffled with a fixed seed; ``--val-fraction`` of
+words are held out for validation. Use ``--top500-splits`` for the legacy
+pool (450 train + 50 val + eval words outside top-500).
 
 After download, convert OPUS->WAV: python data/convert_opus.py
 
 Usage:
-    python data/download_mswc.py                    # full pipeline
-    python data/download_mswc.py --splits-only       # only metadata + splits
-    python data/download_mswc.py --from-archive PATH # extract from local tar.gz
-    python data/download_mswc.py --max-per-word 300
+    python data/download_mswc.py                         # full English + extract
+    python data/download_mswc.py --splits-only           # metadata + splits only
+    python data/download_mswc.py --top500-splits         # legacy ~985-word pool
+    python data/download_mswc.py --from-archive PATH     # local en.tar.gz
+    python data/download_mswc.py --max-per-word 400      # cap clips per word
 """
 
 import argparse
 import gzip
 import json
 import logging
+import random
 import shutil
 import tarfile
 from pathlib import Path
@@ -128,6 +135,46 @@ def create_splits(
     return train_words, val_words, eval_words
 
 
+def create_splits_full_english(
+    word_counts: dict[str, int],
+    val_fraction: float = 0.02,
+    min_clips: int = 1,
+    seed: int = 42,
+) -> tuple[list[str], list[str], list[str]]:
+    """Split *all* eligible English words into train / val; no separate eval pool.
+
+    Words with fewer than ``min_clips`` counts in metadata are skipped.
+
+    Args:
+        word_counts: Mapping word -> utterance count.
+        val_fraction: Fraction of *words* (not clips) reserved for validation.
+        min_clips: Minimum metadata count to include a word.
+        seed: RNG seed for shuffling (reproducible splits).
+
+    Returns:
+        (train_words, val_words, eval_words) where eval_words is always empty.
+    """
+    eligible = [w for w, c in word_counts.items() if c >= min_clips]
+    eligible.sort()
+    rng = random.Random(seed)
+    shuffled = eligible.copy()
+    rng.shuffle(shuffled)
+    n = len(shuffled)
+    if n == 0:
+        return [], [], []
+    n_val = int(round(n * val_fraction))
+    n_val = max(1, n_val) if n > 1 else 0
+    n_val = min(n_val, max(0, n - 1))
+    val_words = sorted(shuffled[:n_val])
+    train_words = sorted(shuffled[n_val:])
+    logger.info(
+        "Full-English splits: %d train, %d val (%.2f%% held out), %d skipped (count < %d)",
+        len(train_words), len(val_words), 100.0 * val_fraction,
+        len(word_counts) - len(eligible), min_clips,
+    )
+    return train_words, val_words, []
+
+
 def save_splits(train: list[str], val: list[str], eval_: list[str]) -> None:
     SPLITS_DIR.mkdir(parents=True, exist_ok=True)
     for name, words in [("train_words", train), ("val_words", val), ("eval_words", eval_)]:
@@ -228,12 +275,14 @@ def extract_target_words(
     Args:
         archive_path: Path to en.tar.gz
         target_words: Set of words to extract.
-        max_per_word: Max clips per word.
+        max_per_word: Max clips per word; ``<= 0`` means no cap (extract all
+            utterances present in the archive for each word).
 
     Returns:
         Dict mapping word -> number of clips extracted.
     """
     CLIPS_DIR.mkdir(parents=True, exist_ok=True)
+    unlimited = max_per_word <= 0
 
     # Check existing clips
     clip_counts: dict[str, int] = {}
@@ -244,10 +293,13 @@ def extract_target_words(
         else:
             clip_counts[w] = 0
 
-    words_needed = {w for w in target_words if clip_counts[w] < max_per_word}
-    if not words_needed:
-        logger.info("All %d words already have >= %d clips", len(target_words), max_per_word)
-        return clip_counts
+    if unlimited:
+        words_needed = set(target_words)
+    else:
+        words_needed = {w for w in target_words if clip_counts[w] < max_per_word}
+        if not words_needed:
+            logger.info("All %d words already have >= %d clips", len(target_words), max_per_word)
+            return clip_counts
 
     logger.info("Extracting %d target words from archive (skipping %d complete)...",
                 len(words_needed), len(target_words) - len(words_needed))
@@ -277,7 +329,7 @@ def extract_target_words(
                     skipped += 1
                     continue
 
-                if clip_counts.get(word, 0) >= max_per_word:
+                if not unlimited and clip_counts.get(word, 0) >= max_per_word:
                     words_needed.discard(word)
                     continue
 
@@ -310,8 +362,20 @@ def extract_target_words(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Download MSWC English for training")
-    parser.add_argument("--max-per-word", type=int, default=200,
-                        help="Max clips per word (default: 200)")
+    parser.add_argument(
+        "--top500-splits", action="store_true",
+        help="Legacy split: top-500 pool (450/50 + eval outside top-500). "
+        "Default is full English vocabulary.",
+    )
+    parser.add_argument("--max-per-word", type=int, default=None,
+                        help="Max clips per word; 0 = unlimited. "
+                        "Default: 0 (full) or 200 (--top500-splits).")
+    parser.add_argument("--val-fraction", type=float, default=0.02,
+                        help="Fraction of words for validation (full-English mode only).")
+    parser.add_argument("--min-clips", type=int, default=1,
+                        help="Minimum metadata count to include a word (full-English only).")
+    parser.add_argument("--split-seed", type=int, default=42,
+                        help="RNG seed for full-English train/val shuffle.")
     parser.add_argument("--n-train", type=int, default=450)
     parser.add_argument("--n-val", type=int, default=50)
     parser.add_argument("--splits-only", action="store_true",
@@ -343,12 +407,28 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("Step 2: Train/Val/Eval splits")
     logger.info("=" * 60)
-    train_words, val_words, eval_words = create_splits(
-        word_counts, n_train=args.n_train, n_val=args.n_val,
-    )
+    if args.top500_splits:
+        train_words, val_words, eval_words = create_splits(
+            word_counts, n_train=args.n_train, n_val=args.n_val,
+        )
+        max_per_word = 200 if args.max_per_word is None else args.max_per_word
+    else:
+        train_words, val_words, eval_words = create_splits_full_english(
+            word_counts,
+            val_fraction=args.val_fraction,
+            min_clips=args.min_clips,
+            seed=args.split_seed,
+        )
+        max_per_word = 0 if args.max_per_word is None else args.max_per_word
+
     save_splits(train_words, val_words, eval_words)
     all_needed = set(train_words + val_words + eval_words)
     logger.info("Total words to extract: %d", len(all_needed))
+    if max_per_word <= 0:
+        logger.warning(
+            "max_per_word=0 (unlimited). Full extraction needs large disk "
+            "and one full pass over en.tar.gz; ensure enough free space before WAV conversion.",
+        )
 
     if args.splits_only:
         logger.info("Done (--splits-only). Run without flag to download audio.")
@@ -372,7 +452,7 @@ def main() -> None:
     logger.info("=" * 60)
     logger.info("Step 4: Extracting target words")
     logger.info("=" * 60)
-    stats = extract_target_words(archive, all_needed, max_per_word=args.max_per_word)
+    stats = extract_target_words(archive, all_needed, max_per_word=max_per_word)
 
     # Optionally delete archive
     if not args.keep_archive and not args.from_archive:

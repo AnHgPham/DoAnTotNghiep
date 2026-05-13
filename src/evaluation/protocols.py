@@ -171,7 +171,20 @@ class EvaluationProtocol:
             if path.exists():
                 with open(path) as f:
                     words = json.load(f)
-                logger.info("Loaded %d MSWC eval words from %s", len(words), path)
+                if words:
+                    logger.info("Loaded %d MSWC eval words from %s", len(words), path)
+                    return words
+                logger.debug("Skipping empty MSWC eval list: %s", path)
+
+        val_path = Path("data/mswc_en/splits/val_words.json")
+        if val_path.exists():
+            with open(val_path) as f:
+                words = json.load(f)
+            if words:
+                logger.info(
+                    "Using %d val_words as MSWC eval pool (no eval_words.json): %s",
+                    len(words), val_path,
+                )
                 return words
 
         mswc_dir = Path("data/mswc_en/clips")

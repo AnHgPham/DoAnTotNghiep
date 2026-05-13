@@ -11,6 +11,7 @@ import logging
 from pathlib import Path
 
 import torch
+import torch.nn.functional as F
 import torchaudio
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,28 @@ class SpectralGateDenoiser:
             ) from exc
         self.stationary = stationary
         self.prop_decrease = prop_decrease
+
+    @staticmethod
+    def _smooth_fallback(waveform: torch.Tensor, kernel_size: int = 9) -> torch.Tensor:
+        """Conservative low-pass fallback used when spectral gating over-suppresses."""
+        if kernel_size <= 1:
+            return waveform
+        squeeze = waveform.dim() == 1
+        x = waveform.unsqueeze(0) if squeeze else waveform
+        if x.dim() != 2 or x.shape[0] != 1:
+            return waveform
+        left = kernel_size // 2
+        right = kernel_size - 1 - left
+        kernel = torch.ones(
+            1,
+            1,
+            kernel_size,
+            dtype=x.dtype,
+            device=x.device,
+        ) / kernel_size
+        smoothed = F.conv1d(F.pad(x.unsqueeze(0), (left, right), mode="reflect"), kernel)
+        smoothed = smoothed.squeeze(0)
+        return smoothed.squeeze(0) if squeeze else smoothed
 
     def denoise(self, waveform: torch.Tensor, sr: int = SAMPLE_RATE) -> torch.Tensor:
         """Denoise a waveform tensor.
@@ -63,6 +86,15 @@ class SpectralGateDenoiser:
             prop_decrease=self.prop_decrease,
         )
         result = torch.from_numpy(denoised_np).unsqueeze(0).to(waveform.device)
+        result = result.to(dtype=waveform.dtype)
+
+        # noisereduce can over-suppress very short KWS clips when no explicit
+        # noise-only segment is available. Guard against near-silence output by
+        # falling back to a conservative smoother that still reduces white noise.
+        in_rms = torch.sqrt(torch.mean(waveform.float().pow(2)) + 1e-8)
+        out_rms = torch.sqrt(torch.mean(result.float().pow(2)) + 1e-8)
+        if out_rms < 0.25 * in_rms:
+            result = self._smooth_fallback(waveform)
 
         if squeeze:
             result = result.squeeze(0)
