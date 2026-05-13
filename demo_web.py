@@ -39,7 +39,7 @@ from src.models.dscnn import DSCNN
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SR = 16000
-CKPT = Path("checkpoints/best.pt")
+CKPT = Path("checkpoints/triplet/best_v2_margin1.0_colab.pt")
 ENROLL_PROFILES_DIR = Path("data/enroll_profiles")
 
 WORD_PRESETS: dict[str, str] = {
@@ -60,7 +60,13 @@ encoder: DSCNN | None = None
 mfcc_ext: MFCCExtractor | None = None
 prototypes: dict[str, torch.Tensor] = {}
 sample_count: dict[str, int] = {}
+sample_embeddings: dict[str, list[torch.Tensor]] = {}
+proto_thresholds: dict[str, float] = {}
 denoiser_instance = None
+
+ALPHA_THRESHOLD = 2.0
+THRESHOLD_FLOOR = 0.30
+THRESHOLD_CEIL = 1.50
 
 
 # ============================================================
@@ -155,10 +161,38 @@ def embed(wav_1s: torch.Tensor) -> torch.Tensor:
     return emb.squeeze(0).cpu()
 
 
+def _recompute_proto_and_threshold(word: str) -> None:
+    """Recompute prototype and per-class threshold from stored embeddings.
+
+    Threshold = clip(mean_d + alpha * std_d, floor, ceil), where d is L2 distance
+    from each enrollment sample to the (re)computed prototype. With < 2 samples,
+    fall back to floor (mean_d alone unstable).
+    """
+    embs = sample_embeddings.get(word, [])
+    if not embs:
+        prototypes.pop(word, None)
+        proto_thresholds.pop(word, None)
+        sample_count[word] = 0
+        return
+    stacked = torch.stack(embs)
+    prototypes[word] = stacked.mean(0)
+    sample_count[word] = len(embs)
+    dists = [torch.dist(e, prototypes[word], p=2).item() for e in embs]
+    mean_d = float(np.mean(dists))
+    std_d = float(np.std(dists)) if len(dists) > 1 else 0.0
+    raw = mean_d + ALPHA_THRESHOLD * max(std_d, 1e-3)
+    proto_thresholds[word] = max(THRESHOLD_FLOOR, min(THRESHOLD_CEIL, raw))
+
+
 def status_md() -> str:
     if not prototypes:
         return "_No keywords enrolled._"
-    items = [f"`{w}` ({sample_count.get(w, 0)})" for w in prototypes]
+    items = []
+    for w in prototypes:
+        n = sample_count.get(w, 0)
+        thr = proto_thresholds.get(w)
+        thr_str = f", thr={thr:.2f}" if thr is not None else ""
+        items.append(f"`{w}` ({n}{thr_str})")
     return f"**{len(prototypes)} keywords enrolled:** " + ", ".join(items)
 
 
@@ -188,9 +222,9 @@ def enroll_gsc(words_text: str, k: int):
             if w.shape[-1] < SR:
                 w = F.pad(w, (0, SR - w.shape[-1]))
             embs.append(embed(w[..., :SR]))
-        prototypes[word] = torch.stack(embs).mean(0)
-        sample_count[word] = len(files)
-        msgs.append(f"`{word}`: OK ({len(files)} samples)")
+        sample_embeddings[word] = embs
+        _recompute_proto_and_threshold(word)
+        msgs.append(f"`{word}`: OK ({len(files)} samples, thr={proto_thresholds[word]:.2f})")
     return "\n".join(msgs), status_md()
 
 
@@ -202,14 +236,10 @@ def enroll_mic(keyword: str, audio):
     if wav is None:
         return "No audio.", status_md()
     e = embed(wav)
-    if keyword in prototypes:
-        n = sample_count.get(keyword, 1)
-        prototypes[keyword] = (prototypes[keyword] * n + e) / (n + 1)
-        sample_count[keyword] = n + 1
-    else:
-        prototypes[keyword] = e
-        sample_count[keyword] = 1
-    return f"Added `{keyword}` ({sample_count[keyword]} total)", status_md()
+    sample_embeddings.setdefault(keyword, []).append(e)
+    _recompute_proto_and_threshold(keyword)
+    thr_str = f", thr={proto_thresholds[keyword]:.2f}" if keyword in proto_thresholds else ""
+    return f"Added `{keyword}` ({sample_count[keyword]} total{thr_str})", status_md()
 
 
 def use_preset(preset_name: str) -> str:
@@ -219,6 +249,8 @@ def use_preset(preset_name: str) -> str:
 def clear_all():
     prototypes.clear()
     sample_count.clear()
+    sample_embeddings.clear()
+    proto_thresholds.clear()
     return "Cleared.", status_md()
 
 
@@ -232,6 +264,8 @@ def save_profile(profile_name: str):
         "labels": list(prototypes.keys()),
         "sample_count": sample_count,
         "embeddings": {k: v.tolist() for k, v in prototypes.items()},
+        "sample_embeddings": {k: [e.tolist() for e in lst] for k, lst in sample_embeddings.items()},
+        "proto_thresholds": dict(proto_thresholds),
     }
     path.write_text(json.dumps(payload), encoding="utf-8")
     return f"Saved profile to `{path}` ({len(prototypes)} keywords)."
@@ -245,9 +279,21 @@ def load_profile(profile_name: str):
     payload = json.loads(path.read_text(encoding="utf-8"))
     prototypes.clear()
     sample_count.clear()
+    sample_embeddings.clear()
+    proto_thresholds.clear()
+    saved_embs = payload.get("sample_embeddings", {})
     for label, vec in payload.get("embeddings", {}).items():
-        prototypes[label] = torch.tensor(vec, dtype=torch.float32)
-        sample_count[label] = payload.get("sample_count", {}).get(label, 0)
+        if label in saved_embs:
+            sample_embeddings[label] = [
+                torch.tensor(e, dtype=torch.float32) for e in saved_embs[label]
+            ]
+            _recompute_proto_and_threshold(label)
+        else:
+            prototypes[label] = torch.tensor(vec, dtype=torch.float32)
+            sample_count[label] = payload.get("sample_count", {}).get(label, 0)
+            saved_thr = payload.get("proto_thresholds", {}).get(label)
+            if saved_thr is not None:
+                proto_thresholds[label] = float(saved_thr)
     return f"Loaded profile `{name}` ({len(prototypes)} keywords).", status_md()
 
 
@@ -279,7 +325,18 @@ def _scoring_softmax(dists: dict[str, float]) -> dict[str, float]:
     return dict(zip(keys, probs))
 
 
-def detect_single(audio, threshold, denoise, scoring):
+def _effective_threshold(word: str, global_threshold: float, use_per_class: bool) -> float:
+    """Resolve threshold for a candidate word.
+
+    Per-class threshold (calibrated from enrollment) is preferred when enabled
+    and available, otherwise fall back to the global slider value.
+    """
+    if use_per_class and word in proto_thresholds:
+        return proto_thresholds[word]
+    return float(global_threshold)
+
+
+def detect_single(audio, threshold, denoise, scoring, use_per_class):
     wav = to_wav_1s(audio, denoise=denoise)
     if wav is None:
         return "_No audio._", None
@@ -304,12 +361,18 @@ def detect_single(audio, threshold, denoise, scoring):
             f"Distance to nearest: `{best_d:.4f}`"
         )
     else:
-        accept = best_d <= threshold
+        eff_thr = _effective_threshold(best_w, threshold, use_per_class)
+        accept = best_d <= eff_thr
         score_val = best_d
         score_label = "L2 distance"
+        thr_src = (
+            f"per-class[{best_w}]={eff_thr:.2f}"
+            if use_per_class and best_w in proto_thresholds
+            else f"global={eff_thr:.2f}"
+        )
         body = (
             f"### {best_w.upper() if accept else 'UNKNOWN (rejected)'}\n"
-            f"Distance: `{best_d:.4f}`  •  threshold: `{threshold:.2f}`"
+            f"Distance: `{best_d:.4f}`  •  threshold: `{thr_src}`"
         )
 
     fig, axes = plt.subplots(1, 2, figsize=(13, max(3.0, len(sd) * 0.42 + 1.0)),
@@ -327,8 +390,18 @@ def detect_single(audio, threshold, denoise, scoring):
                          f"{val:.3f}", va="center", fontsize=9)
     else:
         values = [d for _, d in sd]
-        bars = axes[0].barh(words, values, color=["#4CAF50" if v <= threshold else "#ef5350" for v in values])
-        axes[0].axvline(threshold, color="orange", linestyle="--", lw=2, label=f"threshold={threshold:.2f}")
+        per_thr = [_effective_threshold(w, threshold, use_per_class) for w in words]
+        colors = ["#4CAF50" if v <= t else "#ef5350" for v, t in zip(values, per_thr)]
+        bars = axes[0].barh(words, values, color=colors)
+        if use_per_class and any(w in proto_thresholds for w in words):
+            for w, t in zip(words, per_thr):
+                axes[0].plot([t, t], [words.index(w) - 0.4, words.index(w) + 0.4],
+                             color="#ff8c00", lw=2.0)
+            axes[0].plot([], [], color="#ff8c00", lw=2.0,
+                         label="per-class threshold")
+        else:
+            axes[0].axvline(threshold, color="orange", linestyle="--", lw=2,
+                            label=f"threshold={threshold:.2f}")
         axes[0].set_xlabel("L2 distance (lower = more similar)")
         for bar, val in zip(bars, values):
             axes[0].text(val + 0.005, bar.get_y() + bar.get_height() / 2,
@@ -355,7 +428,7 @@ def _word_segments_by_energy(
     wav: torch.Tensor,
     min_duration_ms: int,
     merge_gap_ms: int = 350,
-    pad_ms: int = 120,
+    pad_ms: int = 200,
 ) -> list[tuple[int, int]]:
     mono = wav.mean(dim=0) if wav.dim() == 2 else wav
     total = mono.shape[-1]
@@ -440,32 +513,43 @@ def _tta_views(segment: torch.Tensor) -> list[torch.Tensor]:
     ]
 
 
-def _score_cluster(segment: torch.Tensor, threshold: float, scoring: str) -> dict:
+def _score_cluster(segment: torch.Tensor, threshold: float, scoring: str,
+                   use_per_class: bool = True) -> dict:
     views = _tta_views(segment)
     embeddings = [embed(view) for view in views]
+
+    all_top3_votes: list[str] = []
+    per_view_top3: list[list[str]] = []
+    for emb_view in embeddings:
+        view_dists = _l2_distances(emb_view)
+        sd_view = sorted(view_dists.items(), key=lambda x: x[1])
+        top3_words = [w for w, _ in sd_view[:3]]
+        all_top3_votes.extend(top3_words)
+        per_view_top3.append(top3_words)
+
+    vote_counts = Counter(all_top3_votes)
+    pred_label, top_votes = vote_counts.most_common(1)[0]
+
     averaged = F.normalize(torch.stack(embeddings).mean(dim=0), p=2, dim=-1)
     dists = _l2_distances(averaged)
     sd = sorted(dists.items(), key=lambda x: x[1])
+
     if scoring == "Probability":
         probs = _scoring_softmax(dists)
-        pred_label = max(probs, key=probs.get)
-        score = probs[pred_label]
+        score = probs.get(pred_label, 0.0)
         accept = score >= threshold
+        eff_thr = float(threshold)
     else:
-        pred_label = sd[0][0]
-        score = sd[0][1]
-        accept = score <= threshold
+        score = dists.get(pred_label, float("inf"))
+        eff_thr = _effective_threshold(pred_label, threshold, use_per_class)
+        accept = score <= eff_thr
 
-    per_view_preds = []
-    for emb_view in embeddings:
-        view_dists = _l2_distances(emb_view)
-        per_view_preds.append(min(view_dists, key=view_dists.get))
-    vote_counts = Counter(per_view_preds)
     return {
         "pred": pred_label if accept else "unknown",
         "raw_pred": pred_label,
         "score": score,
-        "dist": sd[0][1],
+        "dist": dists.get(pred_label, float("inf")),
+        "threshold": eff_thr,
         "top3": ", ".join(f"{w}:{d:.3f}" for w, d in sd[:3]),
         "votes": ", ".join(f"{label}:{count}" for label, count in vote_counts.most_common()),
         "n_views": len(views),
@@ -484,7 +568,7 @@ def _accuracy_line(preds: list[str], expected_text: str) -> str:
 
 
 def detect_long(audio, threshold, seg_method, denoise, scoring,
-                min_duration_ms, expected_text):
+                min_duration_ms, expected_text, use_per_class):
     wav = to_wav(audio)
     if wav is None:
         return "_No audio._", None
@@ -508,7 +592,7 @@ def detect_long(audio, threshold, seg_method, denoise, scoring,
 
     merged = []
     for start, end in segments:
-        scored = _score_cluster(wav[..., start:end], threshold, scoring)
+        scored = _score_cluster(wav[..., start:end], threshold, scoring, use_per_class)
         merged.append({
             "t0": start / SR,
             "t1": end / SR,
@@ -516,6 +600,7 @@ def detect_long(audio, threshold, seg_method, denoise, scoring,
             "raw_pred": scored["raw_pred"],
             "dist": scored["dist"],
             "score": scored["score"],
+            "threshold": scored.get("threshold", threshold),
             "top3": scored["top3"],
             "votes": scored["votes"],
             "n_views": scored["n_views"],
@@ -537,14 +622,15 @@ def detect_long(audio, threshold, seg_method, denoise, scoring,
 
     lines.append("\n### Per-segment detail")
     score_label = "Prob" if scoring == "Probability" else "Dist"
-    lines.append(f"| # | Time | TTA | Final word | {score_label} | Votes | Top-3 |")
-    lines.append("|---|------|-----|------------|-------|-------|-------|")
+    lines.append(f"| # | Time | TTA | Final word | {score_label} | Thr | Votes | Top-3 |")
+    lines.append("|---|------|-----|------------|-------|-----|-------|-------|")
     for idx, m in enumerate(merged, start=1):
         label_md = f"**{m['pred']}**" if m["pred"] != "unknown" else "_unknown_"
         score_str = f"{m['score']:.3f}" if scoring == "Probability" else f"{m['dist']:.4f}"
+        thr_str = f"{m['threshold']:.2f}" if scoring != "Probability" else f"{threshold:.2f}"
         lines.append(
             f"| {idx} | {m['t0']:.1f}-{m['t1']:.1f}s | {m['n_views']} | "
-            f"{label_md} | {score_str} | {m['votes']} | {m['top3']} |"
+            f"{label_md} | {score_str} | {thr_str} | {m['votes']} | {m['top3']} |"
         )
 
     fig, ax = plt.subplots(figsize=(12, 3))
@@ -802,7 +888,11 @@ def build_ui() -> gr.Blocks:
                     det_audio = gr.Audio(label="Audio", sources=["upload", "microphone"], type="numpy")
                     det_th = gr.Slider(
                         minimum=0.0, maximum=2.0, value=0.6, step=0.01,
-                        label="Threshold (lower=stricter for L2; higher=stricter for Prob)",
+                        label="Global threshold (used when per-class is OFF)",
+                    )
+                    det_per_class = gr.Checkbox(
+                        label="Use per-class threshold (calibrated from enrollment) — recommended",
+                        value=True,
                     )
                     det_scoring = gr.Radio(["L2", "Probability"], value="L2",
                                            label="Scoring (L2 = proposed, Probability = Rusci baseline)")
@@ -812,7 +902,7 @@ def build_ui() -> gr.Blocks:
                     det_result = gr.Markdown()
                     det_plot = gr.Plot()
             det_btn.click(detect_single,
-                          [det_audio, det_th, det_denoise, det_scoring],
+                          [det_audio, det_th, det_denoise, det_scoring, det_per_class],
                           [det_result, det_plot])
 
         with gr.Tab("3. Detect (long file)"):
@@ -826,7 +916,12 @@ def build_ui() -> gr.Blocks:
                 with gr.Column(scale=1):
                     long_audio = gr.Audio(label="Long audio", sources=["upload", "microphone"], type="numpy")
                     long_th = gr.Slider(
-                        minimum=0.0, maximum=2.0, value=0.85, step=0.01, label="Threshold",
+                        minimum=0.0, maximum=2.0, value=0.7, step=0.01,
+                        label="Global threshold (used when per-class is OFF)",
+                    )
+                    long_per_class = gr.Checkbox(
+                        label="Use per-class threshold (calibrated from enrollment) — recommended",
+                        value=True,
                     )
                     long_scoring = gr.Radio(["L2", "Probability"], value="L2", label="Scoring method")
                     long_seg = gr.Radio(["Energy", "Silero VAD"], value="Energy",
@@ -847,7 +942,7 @@ def build_ui() -> gr.Blocks:
                     long_plot = gr.Plot()
             long_btn.click(detect_long,
                             [long_audio, long_th, long_seg, long_denoise, long_scoring,
-                             long_mindur, long_expected],
+                             long_mindur, long_expected, long_per_class],
                             [long_result, long_plot])
 
         with gr.Tab("4. Open-set test"):

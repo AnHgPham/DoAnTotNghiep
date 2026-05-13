@@ -56,7 +56,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Oracle test on long audio")
     parser.add_argument("--audio", type=Path, default=Path("data/test/gsc_demo_20words.wav"))
     parser.add_argument("--timings", type=Path, default=None)
-    parser.add_argument("--checkpoint", type=Path, default=Path("checkpoints/best.pt"))
+    parser.add_argument("--checkpoint", type=Path, default=Path("checkpoints/triplet/best_v2_margin1.0_colab.pt"))
     parser.add_argument("--enroll", type=str,
                         default="yes,no,stop,go,up,down,left,right,on,off")
     parser.add_argument("--k", type=int, default=5, help="Enrollment samples per word (thesis: k=5)")

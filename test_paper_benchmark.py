@@ -18,7 +18,7 @@ from src.features.mfcc import MFCCExtractor
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 SR = 16000
-CKPT = Path("checkpoints/best.pt")
+CKPT = Path("checkpoints/triplet/best_v2_margin1.0_colab.pt")
 GSC = Path("data/gsc_v2")
 
 # Paper setup: 10-way 10-shot

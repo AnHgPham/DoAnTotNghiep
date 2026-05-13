@@ -1,127 +1,244 @@
-# Enhanced Few-Shot Open-Set Keyword Spotting
+# Few-Shot Open-Set Keyword Spotting
 
-Few-Shot Open-Set Keyword Spotting system with Direct L2 distance prototype classification, noise robustness, and real-time streaming inference.
+Hệ thống nhận diện từ khóa few-shot cho đồ án tốt nghiệp: người dùng chỉ cần
+thu 3-5 mẫu cho mỗi từ khóa, hệ thống tạo prototype embedding và nhận diện từ
+khóa trong audio tĩnh hoặc luồng microphone streaming. Trọng tâm của project là
+open-set KWS: nhận đúng từ đã đăng ký và biết từ chối âm thanh không thuộc bộ từ
+khóa.
 
-## Features
+## Điểm Chính
 
-- **Few-Shot Learning**: Learn new keywords from 3-5 audio samples without retraining
-- **Open-Set Recognition**: Reject unknown words using acceptance radius threshold
-- **Noise Robustness**: Noise augmentation during training + optional denoising at inference (EXT-1)
-- **Streaming Inference**: VAD + sliding window for continuous real-time detection (EXT-2)
-- **Speaker Verification**: Optional ECAPA-TDNN speaker gate (Optional Extension)
-- **Multiple Loss Functions**: Triplet Loss, ArcFace, Sub-center ArcFace (SCAF)
+- Few-shot enrollment: thêm từ mới bằng 3-5 mẫu WAV/microphone, không cần train
+  lại toàn bộ model.
+- Open-set rejection: dùng khoảng cách L2/prototype, threshold toàn cục hoặc
+  threshold riêng từng từ để giảm false alarm.
+- Streaming KWS: VAD/energy segmentation, multi-window scoring, voting, margin
+  và cooldown để dùng với microphone thực tế.
+- Model baseline: DSCNN-L + MFCC, ổn định cho báo cáo và demo.
+- Model thử nghiệm: EdgeSpot-lite với mel 40x101, trainable PCEN và temporal
+  attention, dùng để tiếp cận hướng EdgeSpot.
+- Training data: MSWC English cho train, Google Speech Commands v2 cho đánh giá,
+  DEMAND noise cho augmentation.
+- Colab workflow: cache MSWC WAV trên Google Drive để lần sau không phải convert
+  lại OPUS sang WAV.
 
-## Setup
+## Trạng Thái Khuyến Nghị
 
-```bash
+- Train chính: dùng `notebooks/02_train_enhanced.ipynb` trên Colab GPU.
+- Dataset cache: `mswc_en_wav_top500_mpw200` trên Google Drive.
+- Baseline ổn định: `dscnn_top500_mpw200_clean`, loss `triplet`, early stopping
+  theo `val_auc`.
+- Demo/eval: luôn lấy `best.pt` trong run tốt nhất, không dùng `latest.pt` nếu
+  checkpoint train tiếp bị degrade.
+- Artifact lớn như `data/`, `checkpoints/`, `results/`, `outputs/`, `*.zip` không
+  được commit vào Git. Lưu chúng ở Google Drive hoặc ổ local.
+
+## Cài Đặt Local
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -U pip
 pip install -r requirements.txt
 ```
 
-## Download Data
+Nếu chạy trên máy không có GPU, project vẫn chạy được demo/eval nhỏ bằng CPU,
+nhưng training MSWC nên chạy trên Colab hoặc máy có CUDA.
+
+## Chuẩn Bị Dữ Liệu
+
+Google Speech Commands v2 dùng cho benchmark:
 
 ```bash
 python data/download_gsc.py
+```
 
-# Local/manual MSWC path
+MSWC Top500 local:
+
+```bash
 python data/download_mswc.py --top500-splits --max-per-word 200
 python data/convert_opus.py --delete-opus
-
-# Colab/Drive path used by notebooks/02_train_enhanced.ipynb
-python data/mswc_drive_cache.py --split-mode top500 --max-per-word 200
 ```
 
-## Project Structure
+MSWC cache trên Google Drive cho Colab:
 
+```bash
+python data/mswc_drive_cache.py \
+  --drive-project /content/drive/MyDrive/DoAnTotNghiep_output \
+  --split-mode top500 \
+  --max-per-word 200 \
+  --workers 2
 ```
-src/
-├── features/       # MFCC extraction + noise augmentation + PCEN + SpecAugment
-├── models/         # DSCNN-L encoder + Triplet/ArcFace/SCAF loss
-├── classifiers/    # OpenNCM classifier (Direct L2 distance)
-├── evaluation/     # Metrics (DET, AUC, EER, P/R/F1) + protocols (GSC, MSWC)
-├── streaming/      # Silero VAD + sliding window engine (EXT-2)
-├── enhancements/   # Denoiser (EXT-1) + Speaker verification (ECAPA-TDNN)
-├── data/           # Dataset loaders (MSWC, GSC)
-└── demo/           # Gradio web app
-scripts/
-├── train.py        # Training with validation + TensorBoard
-├── evaluate.py     # Evaluation on GSC/MSWC protocols
-└── compare_kshot.py # K-shot comparison utility
-tests/              # Unit tests for all modules
-notebooks/          # Colab training notebooks
-configs/            # YAML configuration
-docs/               # Thesis documents, proposals, reports
-```
+
+Cache hợp lệ cần có `clips/<word>/*.wav`, `splits/train_words.json`,
+`splits/val_words.json` và coverage đủ cao cho train/val words. Khi cache hit,
+notebook symlink/copy dữ liệu về `data/mswc_en` để API training không đổi.
 
 ## Training
 
+DSCNN baseline sạch:
+
 ```bash
-# Triplet Loss (default)
-python scripts/train.py --config configs/default.yaml --data-dir data/gsc_v2
+python scripts/train.py \
+  --config configs/default.yaml \
+  --model-family dscnn \
+  --loss triplet \
+  --run-tag dscnn_top500_mpw200_clean \
+  --epochs 35 \
+  --episodes 200 \
+  --num-workers 2 \
+  --early-stop-patience 8 \
+  --early-stop-min-delta 0.001
+```
 
-# EdgeSpot-lite + mel/PCEN frontend
-python scripts/train.py --config configs/default.yaml --model-family edgespot_lite --loss scaf --run-tag edgespot_lite_top500_scaf
+Hard-pair ablation sau khi có confusion matrix:
 
-# Clean DSCNN retrain with early stopping and a run tag
-python scripts/train.py --config configs/default.yaml --run-tag dscnn_top500_clean --early-stop-patience 8
+```bash
+python scripts/train.py \
+  --config configs/default.yaml \
+  --model-family dscnn \
+  --loss triplet \
+  --run-tag dscnn_top500_mpw200_hard02 \
+  --hard-pairs-path results/hard_pairs.json \
+  --hard-pair-prob 0.2
+```
 
-# Hard-pair ablation
-python scripts/train.py --config configs/default.yaml --run-tag dscnn_top500_hard02 --hard-pairs-path results/hard_pairs.json --hard-pair-prob 0.2
+EdgeSpot-lite thử nghiệm:
 
-# ArcFace
-python scripts/train.py --config configs/default.yaml --data-dir data/gsc_v2 --loss arcface
-
-# Sub-center ArcFace
-python scripts/train.py --config configs/default.yaml --data-dir data/gsc_v2 --loss scaf
-
-# Resume training
-python scripts/train.py --config configs/default.yaml --resume checkpoints/latest.pt
+```bash
+python scripts/train.py \
+  --config configs/default.yaml \
+  --model-family edgespot_lite \
+  --loss scaf \
+  --run-tag edgespot_lite_top500_scaf \
+  --epochs 35 \
+  --episodes 200 \
+  --num-workers 2
 ```
 
 ## Evaluation
 
+Đánh giá few-shot open-set trên GSC:
+
 ```bash
-# GSC Fixed protocol
-python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/triplet/best_v2_margin1.0_colab.pt
+python scripts/evaluate.py \
+  --config configs/default.yaml \
+  --checkpoint checkpoints/<run_tag>/best.pt \
+  --protocol gsc_fixed \
+  --k-shot 5 \
+  --plot-det
 
-# GSC Random protocol
-python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/triplet/best_v2_margin1.0_colab.pt --protocol gsc_random
-
-# MSWC evaluation
-python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/triplet/best_v2_margin1.0_colab.pt --protocol mswc_random
+python scripts/evaluate.py \
+  --config configs/default.yaml \
+  --checkpoint checkpoints/<run_tag>/best.pt \
+  --protocol gsc_random \
+  --k-shot 5 \
+  --plot-det
 ```
 
+Benchmark streaming/robustness:
+
+```bash
+python scripts/benchmark_robust_streaming.py \
+  --checkpoint checkpoints/<run_tag>/best.pt \
+  --gsc-dir data/gsc_v2 \
+  --k-shot 5
+```
+
+Các metric quan trọng:
+
+- `keyword_acc`: độ chính xác khi audio là một keyword đã biết.
+- `open_set_acc@5% FAR`: độ chính xác open-set tại false accept rate 5%.
+- `FRR@5% FAR`: tỉ lệ bỏ sót keyword khi FAR được cố định ở 5%.
+- `false_alarms_per_hour`: số lần báo nhầm trong streaming.
+- `miss_rate`: tỉ lệ không phát hiện keyword trong audio dài.
+- `latency_ms`: độ trễ từ lúc nói xong đến lúc hệ thống phát hiện.
+
 ## Demo
+
+Gradio demo:
 
 ```bash
 python src/demo/app.py
 ```
 
-Opens a Gradio web app at `http://localhost:7860` with:
-1. **Offline Detection** - Upload/record audio, detect keywords
-2. **Enrollment** - Register new keywords with 3-5 samples
-3. **Streaming + VAD** - Test sliding-window detection with Silero VAD
-4. **Settings** - Configure denoising, speaker gate, view model info
-
-## Testing
+FastAPI + web UI:
 
 ```bash
-pytest tests/ -v
+python -m src.demo.api_server
 ```
 
-## Architecture
+Sau đó mở `http://127.0.0.1:8000`.
 
-- **Encoder**: DSCNN-L (276 channels, 5 DS blocks, embedding_dim=276)
-- **Alternative Encoder**: EdgeSpot-lite (mel 40x101 + trainable PCEN + temporal attention, embedding_dim=64)
-- **Features**: MFCC (40 computed, 10 used, n_fft=1024, center=False) -> input shape (B, 1, 47, 10); mel frontend -> (B, 1, 40, 101)
-- **Training**: Episodic batching, StepLR(step_size=20, gamma=0.5), validation every 5 epochs
-- **Loss**: Triplet (margin=0.5) | ArcFace (s=30, m=0.5) | SCAF (K=3)
-- **Classification**: Direct L2 distance with acceptance radius threshold
-- **Metrics**: AUC, EER, FRR@FAR, ACC@FAR, Precision, Recall, F1, DET curves
-- **Datasets**: GSC v2 (eval), MSWC English (train), DEMAND (noise)
-- **Extensions**: Spectral-gate denoising (EXT-1), Silero VAD streaming (EXT-2), ECAPA-TDNN speaker verification (Optional)
+Demo hỗ trợ:
 
-## Colab Training
+- enroll keyword từ GSC hoặc microphone;
+- lưu/load enrollment profile;
+- detect audio ngắn;
+- detect file dài;
+- streaming microphone qua WebSocket;
+- open-set test với threshold toàn cục hoặc threshold riêng từng từ.
 
-For GPU training, use the Colab notebooks in `notebooks/`:
-1. `01_train_colab.ipynb` - Basic training
-2. `02_train_enhanced.ipynb` - Full pipeline with all experiments, evaluation, TensorBoard, and demo
+## Cấu Trúc Repo
+
+```text
+configs/              YAML cấu hình model, data, training, evaluation
+data/                 Script download/cache dataset, không commit dataset thật
+docs/                 Tài liệu báo cáo, proposal, phân tích thí nghiệm
+notebooks/            Colab notebooks, đặc biệt 02_train_enhanced.ipynb
+scripts/              Train, evaluate, benchmark, confusion analysis
+src/
+  classifiers/        OpenNCM, OpenMAX, energy OOD classifiers
+  data/               Dataset loaders cho MSWC/GSC
+  demo/               Gradio app, FastAPI backend, static web UI
+  enhancements/       Denoising và speaker verification optional
+  evaluation/         Protocols, metrics, DET curves
+  features/           MFCC, mel, PCEN, augmentation, SpecAugment
+  models/             DSCNN, EdgeSpot-lite, Triplet/ArcFace/SCAF
+  streaming/          VAD/energy streaming engines
+tests/                Unit tests và smoke tests
+```
+
+## Artifact Policy
+
+Không commit các thư mục/file sau:
+
+- `data/gsc_v2`, `data/mswc_en`, `data/demand`
+- `checkpoints/`
+- `results/`
+- `outputs/`
+- `runs/`, `wandb/`, `logs/`
+- `*.pt`, `*.pth`, `*.ckpt`, `*.zip`, `*.rar`
+- `__pycache__/`, `*.pyc`
+
+Khi cần chia sẻ model hoặc kết quả, nén riêng artifact hoặc lưu trên Google
+Drive. Git chỉ nên chứa source code, config, notebook, test và tài liệu nhẹ.
+
+## Test
+
+```bash
+python -m pytest tests -q
+```
+
+Nhóm test hiện kiểm tra feature shapes, model forward, metrics, open-set
+classifier, MSWC Drive cache và streaming engine.
+
+## Hướng Phát Triển
+
+Ưu tiên thực tế để tăng chất lượng demo:
+
+1. Hoàn thiện streaming state machine và threshold calibration theo từng từ.
+2. Thêm benchmark audio dài: false alarm/hour, miss rate, latency, duplicate
+   detection.
+3. Train lại trên streaming-style augmentation: silence, noise, unknown speech,
+   keyword offset ngẫu nhiên.
+4. Dùng hard negative/impostor bank cho enrollment 3-5 mẫu.
+5. Sau khi baseline ổn, mở phase EdgeSpot đầy đủ với Wav2Vec2 teacher KD.
+
+## Tham Khảo
+
+- EdgeSpot: Efficient and High-Performance Few-Shot Model for Keyword Spotting,
+  arXiv 2601.16316.
+- Google Speech Commands v2.
+- Multilingual Spoken Words Corpus.
+- Few-shot open-set KWS và query-by-example KWS literature.

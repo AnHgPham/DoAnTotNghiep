@@ -23,7 +23,7 @@ from src.features.mfcc import MFCCExtractor
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SR = 16000
-DEFAULT_CKPT = Path("checkpoints/best.pt")
+DEFAULT_CKPT = Path("checkpoints/triplet/best_v2_margin1.0_colab.pt")
 
 
 # ==================== Core functions ====================
@@ -302,7 +302,7 @@ def main():
     parser.add_argument("--audio", type=str, default=None,
                         help="Path to audio file to detect (WAV). If not given, uses GSC test samples.")
     parser.add_argument("--checkpoint", type=str, default=str(DEFAULT_CKPT),
-                        help="Checkpoint path, e.g. checkpoints/best.pt")
+                        help="Checkpoint path, e.g. checkpoints/triplet/best_v2_margin1.0_colab.pt")
     parser.add_argument("--threshold", type=float, default=0.8, help="L2 distance threshold (default: 0.8)")
     parser.add_argument("--words", type=str, default="yes,no,stop,go,up,down,left,right,on,off",
                         help="Comma-separated keywords to enroll from GSC")

@@ -5,11 +5,9 @@ from pathlib import Path
 import torch
 
 CHECKPOINTS = [
-    "checkpoints/best.pt",
-    "checkpoints/triplet/best.pt",
-    "checkpoints/triplet/epoch_05.pt",
-    "checkpoints/triplet/epoch_10.pt",
-    "checkpoints/triplet/epoch_15.pt",
+    "checkpoints/triplet/best_v1_margin0.5_local.pt",
+    "checkpoints/triplet/best_v2_margin1.0_colab.pt",
+    "checkpoints/triplet/best_v3_margin1.0_phase2.pt",
 ]
 
 

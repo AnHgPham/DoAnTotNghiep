@@ -29,7 +29,7 @@ from src.features.mfcc import MFCCExtractor
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SAMPLE_RATE = 16000
-CHECKPOINT_PATH = PROJECT_ROOT / "checkpoints" / "best.pt"
+CHECKPOINT_PATH = PROJECT_ROOT / "checkpoints" / "triplet" / "best_v2_margin1.0_colab.pt"
 
 encoder: DSCNN | None = None
 mfcc_extractor: MFCCExtractor | None = None

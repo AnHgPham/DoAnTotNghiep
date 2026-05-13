@@ -165,7 +165,7 @@ def main() -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     encoder = DSCNN(model_size=cfg["model"]["architecture"][-1]).to(device)
-    ckpt = torch.load("checkpoints/best.pt", map_location=device, weights_only=False)
+    ckpt = torch.load("checkpoints/triplet/best_v2_margin1.0_colab.pt", map_location=device, weights_only=False)
     encoder.load_state_dict(ckpt["model_state_dict"])
     encoder.eval()
     print(f"Checkpoint: epoch={ckpt.get('epoch', '?')}, loss={ckpt.get('loss', '?'):.4f}")
