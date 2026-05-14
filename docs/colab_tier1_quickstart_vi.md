@@ -39,7 +39,28 @@ GSC: ~105k WAV
 DEMAND: ~272 WAV
 ```
 
-## 5. Train EdgeSpotFull + SCAF + GE2E
+## 5. Data profile quan trong
+
+De debug nhanh, co the dung cache cu:
+
+```python
+MSWC_SPLIT_MODE = 'top500'
+MSWC_MAX_PER_WORD = 200
+```
+
+De chay nghiem tuc theo huong paper-grade, phai dung all clips/word:
+
+```python
+MSWC_SPLIT_MODE = 'top500'
+MSWC_MAX_PER_WORD = 0
+```
+
+Khi `MSWC_MAX_PER_WORD = 0`, cache moi se la
+`mswc_en_wav_top500_full`. Lan dau se tai/extract/convert lon hon nhieu so
+voi `mswc_en_wav_top500_mpw200`. Khong dung ket qua `mpw200` de claim
+reproduce EdgeSpot.
+
+## 6. Train EdgeSpotFull + SCAF + GE2E
 
 ```python
 !python scripts/train.py \
@@ -71,7 +92,7 @@ Neu train qua lau, debug truoc bang ban nho:
   --num-workers 2
 ```
 
-## 6. Benchmark EdgeSpot exact
+## 7. Benchmark EdgeSpot exact
 
 ```python
 !python scripts/evaluate_edgespot_protocol.py \
@@ -84,13 +105,13 @@ Neu train qua lau, debug truoc bang ban nho:
   --output-dir results/edgespot_exact/edgespot_full_t4_scaf_ge2e
 ```
 
-## 7. Tao bang ket qua
+## 8. Tao bang ket qua
 
 ```python
 !python scripts/make_research_tables.py results/edgespot_exact/edgespot_full_t4_scaf_ge2e/*_results.json
 ```
 
-## 8. KD phase sau khi SCAF/GE2E on dinh
+## 9. KD phase sau khi SCAF/GE2E on dinh
 
 ```python
 !python scripts/precompute_teacher_embeddings.py \
