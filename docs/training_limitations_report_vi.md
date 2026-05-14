@@ -138,6 +138,28 @@ Nhận xét:
 
 Điểm yếu nghiêm trọng nhất không chỉ là closed-set keyword accuracy, mà là **khả năng open-set ở vùng FAR thấp**.
 
+### 4.1. Kết quả thí nghiệm song song khác
+
+Ngoài run ở trên, em cũng chạy thêm một thí nghiệm song song với cùng hướng DSCNN + Triplet trên MSWC Top500 để kiểm tra liệu kết quả kém có phải do ngẫu nhiên hay không. Kết quả thí nghiệm song song còn thấp hơn:
+
+| Experiment | AUC | EER | FRR@5% | ACC@5% | KW-ACC | F1 |
+|---|---:|---:|---:|---:|---:|---:|
+| gsc_fixed_k5 | 0.8148 | 0.2671 | 0.6944 | 0.7169 | 0.6596 | 0.6467 |
+| gsc_fixed_k10 | 0.8347 | 0.2445 | 0.6628 | 0.7281 | 0.7096 | 0.6733 |
+| gsc_random_k5 | 0.7903 | 0.2842 | 0.6992 | 0.7223 | 0.7500 | 0.6270 |
+| gsc_random_k10 | 0.7947 | 0.2796 | 0.6968 | 0.7261 | 0.7648 | 0.6323 |
+
+So với thí nghiệm trước, run song song này giảm ở hầu hết chỉ số:
+
+| Protocol | Run trước KW-ACC | Run song song KW-ACC | Chênh lệch |
+|---|---:|---:|---:|
+| gsc_fixed_k5 | 0.6980 | 0.6596 | -0.0384 |
+| gsc_fixed_k10 | 0.7500 | 0.7096 | -0.0404 |
+| gsc_random_k5 | 0.7836 | 0.7500 | -0.0336 |
+| gsc_random_k10 | 0.8184 | 0.7648 | -0.0536 |
+
+`FRR@5%` của run song song cũng tăng lên khoảng **66-70%**, nghĩa là khi giữ false accept rate ở 5%, hệ thống bỏ sót khoảng hai phần ba keyword thật. Kết quả này củng cố nhận định rằng vấn đề không phải do một checkpoint riêng lẻ, mà là do pipeline huấn luyện hiện tại chưa đủ tốt để generalize sang GSC/open-set.
+
 ## 5. Phân Tích Nguyên Nhân
 
 ### 5.1. MSWC validation không phản ánh tốt GSC/deployment
@@ -213,8 +235,9 @@ Sau nhiều lần train và sửa pipeline, em kết luận tạm thời:
 1. Pipeline dữ liệu đã ổn định hơn trước.
 2. Model có học trên MSWC, thể hiện qua MSWC `val_auc` tăng đến **0.9585**.
 3. Tuy nhiên model không generalize đủ tốt sang GSC/open-set.
-4. Kết quả hiện tại chưa đạt mục tiêu 90-95%.
-5. Mục tiêu thực tế hơn trong giai đoạn này là:
+4. Một thí nghiệm song song khác còn cho kết quả thấp hơn, cho thấy vấn đề có tính lặp lại.
+5. Kết quả hiện tại chưa đạt mục tiêu 90-95%.
+6. Mục tiêu thực tế hơn trong giai đoạn này là:
    - static few-shot `KW-ACC >= 80-85%`;
    - giảm `FRR@5%`;
    - cải thiện streaming bằng calibration và state machine, không chỉ train thêm.
@@ -298,7 +321,6 @@ data distribution + checkpoint selection + enrollment + threshold calibration + 
 
 ## 9. Tóm Tắt Gửi Giảng Viên
 
-Trong giai đoạn này em đã hoàn thiện lại pipeline dữ liệu, cache MSWC WAV trên Drive, sửa các lỗi Colab/cache, và train lại DSCNN trên MSWC Top500 với 85,916 mẫu thuộc 430 class. Kết quả validation trên MSWC đạt cao nhất `val_auc=0.9585`, cho thấy model có học được embedding trên tập train/val. Tuy nhiên khi đánh giá cross-dataset trên Google Speech Commands, kết quả chưa đạt kỳ vọng: `gsc_fixed_k5` chỉ đạt `KW-ACC=69.8%`, `AUC=0.8494`, và `FRR@5%=60.52%`. Điều này cho thấy model chưa generalize tốt và open-set rejection còn yếu.
+Trong giai đoạn này em đã hoàn thiện lại pipeline dữ liệu, cache MSWC WAV trên Drive, sửa các lỗi Colab/cache, và train lại DSCNN trên MSWC Top500 với 85,916 mẫu thuộc 430 class. Kết quả validation trên MSWC đạt cao nhất `val_auc=0.9585`, cho thấy model có học được embedding trên tập train/val. Tuy nhiên khi đánh giá cross-dataset trên Google Speech Commands, kết quả chưa đạt kỳ vọng: `gsc_fixed_k5` chỉ đạt `KW-ACC=69.8%`, `AUC=0.8494`, và `FRR@5%=60.52%`. Một thí nghiệm song song khác còn thấp hơn, với `gsc_fixed_k5 KW-ACC=65.96%`, `AUC=0.8148`, và `FRR@5%=69.44%`. Điều này cho thấy model chưa generalize tốt và open-set rejection còn yếu.
 
 Nguyên nhân chính được xác định là MSWC validation chưa phản ánh tốt deployment/GSC, triplet embedding chưa tách đủ rõ giữa positive và negative, các từ ngắn/gần âm gây nhầm lẫn nhiều, và bài toán open-set/streaming khó hơn closed-set classification. Vì vậy em chưa thể báo cáo rằng model đã đạt mức 90-95%. Hướng tiếp theo là chọn checkpoint bằng GSC/streaming proxy, giảm augmentation quá mạnh, cải thiện enrollment/threshold calibration, và hoàn thiện streaming state machine.
-
