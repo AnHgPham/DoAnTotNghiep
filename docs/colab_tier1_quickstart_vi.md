@@ -30,14 +30,23 @@ Neu Colab bi cham o `transformers`, co the cai rieng:
 
 ## 4. Kiem tra data cache
 
-Chay cac cell mount Drive va setup dataset trong `notebooks/02_train_enhanced.ipynb`
-truoc. Dataset dung phai gan muc:
+Mo notebook rieng cho Tier-1:
+
+```text
+notebooks/03_tier1_edgespot_colab.ipynb
+```
+
+Chay cac cell mount Drive va setup dataset trong notebook nay truoc. Dataset debug cu
+co dang:
 
 ```text
 MSWC: ~95k WAV neu Top500 mpw200
 GSC: ~105k WAV
 DEMAND: ~272 WAV
 ```
+
+Muc `~95k WAV` chi dung de debug/smoke test. Khong dung de bao cao reproduce
+EdgeSpot vi moi word da bi gioi han toi da 200 clips.
 
 ## 5. Data profile quan trong
 
@@ -59,6 +68,18 @@ Khi `MSWC_MAX_PER_WORD = 0`, cache moi se la
 `mswc_en_wav_top500_full`. Lan dau se tai/extract/convert lon hon nhieu so
 voi `mswc_en_wav_top500_mpw200`. Khong dung ket qua `mpw200` de claim
 reproduce EdgeSpot.
+
+Sau khi setup MSWC xong, bat buoc in data profile:
+
+```python
+!python scripts/mswc_data_report.py --data-dir data/mswc_en --top-n 20
+```
+
+Neu output canh bao `mpw200 debug cache`, dung train nghiem tuc va doi lai:
+
+```python
+MSWC_MAX_PER_WORD = 0
+```
 
 ## 6. Train EdgeSpotFull + SCAF + GE2E
 
