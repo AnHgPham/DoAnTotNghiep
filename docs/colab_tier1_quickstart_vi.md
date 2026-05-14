@@ -144,6 +144,15 @@ Neu train qua lau, debug truoc bang ban nho:
 !python scripts/make_research_tables.py results/edgespot_exact/edgespot_full_t4_scaf_ge2e/*_results.json
 ```
 
+Kiem tra readiness truoc khi viet bao:
+
+```python
+!python scripts/research_readiness.py \
+  --data-profile microset_en \
+  --results-root /content/drive/MyDrive/DoAnTotNghiep_output/results \
+  --checkpoints-root /content/drive/MyDrive/DoAnTotNghiep_output/checkpoints
+```
+
 ## 9. KD phase sau khi SCAF/GE2E on dinh
 
 ```python

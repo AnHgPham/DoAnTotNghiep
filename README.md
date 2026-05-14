@@ -101,6 +101,15 @@ python scripts/train.py \
 
 ## Training
 
+Research/publication roadmap:
+
+```bash
+python scripts/research_readiness.py --data-profile microset_en
+python scripts/research_readiness.py --data-profile top500_full \
+  --results-root results \
+  --checkpoints-root checkpoints
+```
+
 DSCNN baseline sạch:
 
 ```bash

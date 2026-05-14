@@ -1,0 +1,118 @@
+project:
+  name: Few-Shot Open-Set Keyword Spotting
+  primary_goal: "Publication-grade few-shot open-set KWS with calibrated evaluation"
+  target_venues:
+    near_term:
+      - INTERSPEECH workshop/main
+      - ICASSP workshop/main
+    stretch:
+      - AAAI
+      - IJCAI
+      - ACL
+      - EMNLP
+
+data_profiles:
+  microset_en:
+    description: "Official MLCommons MSWC Microset English; resource-constrained experiment profile."
+    data_dir: data/mswc_microset_en
+    allowed_claim: "official Microset experiment, pipeline validation, ablation under disk constraints"
+    forbidden_claim: "EdgeSpot/MSWC Top500 full reproduction"
+    prepare:
+      - "python data/download_mswc_microset.py --language en --workers 2"
+      - "python scripts/mswc_data_report.py --data-dir data/mswc_microset_en --top-n 20"
+  top500_full:
+    description: "MSWC English Top500 train/val with all clips per word."
+    data_dir: data/mswc_en
+    drive_cache: mswc_en_wav_top500_full
+    allowed_claim: "Top500 full-clips experiment and EdgeSpot-style reproduction attempt"
+    forbidden_claim: "full MSWC English unless split_mode=full is used"
+    prepare:
+      - "python data/mswc_drive_cache.py --drive-project /content/drive/MyDrive/DoAnTotNghiep_output --split-mode top500 --max-per-word 0 --workers 2"
+      - "python scripts/mswc_data_report.py --data-dir data/mswc_en --top-n 20"
+
+benchmark:
+  canonical_protocol: gsc_edgespot_exact
+  query_splits:
+    dev: "checkpoint selection and calibration only"
+    test: "final report only"
+  required_final_runs: 100
+  primary_metrics:
+    - open_set_acc_at_1far
+    - open_set_acc_at_5far
+    - frr_at_5far
+    - auc
+    - eer
+    - keyword_acc
+
+experiments:
+  - id: dscnn_triplet_baseline
+    family: dscnn
+    loss: triplet
+    purpose: "legacy DSCNN baseline and negative result anchor"
+    run_tag_template: "dscnn_triplet_{data_label}"
+    priority: required
+  - id: bcresnet_fs_scaf
+    family: bcresnet_fs
+    loss: scaf
+    purpose: "architecture baseline without attention"
+    run_tag_template: "bcresnet_fs_scaf_{data_label}"
+    priority: recommended
+  - id: edgespot_full_t4_scaf
+    family: edgespot_full
+    edge_tau: 4
+    loss: scaf
+    purpose: "EdgeSpot-style reproduction without GE2E/KD"
+    run_tag_template: "edgespot_full_t4_scaf_{data_label}"
+    priority: required
+  - id: edgespot_full_t4_scaf_ge2e
+    family: edgespot_full
+    edge_tau: 4
+    loss: scaf_ge2e
+    purpose: "main practical baseline"
+    run_tag_template: "edgespot_full_t4_scaf_ge2e_{data_label}"
+    priority: required
+  - id: edgespot_full_t4_calibrated
+    family: edgespot_full
+    edge_tau: 4
+    loss: scaf_ge2e
+    purpose: "proposed calibrated open-set method"
+    run_tag_template: "edgespot_full_t4_scaf_ge2e_calibrated_{data_label}"
+    priority: stretch
+  - id: edgespot_full_t4_kd_scaf_ge2e
+    family: edgespot_full
+    edge_tau: 4
+    loss: kd_scaf_ge2e
+    purpose: "teacher-distilled stretch method"
+    run_tag_template: "edgespot_full_t4_kd_scaf_ge2e_{data_label}"
+    priority: stretch
+
+targets:
+  reproduction_accept:
+    metric: open_set_acc_at_1far
+    min_value: 0.78
+    scope: top500_full
+  reproduction_success:
+    metric: open_set_acc_at_1far
+    min_value: 0.80
+    scope: top500_full
+  proposed_method_accept:
+    improvement_metric: open_set_acc_at_1far
+    min_absolute_improvement: 0.02
+    secondary_metric: frr_at_5far
+    desired_direction: lower
+
+artifact_requirements:
+  required:
+    - "configs/research_experiments.yaml"
+    - "docs/publication_roadmap_vi.md"
+    - "notebooks/03_tier1_edgespot_colab.ipynb"
+    - "scripts/mswc_data_report.py"
+    - "scripts/evaluate_edgespot_protocol.py"
+    - "scripts/make_research_tables.py"
+  final_report:
+    - "GSC-dev selection result JSON"
+    - "GSC-test 100-run result JSON"
+    - "DET curve"
+    - "confusion matrix or per-word metrics"
+    - "data profile report"
+    - "checkpoint best.pt"
