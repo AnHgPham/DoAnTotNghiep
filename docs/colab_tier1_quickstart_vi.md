@@ -83,20 +83,20 @@ MSWC_MAX_PER_WORD = 0
 
 ## 5.1. Option: MSWC Microset neu khong du disk
 
-Neu thay cho phep dung Microset, day la ban chinh thuc cua MLCommons, nho hon nhieu va phu hop de bao cao trong dieu kien tai nguyen han che:
+Neu thay cho phep dung Microset, notebook 03 da co san data profile nay. Doi cell config thanh:
 
 ```python
-!python data/download_mswc_microset.py --language en --workers 2
-!python scripts/mswc_data_report.py --data-dir data/mswc_microset_en --top-n 20
+DATA_PROFILE = 'microset_en'
 ```
 
-Train Microset thi them `--data-dir data/mswc_microset_en` vao lenh train. Khong claim day la reproduce EdgeSpot full/MSWC Top500.
+Notebook se tu tai Microset, dung `data/mswc_microset_en`, dat run tag co hau to `microset_en`, va in data profile. Khong claim day la reproduce EdgeSpot full/MSWC Top500; claim la official MLCommons Microset experiment.
 
 ## 6. Train EdgeSpotFull + SCAF + GE2E
 
 ```python
 !python scripts/train.py \
   --config configs/default.yaml \
+  --data-dir data/mswc_en \
   --model-family edgespot_full \
   --edge-tau 4 \
   --loss scaf_ge2e \
@@ -114,6 +114,7 @@ Neu train qua lau, debug truoc bang ban nho:
 ```python
 !python scripts/train.py \
   --config configs/default.yaml \
+  --data-dir data/mswc_en \
   --model-family edgespot_full \
   --edge-tau 1 \
   --loss scaf_ge2e \

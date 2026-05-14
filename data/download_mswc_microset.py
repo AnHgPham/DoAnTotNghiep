@@ -47,6 +47,9 @@ def _download_file(url: str, dest: Path, retries: int = 3) -> None:
                     tmp.replace(dest)
                     return
                 resp.raise_for_status()
+                if resume_pos and resp.status_code != 206:
+                    logger.warning("Server ignored Range header; restarting download for %s", dest)
+                    resume_pos = 0
                 total = int(resp.headers.get("content-length", 0)) + resume_pos
                 mode = "ab" if resume_pos else "wb"
                 with open(tmp, mode) as f, tqdm(
@@ -96,7 +99,18 @@ def _safe_extract_member(tar: tarfile.TarFile, member: tarfile.TarInfo, target: 
     if not str(out_path).startswith(str(target_resolved)):
         logger.warning("Skipping unsafe tar member: %s", member.name)
         return False
-    tar.extract(member, path=target)
+    if member.isdir():
+        out_path.mkdir(parents=True, exist_ok=True)
+        return True
+    if not member.isfile():
+        logger.debug("Skipping non-file tar member: %s", member.name)
+        return False
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    src = tar.extractfile(member)
+    if src is None:
+        return False
+    with src, open(out_path, "wb") as dst:
+        shutil.copyfileobj(src, dst)
     return True
 
 
@@ -186,6 +200,21 @@ def summarize(output_dir: Path) -> None:
                 len(words), wav_n, opus_n, total_size, output_dir)
 
 
+def _has_existing_audio(output_dir: Path) -> bool:
+    clips = output_dir / "clips"
+    return clips.exists() and (
+        any(clips.rglob("*.wav")) or any(clips.rglob("*.opus"))
+    )
+
+
+def _has_splits(output_dir: Path) -> bool:
+    splits = output_dir / "splits"
+    return (
+        (splits / "train_words.json").exists()
+        and (splits / "val_words.json").exists()
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Download MLCommons MSWC Microset")
     parser.add_argument("--language", choices=["en", "es"], default="en")
@@ -204,16 +233,22 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 
     output_dir = args.output_dir or Path(f"data/mswc_microset_{args.language}")
-    archive = download_microset(args.archive, mirror=args.mirror)
-    extract_language(archive, args.language, output_dir, force=args.force)
+    if _has_existing_audio(output_dir) and not args.force:
+        logger.info("Existing Microset audio found at %s; skipping archive download/extract", output_dir)
+    else:
+        archive = download_microset(args.archive, mirror=args.mirror)
+        extract_language(archive, args.language, output_dir, force=args.force)
+        if not args.keep_archive:
+            archive.unlink(missing_ok=True)
+            logger.info("Deleted archive: %s", archive)
+
     if not args.skip_convert:
         convert_opus(output_dir, workers=args.workers, delete_opus=not args.keep_opus)
-    write_word_splits(output_dir, val_fraction=args.val_fraction, seed=args.seed)
+    if not _has_splits(output_dir) or args.force:
+        write_word_splits(output_dir, val_fraction=args.val_fraction, seed=args.seed)
+    else:
+        logger.info("Existing Microset splits found at %s", output_dir / "splits")
     summarize(output_dir)
-
-    if not args.keep_archive:
-        archive.unlink(missing_ok=True)
-        logger.info("Deleted archive: %s", archive)
 
 
 if __name__ == "__main__":

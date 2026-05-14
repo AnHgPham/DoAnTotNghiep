@@ -13,7 +13,7 @@ After download, convert OPUS->WAV: python data/convert_opus.py
 Usage:
     python data/download_mswc.py                         # full English + extract
     python data/download_mswc.py --splits-only           # metadata + splits only
-    python data/download_mswc.py --top500-splits         # top500/eval pool, full clips per word
+    python data/download_mswc.py --top500-splits         # top500 train/val, full clips per word
     python data/download_mswc.py --from-archive PATH     # local en.tar.gz
     python data/download_mswc.py --max-per-word 400      # cap clips per word
 """
@@ -208,6 +208,9 @@ def _download_file(url: str, dest: Path, desc: str | None = None) -> None:
         tmp.rename(dest)
         return
     resp.raise_for_status()
+    if resume_pos and resp.status_code != 206:
+        logger.warning("Server ignored Range header; restarting download for %s", dest)
+        resume_pos = 0
 
     total = int(resp.headers.get("content-length", 0)) + resume_pos
     mode = "ab" if resume_pos else "wb"
@@ -367,6 +370,12 @@ def main() -> None:
         help="Legacy split: top-500 pool (450/50 + eval outside top-500). "
         "Default is full English vocabulary.",
     )
+    parser.add_argument(
+        "--include-eval-words",
+        action="store_true",
+        help="With --top500-splits, also extract eval words outside top-500. "
+        "Default is false to keep the Top500 cache to 450 train + 50 val words.",
+    )
     parser.add_argument("--max-per-word", type=int, default=None,
                         help="Max clips per word; 0 = unlimited/full. "
                         "Default: 0 for both full-English and top500 modes.")
@@ -411,6 +420,13 @@ def main() -> None:
         train_words, val_words, eval_words = create_splits(
             word_counts, n_train=args.n_train, n_val=args.n_val,
         )
+        if not args.include_eval_words:
+            logger.info(
+                "Not extracting %d eval words by default; "
+                "pass --include-eval-words for the legacy 985-word pool.",
+                len(eval_words),
+            )
+            eval_words = []
         max_per_word = 0 if args.max_per_word is None else args.max_per_word
     else:
         train_words, val_words, eval_words = create_splits_full_english(

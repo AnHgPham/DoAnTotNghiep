@@ -3,9 +3,8 @@
 Downloads tar.gz shards one by one, extracts only target words,
 then discards the shard. Audio is WAV@16kHz -- no conversion needed.
 
-This avoids needing the full 55GB dataset for a **small word list** (legacy
-top-500 pool + eval): only those target words are kept (e.g. max 200 clips
-each ≈ 5GB). For **full English vocabulary**, prefer ``download_mswc.py``
+This avoids needing the full 55GB dataset for a **small word list** (Top500
+train/val by default): only those target words are kept. For **full English vocabulary**, prefer ``download_mswc.py``
 with the MLCommons ``en.tar.gz`` mirror (iterate one archive; large disk).
 
 Usage:
@@ -374,6 +373,8 @@ def main() -> None:
     parser.add_argument("--max-per-word", type=int, default=0)
     parser.add_argument("--n-train", type=int, default=450)
     parser.add_argument("--n-val", type=int, default=50)
+    parser.add_argument("--include-eval-words", action="store_true",
+                        help="Also download eval words outside top-500")
     parser.add_argument("--splits-only", action="store_true",
                         help="Only generate word splits, skip audio download")
     parser.add_argument("--keep-shards", action="store_true",
@@ -405,6 +406,12 @@ def main() -> None:
     train_words, val_words, eval_words = create_splits(
         word_counts, n_train=args.n_train, n_val=args.n_val,
     )
+    if not args.include_eval_words:
+        logger.info(
+            "Not downloading %d eval words by default; pass --include-eval-words for legacy pool.",
+            len(eval_words),
+        )
+        eval_words = []
     save_splits(train_words, val_words, eval_words)
 
     if args.splits_only:
@@ -417,7 +424,8 @@ def main() -> None:
     logger.info("=" * 60)
 
     all_needed = set(train_words + val_words + eval_words)
-    logger.info("Target: %d words, max %d clips each", len(all_needed), args.max_per_word)
+    cap = "full/unlimited" if args.max_per_word <= 0 else str(args.max_per_word)
+    logger.info("Target: %d words, max %s clips each", len(all_needed), cap)
 
     stats = download_audio_from_hf(
         target_words=all_needed,
