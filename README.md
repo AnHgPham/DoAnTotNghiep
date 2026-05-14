@@ -25,6 +25,8 @@ khóa.
 ## Trạng Thái Khuyến Nghị
 
 - Train chính: dùng `notebooks/02_train_enhanced.ipynb` trên Colab GPU.
+- Train Tier-1 EdgeSpot: dùng `notebooks/03_tier1_edgespot_colab.ipynb` trên
+  Colab A100, tách riêng khỏi notebook DSCNN cũ.
 - Dataset cache: `mswc_en_wav_top500_mpw200` trên Google Drive.
 - Baseline ổn định: `dscnn_top500_mpw200_clean`, loss `triplet`, early stopping
   theo `val_auc`.
