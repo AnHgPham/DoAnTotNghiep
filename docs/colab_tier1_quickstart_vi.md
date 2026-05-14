@@ -81,6 +81,17 @@ Neu output canh bao `mpw200 debug cache`, dung train nghiem tuc va doi lai:
 MSWC_MAX_PER_WORD = 0
 ```
 
+## 5.1. Option: MSWC Microset neu khong du disk
+
+Neu thay cho phep dung Microset, day la ban chinh thuc cua MLCommons, nho hon nhieu va phu hop de bao cao trong dieu kien tai nguyen han che:
+
+```python
+!python data/download_mswc_microset.py --language en --workers 2
+!python scripts/mswc_data_report.py --data-dir data/mswc_microset_en --top-n 20
+```
+
+Train Microset thi them `--data-dir data/mswc_microset_en` vao lenh train. Khong claim day la reproduce EdgeSpot full/MSWC Top500.
+
 ## 6. Train EdgeSpotFull + SCAF + GE2E
 
 ```python

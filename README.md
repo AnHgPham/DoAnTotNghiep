@@ -77,6 +77,28 @@ Cache hợp lệ cần có `clips/<word>/*.wav`, `splits/train_words.json`,
 `splits/val_words.json` và coverage đủ cao cho train/val words. Khi cache hit,
 notebook symlink/copy dữ liệu về `data/mswc_en` để API training không đổi.
 
+MSWC Microset chinh thuc cua MLCommons, dung khi Colab/o dia khong du cho Top500/full:
+
+```bash
+python data/download_mswc_microset.py --language en --workers 2
+python scripts/mswc_data_report.py --data-dir data/mswc_microset_en
+```
+
+Train nhanh tren Microset:
+
+```bash
+python scripts/train.py \
+  --config configs/default.yaml \
+  --data-dir data/mswc_microset_en \
+  --model-family edgespot_full \
+  --edge-tau 4 \
+  --loss scaf_ge2e \
+  --run-tag edgespot_full_t4_scaf_ge2e_microset_en \
+  --epochs 20 \
+  --episodes 100 \
+  --num-workers 2
+```
+
 ## Training
 
 DSCNN baseline sạch:
