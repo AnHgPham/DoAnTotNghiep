@@ -513,7 +513,7 @@ def main() -> None:
     if args.max_per_word is not None:
         max_per_word = args.max_per_word
     else:
-        max_per_word = cfg["data"].get("max_per_word", 200)
+        max_per_word = cfg["data"].get("max_per_word", 0)
     requires_kd = args.loss.startswith("kd_")
     teacher_store = None
     if requires_kd:

@@ -201,7 +201,7 @@ def _list_hf_shards(split: str = "train", fmt: str = "wav") -> list[str]:
 
 def download_audio_from_hf(
     target_words: set[str],
-    max_per_word: int = 200,
+    max_per_word: int = 0,
     fmt: str = "wav",
     splits: list[str] | None = None,
     delete_after_extract: bool = True,
@@ -215,7 +215,7 @@ def download_audio_from_hf(
 
     Args:
         target_words: Words to download audio for.
-        max_per_word: Maximum clips per word.
+        max_per_word: Maximum clips per word. ``<=0`` means unlimited/full.
         fmt: Audio format ('wav' or 'opus').
         splits: HF splits to process (default: train, dev, test).
         delete_after_extract: Remove downloaded shards after extraction.
@@ -235,11 +235,15 @@ def download_audio_from_hf(
         if word_dir.exists():
             clip_counts[word] = len(list(word_dir.glob("*.wav")))
 
-    words_done = {w for w in target_words if clip_counts[w] >= max_per_word}
+    limit_enabled = max_per_word > 0
+    words_done = {
+        w for w in target_words
+        if limit_enabled and clip_counts[w] >= max_per_word
+    }
     words_needed = target_words - words_done
 
     if not words_needed:
-        logger.info("All %d words already have >= %d clips!", len(target_words), max_per_word)
+        logger.info("All %d words already satisfy max_per_word=%d!", len(target_words), max_per_word)
         return dict(clip_counts)
 
     logger.info(
@@ -286,7 +290,10 @@ def download_audio_from_hf(
             )
 
             # Update words_needed
-            newly_done = {w for w in words_needed if clip_counts[w] >= max_per_word}
+            newly_done = {
+                w for w in words_needed
+                if limit_enabled and clip_counts[w] >= max_per_word
+            }
             words_needed -= newly_done
             words_done |= newly_done
 
@@ -331,7 +338,7 @@ def _extract_from_tar(
                 if keyword not in words_needed:
                     continue
 
-                if clip_counts[keyword] >= max_per_word:
+                if max_per_word > 0 and clip_counts[keyword] >= max_per_word:
                     continue
 
                 word_dir = CLIPS_DIR / keyword
@@ -364,7 +371,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Download MSWC English from HuggingFace (WAV 16kHz)"
     )
-    parser.add_argument("--max-per-word", type=int, default=200)
+    parser.add_argument("--max-per-word", type=int, default=0)
     parser.add_argument("--n-train", type=int, default=450)
     parser.add_argument("--n-val", type=int, default=50)
     parser.add_argument("--splits-only", action="store_true",

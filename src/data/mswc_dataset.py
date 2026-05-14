@@ -42,7 +42,7 @@ class MSWCDataset(Dataset):
         self,
         root_dir: str | Path,
         words: list[str],
-        max_per_word: int = 200,
+        max_per_word: int = 0,
         noise_augmenter=None,
         wave_augmenter=None,
         spec_augmenter=None,

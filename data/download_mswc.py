@@ -13,7 +13,7 @@ After download, convert OPUS->WAV: python data/convert_opus.py
 Usage:
     python data/download_mswc.py                         # full English + extract
     python data/download_mswc.py --splits-only           # metadata + splits only
-    python data/download_mswc.py --top500-splits         # legacy ~985-word pool
+    python data/download_mswc.py --top500-splits         # top500/eval pool, full clips per word
     python data/download_mswc.py --from-archive PATH     # local en.tar.gz
     python data/download_mswc.py --max-per-word 400      # cap clips per word
 """
@@ -265,7 +265,7 @@ def download_english_audio(mirror: str = "cloudflare") -> Path:
 def extract_target_words(
     archive_path: Path,
     target_words: set[str],
-    max_per_word: int = 200,
+    max_per_word: int = 0,
 ) -> dict[str, int]:
     """Extract only target words from the MSWC English archive.
 
@@ -368,8 +368,8 @@ def main() -> None:
         "Default is full English vocabulary.",
     )
     parser.add_argument("--max-per-word", type=int, default=None,
-                        help="Max clips per word; 0 = unlimited. "
-                        "Default: 0 (full) or 200 (--top500-splits).")
+                        help="Max clips per word; 0 = unlimited/full. "
+                        "Default: 0 for both full-English and top500 modes.")
     parser.add_argument("--val-fraction", type=float, default=0.02,
                         help="Fraction of words for validation (full-English mode only).")
     parser.add_argument("--min-clips", type=int, default=1,
@@ -411,7 +411,7 @@ def main() -> None:
         train_words, val_words, eval_words = create_splits(
             word_counts, n_train=args.n_train, n_val=args.n_val,
         )
-        max_per_word = 200 if args.max_per_word is None else args.max_per_word
+        max_per_word = 0 if args.max_per_word is None else args.max_per_word
     else:
         train_words, val_words, eval_words = create_splits_full_english(
             word_counts,

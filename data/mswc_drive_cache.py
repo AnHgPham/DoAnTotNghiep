@@ -9,7 +9,7 @@ Typical notebook use:
     _from_drive_cache = setup_mswc_from_drive(
         DRIVE_PROJECT,
         split_mode="top500",
-        max_per_word=200,
+        max_per_word=0,
     )
 """
 
@@ -32,7 +32,7 @@ LOCAL_CLIPS = LOCAL_MSWC / "clips"
 SPLIT_FILES = ("train_words.json", "val_words.json", "eval_words.json")
 
 
-def cache_dir_name(split_mode: str = "top500", max_per_word: int = 200) -> str:
+def cache_dir_name(split_mode: str = "top500", max_per_word: int = 0) -> str:
     """Return a Drive cache directory name tied to split/extraction policy."""
     cap = "full" if int(max_per_word) <= 0 else f"mpw{int(max_per_word)}"
     return f"mswc_en_wav_{split_mode}_{cap}"
@@ -41,7 +41,7 @@ def cache_dir_name(split_mode: str = "top500", max_per_word: int = 200) -> str:
 def _drive_mswc_dir(
     drive_project: str | Path,
     split_mode: str = "top500",
-    max_per_word: int = 200,
+    max_per_word: int = 0,
 ) -> Path:
     return Path(drive_project) / cache_dir_name(split_mode, max_per_word)
 
@@ -115,7 +115,7 @@ def _coverage_for_words(clips_dir: Path, words: list[str]) -> tuple[int, int, fl
 def drive_cache_status(
     drive_project: str | Path,
     split_mode: str = "top500",
-    max_per_word: int = 200,
+    max_per_word: int = 0,
     count_wavs: bool = False,
 ) -> dict:
     """Inspect a Drive cache without mutating local files.
@@ -174,7 +174,7 @@ def drive_cache_status(
 def is_drive_cache_valid(
     drive_project: str | Path,
     split_mode: str = "top500",
-    max_per_word: int = 200,
+    max_per_word: int = 0,
     min_train_val_coverage: float = 0.9,
 ) -> tuple[bool, dict]:
     """Validate that Drive has splits and enough WAV-backed train/val words."""
@@ -192,7 +192,7 @@ def is_drive_cache_valid(
 def check_drive_cache(
     drive_project: str,
     split_mode: str = "top500",
-    max_per_word: int = 200,
+    max_per_word: int = 0,
 ) -> tuple[Path, Path, int]:
     """Check if Drive has cached WAV files.
 
@@ -252,7 +252,7 @@ def _candidate_split_dirs(drive_project: str | Path) -> list[Path]:
 def repair_drive_cache_splits(
     drive_project: str | Path,
     split_mode: str = "top500",
-    max_per_word: int = 200,
+    max_per_word: int = 0,
     min_words: int = 30,
 ) -> bool:
     """Repair a partial Drive WAV cache that has clips but no split JSON files.
@@ -384,7 +384,7 @@ def load_from_drive(drive_clips: Path, drive_splits: Path) -> bool:
 def save_to_drive(
     drive_project: str,
     split_mode: str = "top500",
-    max_per_word: int = 200,
+    max_per_word: int = 0,
 ) -> bool:
     """Save local WAV files + splits + metadata to Drive for future sessions."""
     if not LOCAL_CLIPS.exists():
@@ -451,7 +451,7 @@ def save_to_drive(
 def download_and_convert(
     n_cpu: int = 0,
     split_mode: str = "top500",
-    max_per_word: int = 200,
+    max_per_word: int = 0,
 ) -> None:
     """Run the full download + extract + OPUS-to-WAV conversion pipeline."""
     logger.info("Downloading MSWC English...")
@@ -503,7 +503,7 @@ def download_and_convert(
 def setup_mswc_from_drive(
     drive_project: str,
     split_mode: str = "top500",
-    max_per_word: int = 200,
+    max_per_word: int = 0,
     min_train_val_coverage: float = 0.9,
     n_cpu: int = 0,
     min_words: int | None = None,
@@ -597,7 +597,21 @@ def setup_mswc_from_drive(
     try:
         free_gb = shutil.disk_usage("/content").free / 1024**3
         logger.info("Free disk: %.1f GB", free_gb)
-        if free_gb < 35:
+        if max_per_word <= 0:
+            if free_gb < 80:
+                logger.error(
+                    "Full extraction needs large temporary space. "
+                    "Need at least ~80GB, recommended 150GB+. Current: %.1fGB",
+                    free_gb,
+                )
+                return False
+            if free_gb < 150:
+                logger.warning(
+                    "Full extraction may be tight with %.1fGB free. "
+                    "Use a smaller cap only for smoke tests, not final results.",
+                    free_gb,
+                )
+        elif free_gb < 35:
             logger.error("Can ~35GB cho tar. Hien tai: %.1fGB", free_gb)
             return False
     except OSError:
@@ -628,7 +642,7 @@ def main() -> None:
     )
     parser.add_argument("--workers", type=int, default=0)
     parser.add_argument("--split-mode", choices=["top500", "full"], default="top500")
-    parser.add_argument("--max-per-word", type=int, default=200)
+    parser.add_argument("--max-per-word", type=int, default=0)
     parser.add_argument("--min-train-val-coverage", type=float, default=0.9)
     parser.add_argument("--min-words", type=int, default=None, help="Deprecated")
     parser.add_argument(

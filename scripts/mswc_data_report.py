@@ -60,6 +60,17 @@ def _print_split_report(
     if present:
         values = list(present.values())
         print(f"min/max_audio_word: {min(values):,} / {max(values):,}")
+        count_hist: dict[int, int] = {}
+        for value in values:
+            count_hist[value] = count_hist.get(value, 0) + 1
+        most_common_count, most_common_n = max(
+            count_hist.items(),
+            key=lambda item: item[1],
+        )
+        print(
+            "most_common_word_count: "
+            f"{most_common_count:,} files on {most_common_n}/{len(values)} words",
+        )
 
     if metadata_counts and words:
         expected = {word: metadata_counts.get(word, 0) for word in words}
@@ -71,6 +82,11 @@ def _print_split_report(
     capped_words = sum(1 for count in present.values() if 0 < count <= 200)
     if words and capped_words / max(len(words), 1) > 0.80:
         print("WARNING: most words have <=200 files. This looks like an mpw200 debug cache, not full extraction.")
+    if present and most_common_n / max(len(present), 1) > 0.80 and most_common_count <= 1000:
+        print(
+            "WARNING: most words have the exact same low file count. "
+            "This looks like a capped extraction such as mpw500/mpw1000, not full extraction.",
+        )
 
     ranked = sorted(present.items(), key=lambda item: item[1], reverse=True)
     if ranked:

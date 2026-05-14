@@ -27,8 +27,9 @@ khóa.
 - Train chính: dùng `notebooks/02_train_enhanced.ipynb` trên Colab GPU.
 - Train Tier-1 EdgeSpot: dùng `notebooks/03_tier1_edgespot_colab.ipynb` trên
   Colab A100, tách riêng khỏi notebook DSCNN cũ.
-- Dataset cache: `mswc_en_wav_top500_mpw200` trên Google Drive.
-- Baseline ổn định: `dscnn_top500_mpw200_clean`, loss `triplet`, early stopping
+- Dataset cache: `mswc_en_wav_top500_full` trên Google Drive.
+  Cache `mswc_en_wav_top500_mpw200/mpw500` chi dung cho smoke test/debug.
+- Baseline ổn định: `dscnn_top500_full_clean`, loss `triplet`, early stopping
   theo `val_auc`.
 - Demo/eval: luôn lấy `best.pt` trong run tốt nhất, không dùng `latest.pt` nếu
   checkpoint train tiếp bị degrade.
@@ -58,7 +59,7 @@ python data/download_gsc.py
 MSWC Top500 local:
 
 ```bash
-python data/download_mswc.py --top500-splits --max-per-word 200
+python data/download_mswc.py --top500-splits --max-per-word 0
 python data/convert_opus.py --delete-opus
 ```
 
@@ -68,7 +69,7 @@ MSWC cache trên Google Drive cho Colab:
 python data/mswc_drive_cache.py \
   --drive-project /content/drive/MyDrive/DoAnTotNghiep_output \
   --split-mode top500 \
-  --max-per-word 200 \
+  --max-per-word 0 \
   --workers 2
 ```
 
@@ -85,7 +86,7 @@ python scripts/train.py \
   --config configs/default.yaml \
   --model-family dscnn \
   --loss triplet \
-  --run-tag dscnn_top500_mpw200_clean \
+  --run-tag dscnn_top500_full_clean \
   --epochs 35 \
   --episodes 200 \
   --num-workers 2 \
@@ -100,7 +101,7 @@ python scripts/train.py \
   --config configs/default.yaml \
   --model-family dscnn \
   --loss triplet \
-  --run-tag dscnn_top500_mpw200_hard02 \
+  --run-tag dscnn_top500_full_hard02 \
   --hard-pairs-path results/hard_pairs.json \
   --hard-pair-prob 0.2
 ```

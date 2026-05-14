@@ -58,7 +58,7 @@ def test_setup_loads_valid_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(cache, "LOCAL_MSWC", Path("data/mswc_en"))
     monkeypatch.setattr(cache, "LOCAL_CLIPS", Path("data/mswc_en/clips"))
 
-    from_cache = cache.setup_mswc_from_drive(drive_project)
+    from_cache = cache.setup_mswc_from_drive(drive_project, max_per_word=200)
 
     assert from_cache is True
     assert Path("data/mswc_en/splits/train_words.json").exists()
@@ -95,7 +95,7 @@ def test_setup_miss_runs_download_and_save(tmp_path, monkeypatch):
     from_cache = cache.setup_mswc_from_drive(drive_project)
 
     assert from_cache is False
-    assert calls == ["download:top500:200", "save:top500:200"]
+    assert calls == ["download:top500:0", "save:top500:0"]
 
 
 def test_setup_repairs_partial_cache_with_wavs_but_no_splits(tmp_path, monkeypatch):
@@ -115,7 +115,7 @@ def test_setup_repairs_partial_cache_with_wavs_but_no_splits(tmp_path, monkeypat
     monkeypatch.setattr(cache, "LOCAL_CLIPS", Path("data/mswc_en/clips"))
     monkeypatch.setattr(cache, "download_and_convert", fail_download)
 
-    from_cache = cache.setup_mswc_from_drive(drive_project)
+    from_cache = cache.setup_mswc_from_drive(drive_project, max_per_word=200)
 
     assert from_cache is True
     assert (drive_cache / "splits" / "train_words.json").exists()
@@ -150,7 +150,7 @@ def test_setup_repairs_cache_with_splits_that_do_not_match_wavs(tmp_path, monkey
     monkeypatch.setattr(cache, "LOCAL_CLIPS", Path("data/mswc_en/clips"))
     monkeypatch.setattr(cache, "download_and_convert", fail_download)
 
-    from_cache = cache.setup_mswc_from_drive(drive_project)
+    from_cache = cache.setup_mswc_from_drive(drive_project, max_per_word=200)
 
     assert from_cache is True
     repaired = json.loads((drive_cache / "splits" / "train_words.json").read_text())
