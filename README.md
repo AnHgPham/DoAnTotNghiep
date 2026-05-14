@@ -116,6 +116,50 @@ python scripts/train.py \
   --num-workers 2
 ```
 
+Tier-1 EdgeSpot reproduction:
+
+```bash
+# Model/parameter report for EdgeSpot-4 style encoder
+python scripts/model_report.py --family edgespot_full --tau 4
+
+# Train EdgeSpotFull with SCAF
+python scripts/train.py \
+  --config configs/default.yaml \
+  --model-family edgespot_full \
+  --edge-tau 4 \
+  --loss scaf \
+  --run-tag edgespot_full_t4_scaf \
+  --epochs 40 \
+  --episodes 600 \
+  --num-workers 2
+
+# GE2E hybrid objective
+python scripts/train.py \
+  --config configs/default.yaml \
+  --model-family edgespot_full \
+  --edge-tau 4 \
+  --loss scaf_ge2e \
+  --run-tag edgespot_full_t4_scaf_ge2e
+```
+
+Wav2Vec2 teacher KD workflow:
+
+```bash
+python scripts/precompute_teacher_embeddings.py \
+  --data-dir data/mswc_en \
+  --split train \
+  --output-dir outputs/teacher_w2v2_train \
+  --batch-size 16
+
+python scripts/train.py \
+  --config configs/default.yaml \
+  --model-family edgespot_full \
+  --edge-tau 4 \
+  --loss kd_scaf_ge2e \
+  --teacher-embeddings-dir outputs/teacher_w2v2_train \
+  --run-tag edgespot_full_t4_kd_scaf_ge2e
+```
+
 ## Evaluation
 
 Đánh giá few-shot open-set trên GSC:
@@ -143,6 +187,21 @@ python scripts/benchmark_robust_streaming.py \
   --checkpoint checkpoints/<run_tag>/best.pt \
   --gsc-dir data/gsc_v2 \
   --k-shot 5
+```
+
+Canonical EdgeSpot-style benchmark with true silence:
+
+```bash
+python scripts/evaluate_edgespot_protocol.py \
+  --checkpoint checkpoints/<run_tag>/best.pt \
+  --model-family edgespot_full \
+  --edge-tau 4 \
+  --k-shot 10 \
+  --n-runs 100 \
+  --gsc-query-split test \
+  --output-dir results/edgespot_exact/<run_tag>
+
+python scripts/make_research_tables.py results/edgespot_exact/<run_tag>/*_results.json
 ```
 
 Các metric quan trọng:
@@ -194,7 +253,7 @@ src/
   enhancements/       Denoising và speaker verification optional
   evaluation/         Protocols, metrics, DET curves
   features/           MFCC, mel, PCEN, augmentation, SpecAugment
-  models/             DSCNN, EdgeSpot-lite, Triplet/ArcFace/SCAF
+  models/             DSCNN, BCResNetFS, EdgeSpot-lite/full, Triplet/ArcFace/SCAF/GE2E
   streaming/          VAD/energy streaming engines
 tests/                Unit tests và smoke tests
 ```

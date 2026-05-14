@@ -25,7 +25,9 @@ from src.classifiers.openmax import OpenMAXClassifier
 from src.evaluation.gsc import GSCFewShotProvider
 from src.evaluation.metrics import plot_det_curves
 from src.evaluation.protocols import EvaluationProtocol
+from src.models.bcresnet_fs import BCResNetFS
 from src.models.dscnn import DSCNN
+from src.models.edgespot_full import EdgeSpotFull
 from src.models.edgespot_lite import EdgeSpotLite
 
 logger = logging.getLogger(__name__)
@@ -34,6 +36,7 @@ PROTOCOL_MAP = {
     "gsc_fixed": ("gsc", "fixed"),
     "gsc_random": ("gsc", "random"),
     "gsc_edgespot": ("gsc", "edgespot"),
+    "gsc_edgespot_exact": ("gsc", "edgespot_exact"),
     "mswc_random": ("mswc", "random"),
 }
 
@@ -62,13 +65,21 @@ def main() -> None:
     parser.add_argument("--config", type=str, default="configs/default.yaml")
     parser.add_argument("--checkpoint", type=str, required=True)
     parser.add_argument("--model-family", type=str, default="auto",
-                        choices=["auto", "dscnn", "edgespot_lite"],
+                        choices=["auto", "dscnn", "edgespot_lite", "edgespot_full", "bcresnet_fs"],
                         help="Encoder family. 'auto' uses checkpoint metadata, then config.")
+    parser.add_argument("--edge-tau", type=int, default=None,
+                        help="Width multiplier for EdgeSpot/BCResNet families")
     parser.add_argument(
         "--protocol", type=str, default="gsc_fixed",
         choices=list(PROTOCOL_MAP.keys()),
     )
     parser.add_argument("--n-runs", type=int, default=None)
+    parser.add_argument("--gsc-query-split", type=str, default="test",
+                        choices=["dev", "test"],
+                        help="GSC query split. dev uses official train files; "
+                             "test uses official testing_list.txt.")
+    parser.add_argument("--target-far", type=float, default=None,
+                        help="Override config evaluation.target_far")
     parser.add_argument("--k-shot", type=int, default=None,
                         help="Override config evaluation.k_shot")
     parser.add_argument("--n-way", type=int, default=None,
@@ -145,7 +156,21 @@ def main() -> None:
         feature_type = "mfcc"
     elif model_family == "edgespot_lite":
         encoder = EdgeSpotLite(
-            width_mult=int(cfg.get("model", {}).get("edge_width_mult", 4)),
+            width_mult=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
+            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
+            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
+        ).to(device)
+        feature_type = "mel"
+    elif model_family == "edgespot_full":
+        encoder = EdgeSpotFull(
+            tau=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
+            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
+            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
+        ).to(device)
+        feature_type = "mel"
+    elif model_family == "bcresnet_fs":
+        encoder = BCResNetFS(
+            tau=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
             embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
             use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
         ).to(device)
@@ -165,7 +190,12 @@ def main() -> None:
 
     # Setup protocol
     dataset, mode = PROTOCOL_MAP[args.protocol]
-    n_runs = args.n_runs or cfg["evaluation"]["n_runs"]
+    if args.n_runs is not None:
+        n_runs = args.n_runs
+    elif args.protocol == "gsc_edgespot_exact":
+        n_runs = 100
+    else:
+        n_runs = cfg["evaluation"]["n_runs"]
 
     k_shot = args.k_shot or cfg["evaluation"]["k_shot"]
     n_way = args.n_way or cfg["evaluation"]["n_way"]
@@ -199,7 +229,11 @@ def main() -> None:
     logger.info("=" * 60)
 
     if dataset == "gsc":
-        sample_provider = GSCFewShotProvider(cfg["data"]["gsc_dir"], feature_type=feature_type)
+        sample_provider = GSCFewShotProvider(
+            cfg["data"]["gsc_dir"],
+            feature_type=feature_type,
+            query_split=args.gsc_query_split,
+        )
     elif dataset == "mswc":
         from src.evaluation.mswc import MSWCFewShotProvider
         sample_provider = MSWCFewShotProvider(cfg["data"]["mswc_dir"], feature_type=feature_type)
@@ -211,7 +245,7 @@ def main() -> None:
         classifier,
         sample_provider,
         device=device,
-        target_far=cfg["evaluation"]["target_far"],
+        target_far=args.target_far if args.target_far is not None else cfg["evaluation"]["target_far"],
     )
 
     output_dir = Path(args.output_dir)

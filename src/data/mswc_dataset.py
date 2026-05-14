@@ -35,6 +35,7 @@ class MSWCDataset(Dataset):
         wave_augmenter: Optional WaveformAugmenter for training.
         spec_augmenter: Optional SpecAugment applied to MFCC features (training only).
         feature_type: ``"mfcc"`` for DSCNN input or ``"mel"`` for EdgeSpot-lite input.
+        return_path: If True, return the audio path string with each sample.
     """
 
     def __init__(
@@ -46,6 +47,7 @@ class MSWCDataset(Dataset):
         wave_augmenter=None,
         spec_augmenter=None,
         feature_type: str = "mfcc",
+        return_path: bool = False,
     ):
         self.root_dir = Path(root_dir)
         if feature_type == "mfcc":
@@ -55,6 +57,7 @@ class MSWCDataset(Dataset):
         else:
             raise ValueError("feature_type must be 'mfcc' or 'mel'")
         self.feature_type = feature_type
+        self.return_path = bool(return_path)
         self.noise_augmenter = noise_augmenter
         self.wave_augmenter = wave_augmenter
         self.spec_augmenter = spec_augmenter
@@ -117,6 +120,8 @@ class MSWCDataset(Dataset):
         if self.spec_augmenter is not None:
             features = self.spec_augmenter(features)
 
+        if self.return_path:
+            return features, label, path.as_posix()
         return features, label
 
 

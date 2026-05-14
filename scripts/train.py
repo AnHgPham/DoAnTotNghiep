@@ -20,6 +20,7 @@ from pathlib import Path
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 import yaml
 from torch.optim.lr_scheduler import (
@@ -34,12 +35,19 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.models.dscnn import DSCNN
+from src.models.bcresnet_fs import BCResNetFS
+from src.models.edgespot_full import EdgeSpotFull
 from src.models.edgespot_lite import EdgeSpotLite
+from src.models.ge2e import GE2ELoss
 from src.models.prototypical import EpisodicBatchSampler, TripletLoss, train_one_epoch
 from src.models.arcface import ArcFaceLoss, SubCenterArcFaceLoss
 from src.data.mswc_dataset import MSWCDataset, build_episodic_loader
+from src.classifiers.open_ncm import OpenNCMClassifier
+from src.evaluation.gsc import GSCFewShotProvider
+from src.evaluation.protocols import EvaluationProtocol
 from src.features.augmentation import NoiseAugmenter, WaveformAugmenter
 from src.features.spec_augment import SpecAugment
+from src.training.kd import TeacherEmbeddingStore, kd_cosine_loss
 
 logger = logging.getLogger(__name__)
 
@@ -92,6 +100,14 @@ def load_checkpoint(path: Path, encoder, optimizer, scheduler, loss_head=None) -
     return checkpoint["epoch"] + 1
 
 
+def _unpack_batch(batch):
+    if len(batch) == 3:
+        features, labels, paths = batch
+        return features, labels, list(paths)
+    features, labels = batch
+    return features, labels, None
+
+
 def train_one_epoch_arcface(
     encoder: torch.nn.Module,
     loss_head: torch.nn.Module,
@@ -106,7 +122,8 @@ def train_one_epoch_arcface(
     total_loss = 0.0
     n_batches = 0
 
-    for batch_mfcc, batch_labels in dataloader:
+    for batch in dataloader:
+        batch_mfcc, batch_labels, _ = _unpack_batch(batch)
         batch_mfcc = batch_mfcc.to(device)
         batch_labels = batch_labels.to(device)
 
@@ -128,6 +145,74 @@ def train_one_epoch_arcface(
         n_batches += 1
 
     return {"loss": total_loss / max(n_batches, 1), "num_episodes": n_batches}
+
+
+def train_one_epoch_hybrid(
+    encoder: torch.nn.Module,
+    loss_modules: nn.ModuleDict,
+    dataloader,
+    optimizer: torch.optim.Optimizer,
+    device: torch.device,
+    teacher_store: TeacherEmbeddingStore | None = None,
+    weights: dict[str, float] | None = None,
+    grad_clip: float = 0.0,
+) -> dict:
+    """Train one epoch with GE2E/SCAF/KD hybrid objectives."""
+    weights = weights or {}
+    encoder.train()
+    loss_modules.train()
+    total_loss = 0.0
+    n_batches = 0
+    totals = {"scaf": 0.0, "ge2e": 0.0, "kd": 0.0, "ge2e_acc": 0.0}
+
+    for batch in dataloader:
+        batch_features, batch_labels, paths = _unpack_batch(batch)
+        batch_features = batch_features.to(device)
+        batch_labels = batch_labels.to(device)
+
+        embeddings = F.normalize(encoder(batch_features), p=2, dim=-1)
+        loss = embeddings.sum() * 0.0
+
+        if "scaf" in loss_modules:
+            scaf = loss_modules["scaf"](embeddings, batch_labels)
+            loss = loss + float(weights.get("scaf", 1.0)) * scaf
+            totals["scaf"] += float(scaf.item())
+
+        if "ge2e" in loss_modules:
+            ge2e = loss_modules["ge2e"](embeddings, batch_labels)
+            loss = loss + float(weights.get("ge2e", 1.0)) * ge2e
+            totals["ge2e"] += float(ge2e.item())
+            totals["ge2e_acc"] += float(loss_modules["ge2e"].last_stats.get("acc", 0.0))
+
+        if teacher_store is not None:
+            if paths is None:
+                raise RuntimeError("KD training requires dataset return_path=True")
+            teacher = teacher_store.get_many(paths, device=device)
+            kd = kd_cosine_loss(embeddings, teacher)
+            loss = loss + float(weights.get("kd", 1.0)) * kd
+            totals["kd"] += float(kd.item())
+
+        optimizer.zero_grad()
+        loss.backward()
+        if grad_clip > 0:
+            torch.nn.utils.clip_grad_norm_(
+                list(encoder.parameters()) + list(loss_modules.parameters()),
+                max_norm=grad_clip,
+            )
+        optimizer.step()
+
+        total_loss += float(loss.item())
+        n_batches += 1
+
+    denom = max(n_batches, 1)
+    return {
+        "loss": total_loss / denom,
+        "num_episodes": n_batches,
+        "scaf_loss": totals["scaf"] / denom,
+        "ge2e_loss": totals["ge2e"] / denom,
+        "kd_loss": totals["kd"] / denom,
+        "ge2e_acc": totals["ge2e_acc"] / denom,
+    }
 
 
 def validate_few_shot(
@@ -263,7 +348,10 @@ def main() -> None:
     parser.add_argument("--data-dir", type=str, default=None,
                         help="Data directory (default: from config gsc_dir)")
     parser.add_argument("--loss", type=str, default="triplet",
-                        choices=["triplet", "arcface", "scaf"],
+                        choices=[
+                            "triplet", "arcface", "scaf", "ge2e", "scaf_ge2e",
+                            "kd_scaf", "kd_ge2e", "kd_scaf_ge2e",
+                        ],
                         help="Loss function")
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--epochs", type=int, default=None)
@@ -284,8 +372,15 @@ def main() -> None:
     parser.add_argument("--ckpt-subdir", type=str, default=None,
                         help="Subdirectory under checkpoint.dir for this run")
     parser.add_argument("--model-family", type=str, default=None,
-                        choices=["dscnn", "edgespot_lite"],
+                        choices=["dscnn", "edgespot_lite", "edgespot_full", "bcresnet_fs"],
                         help="Encoder family. Default: config model.family or dscnn")
+    parser.add_argument("--edge-tau", type=int, default=None,
+                        help="Width multiplier for EdgeSpotFull/BCResNetFS/EdgeSpot-lite")
+    parser.add_argument("--teacher-embeddings-dir", type=str, default=None,
+                        help="Directory with precomputed teacher embedding shards for KD losses")
+    parser.add_argument("--kd-weight", type=float, default=None)
+    parser.add_argument("--scaf-weight", type=float, default=None)
+    parser.add_argument("--ge2e-weight", type=float, default=None)
     parser.add_argument("--run-tag", type=str, default=None,
                         help="Run directory under checkpoint.dir. Overrides loss-name subdir.")
     parser.add_argument("--hard-pairs-path", type=str, default=None,
@@ -296,6 +391,14 @@ def main() -> None:
                         help="Stop after N validation checks without val_auc improvement. 0 disables.")
     parser.add_argument("--early-stop-min-delta", type=float, default=0.001,
                         help="Minimum val_auc gain for early stopping")
+    parser.add_argument("--select-by-gsc-dev", action="store_true",
+                        help="Select best checkpoint by GSC-dev ACC@1%% FAR instead of MSWC val_auc")
+    parser.add_argument("--gsc-dev-every", type=int, default=1,
+                        help="Run GSC-dev checkpoint selection every N epochs")
+    parser.add_argument("--gsc-dev-runs", type=int, default=5,
+                        help="Number of GSC-dev EdgeSpot-exact runs during training")
+    parser.add_argument("--gsc-dev-k-shot", type=int, default=10,
+                        help="k-shot for GSC-dev checkpoint selection")
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -314,7 +417,21 @@ def main() -> None:
         feature_type = "mfcc"
     elif model_family == "edgespot_lite":
         encoder = EdgeSpotLite(
-            width_mult=int(cfg.get("model", {}).get("edge_width_mult", 4)),
+            width_mult=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
+            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
+            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
+        ).to(device)
+        feature_type = "mel"
+    elif model_family == "edgespot_full":
+        encoder = EdgeSpotFull(
+            tau=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
+            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
+            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
+        ).to(device)
+        feature_type = "mel"
+    elif model_family == "bcresnet_fs":
+        encoder = BCResNetFS(
+            tau=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
             embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
             use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
         ).to(device)
@@ -397,11 +514,23 @@ def main() -> None:
         max_per_word = args.max_per_word
     else:
         max_per_word = cfg["data"].get("max_per_word", 200)
+    requires_kd = args.loss.startswith("kd_")
+    teacher_store = None
+    if requires_kd:
+        if not args.teacher_embeddings_dir:
+            raise ValueError(f"{args.loss} requires --teacher-embeddings-dir")
+        teacher_store = TeacherEmbeddingStore(args.teacher_embeddings_dir)
+        logger.info(
+            "Teacher embeddings: %d vectors, dim=%s from %s",
+            len(teacher_store), teacher_store.embedding_dim, args.teacher_embeddings_dir,
+        )
+
     dataset = MSWCDataset(
         root_dir=data_dir, words=train_words, max_per_word=max_per_word,
         noise_augmenter=noise_aug, wave_augmenter=wave_aug,
         spec_augmenter=spec_aug,
         feature_type=feature_type,
+        return_path=requires_kd,
     )
 
     train_cfg = cfg["training"]
@@ -434,6 +563,7 @@ def main() -> None:
 
     loss_fn = None
     loss_head = None
+    hybrid_weights: dict[str, float] = {}
     if args.loss == "triplet":
         loss_fn = TripletLoss(margin=margin, mining=mining)
         optimizer = torch.optim.Adam(
@@ -456,6 +586,31 @@ def main() -> None:
         ).to(device)
         all_params = list(encoder.parameters()) + list(loss_head.parameters())
         optimizer = torch.optim.Adam(all_params, lr=lr, weight_decay=weight_decay)
+    elif args.loss in {"ge2e", "scaf_ge2e", "kd_scaf", "kd_ge2e", "kd_scaf_ge2e"}:
+        loss_head = nn.ModuleDict()
+        if "scaf" in args.loss:
+            loss_head["scaf"] = SubCenterArcFaceLoss(
+                embedding_dim=encoder.embedding_dim,
+                num_classes=len(dataset.word_to_idx),
+                K=int(train_cfg.get("arcface", {}).get("sub_centers", 3)),
+                scale=float(train_cfg.get("arcface", {}).get("scale", 30.0)),
+                margin=float(train_cfg.get("arcface", {}).get("margin", 0.5)),
+            )
+        if "ge2e" in args.loss:
+            loss_head["ge2e"] = GE2ELoss()
+        loss_head = loss_head.to(device)
+        if args.kd_weight is None:
+            hybrid_weights["kd"] = 1.0
+        else:
+            hybrid_weights["kd"] = args.kd_weight
+        if args.scaf_weight is None:
+            hybrid_weights["scaf"] = 5e-5 if args.loss.startswith("kd_") else 1.0
+        else:
+            hybrid_weights["scaf"] = args.scaf_weight
+        hybrid_weights["ge2e"] = 1.0 if args.ge2e_weight is None else args.ge2e_weight
+        all_params = list(encoder.parameters()) + list(loss_head.parameters())
+        optimizer = torch.optim.Adam(all_params, lr=lr, weight_decay=weight_decay)
+        logger.info("Hybrid loss modules=%s weights=%s", list(loss_head.keys()), hybrid_weights)
 
     sched_cfg = train_cfg.get("scheduler", {})
     sched_type = sched_cfg.get("type", "StepLR")
@@ -528,6 +683,23 @@ def main() -> None:
     else:
         logger.info("No validation words available, using training loss only")
 
+    gsc_dev_provider = None
+    if args.select_by_gsc_dev:
+        gsc_dir = Path(cfg["data"]["gsc_dir"])
+        if not gsc_dir.exists():
+            raise FileNotFoundError(
+                f"--select-by-gsc-dev requires GSC data at {gsc_dir}"
+            )
+        gsc_dev_provider = GSCFewShotProvider(
+            gsc_dir,
+            feature_type=feature_type,
+            query_split="dev",
+        )
+        logger.info(
+            "Checkpoint selection: GSC-dev gsc_edgespot_exact, runs=%d, k=%d",
+            args.gsc_dev_runs, args.gsc_dev_k_shot,
+        )
+
     # TensorBoard / checkpoint dir
     ckpt_subdir = args.ckpt_subdir or args.run_tag or args.loss
     ckpt_dir = Path(cfg["checkpoint"]["dir"]) / ckpt_subdir
@@ -547,6 +719,7 @@ def main() -> None:
     logger.info("=" * 60)
 
     val_auc = 0.0
+    gsc_dev_metric: float | None = None
     metrics: dict = {"loss": float("nan")}
 
     for epoch in range(start_epoch, n_epochs):
@@ -555,9 +728,20 @@ def main() -> None:
                 encoder, train_loader, optimizer, loss_fn, device,
                 grad_clip=grad_clip,
             )
-        else:
+        elif args.loss in ("arcface", "scaf"):
             metrics = train_one_epoch_arcface(
                 encoder, loss_head, train_loader, optimizer, device,
+                grad_clip=grad_clip,
+            )
+        else:
+            metrics = train_one_epoch_hybrid(
+                encoder,
+                loss_head,
+                train_loader,
+                optimizer,
+                device,
+                teacher_store=teacher_store,
+                weights=hybrid_weights,
                 grad_clip=grad_clip,
             )
 
@@ -578,6 +762,13 @@ def main() -> None:
             )
             if grad_clip > 0:
                 log_line += f" | grad_norm={metrics.get('mean_grad_norm', 0):.2f}"
+        elif args.loss not in ("arcface", "scaf"):
+            log_line += (
+                f" | scaf={metrics.get('scaf_loss', 0):.4f}"
+                f" | ge2e={metrics.get('ge2e_loss', 0):.4f}"
+                f" | kd={metrics.get('kd_loss', 0):.4f}"
+                f" | ge2e_acc={metrics.get('ge2e_acc', 0):.3f}"
+            )
         logger.info(log_line)
 
         writer.add_scalar("train/loss", metrics["loss"], epoch + 1)
@@ -602,7 +793,41 @@ def main() -> None:
                 "  Val: AUC=%.4f, ACC=%.4f", val_auc, val_metrics["val_acc"],
             )
 
-        current_metric = val_auc if val_auc > 0 else -metrics["loss"]
+        gsc_dev_metric = None
+        if (
+            args.select_by_gsc_dev
+            and gsc_dev_provider is not None
+            and (epoch + 1) % max(1, args.gsc_dev_every) == 0
+        ):
+            gsc_protocol = EvaluationProtocol(
+                dataset="gsc",
+                mode="edgespot_exact",
+                n_runs=args.gsc_dev_runs,
+                k_shot=args.gsc_dev_k_shot,
+                seed=cfg["seed"],
+            )
+            gsc_results = gsc_protocol.evaluate(
+                encoder,
+                OpenNCMClassifier(),
+                gsc_dev_provider,
+                device=device,
+                target_far=0.01,
+            )
+            gsc_dev_metric = float(gsc_results["open_set_acc_at_1far"])
+            writer.add_scalar("gsc_dev/acc_at_1far", gsc_dev_metric, epoch + 1)
+            writer.add_scalar("gsc_dev/frr_at_5far", gsc_results["frr_at_5far"], epoch + 1)
+            logger.info(
+                "  GSC-dev: ACC@1%%FAR=%.4f, ACC@5%%FAR=%.4f, FRR@5%%=%.4f",
+                gsc_dev_metric,
+                gsc_results["open_set_acc_at_5far"],
+                gsc_results["frr_at_5far"],
+            )
+
+        current_metric = (
+            gsc_dev_metric
+            if gsc_dev_metric is not None
+            else (val_auc if val_auc > 0 else -metrics["loss"])
+        )
 
         if (epoch + 1) % save_every == 0:
             save_checkpoint(
@@ -619,7 +844,9 @@ def main() -> None:
                 encoder, optimizer, scheduler, epoch, val_auc, metrics["loss"],
                 ckpt_dir / "best.pt", loss_head,
             )
-            if val_auc > 0:
+            if gsc_dev_metric is not None:
+                logger.info("  * New best GSC-dev ACC@1%%FAR: %.4f", gsc_dev_metric)
+            elif val_auc > 0:
                 logger.info("  * New best val AUC: %.4f", val_auc)
             else:
                 logger.info("  * New best loss: %.6f", metrics["loss"])

@@ -20,7 +20,7 @@ mfcc:
   pad_mode: "constant"
 
 model:
-  family: "dscnn"          # dscnn | edgespot_lite
+  family: "dscnn"          # dscnn | edgespot_lite | edgespot_full | bcresnet_fs
   architecture: "DSCNN-L"
   channels: 276
   num_ds_blocks: 5
@@ -38,11 +38,15 @@ training:
   triplet_margin: 1.0          # increased from 0.5 -- L2-norm embeddings have max distance 2.0
   mining: "semi_hard"          # random | hard | semi_hard (semi_hard recommended)
   grad_clip: 5.0               # max L2 norm for gradient clipping (0 disables)
-  loss: "triplet"              # triplet | arcface | scaf
+  loss: "triplet"              # triplet | arcface | scaf | ge2e | scaf_ge2e | kd_*
   arcface:
     scale: 30.0
     margin: 0.5
     sub_centers: 3
+  hybrid:
+    kd_weight: 1.0
+    scaf_weight_with_kd: 0.00005
+    ge2e_weight: 1.0
   optimizer:
     type: "Adam"
     lr: 0.001
@@ -95,6 +99,7 @@ evaluation:
   target_far: 0.05
   n_way: 5
   k_shot: 5
+  edgespot_exact_runs: 100
 
 streaming:
   vad_threshold: 0.5

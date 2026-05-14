@@ -8,6 +8,8 @@ Three protocols:
 
 import logging
 import random
+from collections import Counter, defaultdict
+from pathlib import Path
 from typing import Any
 
 import numpy as np
@@ -19,6 +21,7 @@ from src.evaluation.metrics import (
     compute_det_curve,
     compute_eer,
     compute_frr_at_far,
+    get_threshold_at_far,
     compute_keyword_accuracy,
     compute_open_set_acc_at_far,
     compute_precision_recall_f1,
@@ -29,9 +32,9 @@ logger = logging.getLogger(__name__)
 GSC_POSITIVE_WORDS = ["yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go"]
 GSC_EXCLUDED_WORDS = ["backward", "forward", "visual", "follow", "learn"]
 
-# EdgeSpot protocol: 11 target keywords (10 commands + silence proxy "marvin")
+# EdgeSpot exact protocol: 11 targets = 10 commands + true silence.
 EDGESPOT_TARGET_WORDS = [
-    "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go", "marvin",
+    "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go", "_silence_",
 ]
 GSC_ALL_35_WORDS = [
     "yes", "no", "up", "down", "left", "right", "on", "off", "stop", "go",
@@ -88,9 +91,9 @@ class EvaluationProtocol:
         elif dataset == "gsc" and mode == "random":
             self.n_positive = 10
             self.n_negative = 20
-        elif dataset == "gsc" and mode == "edgespot":
+        elif dataset == "gsc" and mode in ("edgespot", "edgespot_exact"):
             self.n_positive = 11
-            self.n_negative = 24  # 35 - 11 = 24
+            self.n_negative = 25  # 35 spoken words - 10 command targets
         elif dataset == "mswc":
             self.n_positive = 5
             self.n_negative = 50
@@ -112,7 +115,7 @@ class EvaluationProtocol:
             return self._gsc_fixed_partition()
         elif self.dataset == "gsc" and self.mode == "random":
             return self._gsc_random_partition(run_idx)
-        elif self.dataset == "gsc" and self.mode == "edgespot":
+        elif self.dataset == "gsc" and self.mode in ("edgespot", "edgespot_exact"):
             return self._gsc_edgespot_partition(run_idx)
         elif self.dataset == "mswc":
             return self._mswc_random_partition(run_idx)
@@ -128,11 +131,11 @@ class EvaluationProtocol:
         return positive, negative
 
     def _gsc_edgespot_partition(self, run_idx: int) -> tuple[list[str], list[str]]:
-        """EdgeSpot protocol: 11 target keywords vs 24 remaining, 100 random trials."""
+        """EdgeSpot exact protocol: 10 commands + true silence vs 25 speech words."""
         rng = random.Random(self.seed + run_idx)
         positive = list(EDGESPOT_TARGET_WORDS)
         rng.shuffle(positive)
-        negative = [w for w in GSC_ALL_35_WORDS if w not in positive]
+        negative = [w for w in GSC_ALL_35_WORDS if w not in GSC_POSITIVE_WORDS]
         rng.shuffle(negative)
         return positive, negative
 
@@ -233,6 +236,9 @@ class EvaluationProtocol:
         all_precision = []
         all_recall = []
         all_f1 = []
+        far_operating_points = (0.01, 0.05)
+        acc_by_far: dict[float, list[float]] = {far: [] for far in far_operating_points}
+        frr_by_far: dict[float, list[float]] = {far: [] for far in far_operating_points}
         per_run_results = []
 
         encoder.eval()
@@ -397,11 +403,69 @@ class EvaluationProtocol:
                 scores,
                 target_far=target_far,
             )
+            run_metrics_by_far = {}
+            for far_point in far_operating_points:
+                acc_far = compute_open_set_acc_at_far(
+                    y_true,
+                    y_true_labels,
+                    y_pred_labels,
+                    scores,
+                    target_far=far_point,
+                )
+                frr_far = compute_frr_at_far(y_true, scores, target_far=far_point)
+                acc_by_far[far_point].append(acc_far)
+                frr_by_far[far_point].append(frr_far)
+                run_metrics_by_far[f"open_set_acc_at_{int(far_point * 100)}far"] = acc_far
+                run_metrics_by_far[f"frr_at_{int(far_point * 100)}far"] = frr_far
+
             keyword_acc = compute_keyword_accuracy(
                 [label for label, is_known in zip(y_true_labels, y_true, strict=True) if is_known == 1],
                 [label for label, is_known in zip(y_pred_labels, y_true, strict=True) if is_known == 1],
             )
             far_curve, frr_curve = compute_det_curve(y_true, scores)
+            operating_threshold = get_threshold_at_far(y_true, scores, target_far=target_far)
+            accepted = scores >= operating_threshold
+
+            confusion: dict[str, Counter] = defaultdict(Counter)
+            per_word_counter: dict[str, Counter] = defaultdict(Counter)
+            for is_known, true_label, pred_label, is_accepted in zip(
+                y_true, y_true_labels, y_pred_labels, accepted, strict=True,
+            ):
+                final_pred = pred_label if is_accepted else "unknown"
+                confusion[true_label][final_pred] += 1
+                bucket = per_word_counter[true_label]
+                bucket["total"] += 1
+                if is_known == 1:
+                    bucket["known"] += 1
+                    if not is_accepted:
+                        bucket["rejected"] += 1
+                    elif pred_label == true_label:
+                        bucket["correct"] += 1
+                    else:
+                        bucket["confused"] += 1
+                else:
+                    bucket["unknown"] += 1
+                    if is_accepted:
+                        bucket["false_accept"] += 1
+                    else:
+                        bucket["correct_reject"] += 1
+
+            per_word = {}
+            for word, counts in per_word_counter.items():
+                total = max(int(counts["total"]), 1)
+                known = max(int(counts["known"]), 1)
+                unknown = max(int(counts["unknown"]), 1)
+                per_word[word] = {
+                    "total": int(counts["total"]),
+                    "correct": int(counts["correct"]),
+                    "rejected": int(counts["rejected"]),
+                    "confused": int(counts["confused"]),
+                    "false_accept": int(counts["false_accept"]),
+                    "correct_reject": int(counts["correct_reject"]),
+                    "keyword_recall_at_far": float(counts["correct"] / known) if counts["known"] else None,
+                    "false_accept_rate": float(counts["false_accept"] / unknown) if counts["unknown"] else None,
+                    "accuracy_at_far": float((counts["correct"] + counts["correct_reject"]) / total),
+                }
 
             y_pred_binary = (scores >= eer_thr).astype(int)
             prf = compute_precision_recall_f1(y_true, y_pred_binary)
@@ -425,6 +489,15 @@ class EvaluationProtocol:
                     "recall": prf["recall"],
                     "f1": prf["f1"],
                     "seed": run_seed,
+                    "positive_words": positive_words,
+                    "negative_words": negative_words,
+                    "threshold_at_target_far": float(operating_threshold),
+                    "metrics_by_far": run_metrics_by_far,
+                    "confusion_matrix": {
+                        true_label: dict(pred_counts)
+                        for true_label, pred_counts in sorted(confusion.items())
+                    },
+                    "per_word": per_word,
                     "det_curve": {
                         "far": far_curve.tolist(),
                         "frr": frr_curve.tolist(),
@@ -462,6 +535,13 @@ class EvaluationProtocol:
             "mode": self.mode,
             "per_run": per_run_results,
         }
+
+        for far_point in far_operating_points:
+            key = int(far_point * 100)
+            results[f"open_set_acc_at_{key}far"] = float(np.mean(acc_by_far[far_point]))
+            results[f"open_set_acc_at_{key}far_std"] = float(np.std(acc_by_far[far_point]))
+            results[f"frr_at_{key}far"] = float(np.mean(frr_by_far[far_point]))
+            results[f"frr_at_{key}far_std"] = float(np.std(frr_by_far[far_point]))
 
         if np.isclose(target_far, 0.05):
             results["frr_at_5far"] = results["frr_at_far"]
