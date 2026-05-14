@@ -454,6 +454,10 @@ def download_and_convert(
     max_per_word: int = 0,
 ) -> None:
     """Run the full download + extract + OPUS-to-WAV conversion pipeline."""
+    if LOCAL_CLIPS.is_symlink():
+        logger.info("Removing stale local MSWC clips symlink before cache rebuild: %s", LOCAL_CLIPS)
+        LOCAL_CLIPS.unlink()
+
     logger.info("Downloading MSWC English...")
     cmd = [sys.executable, "data/download_mswc.py"]
     if split_mode == "top500":
