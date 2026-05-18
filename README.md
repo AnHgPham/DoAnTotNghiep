@@ -1,5 +1,16 @@
 # Few-Shot Open-Set Keyword Spotting
 
+## Current Training Workflow
+
+Current recommended Colab workflow is command-based, not notebook-driven:
+
+- Use a blank Colab notebook as an A100/GPU terminal.
+- Copy cells from `docs/colab_microset_runbook_vi.md`.
+- Current temporary data profile: `MSWC Microset English`.
+- This is NOT Top500 full, NOT full MSWC, and NOT an EdgeSpot paper reproduction claim.
+- `notebooks/02_train_enhanced.ipynb` is legacy/experimental for now.
+- The current status note is in `docs/current_training_profile_vi.md`.
+
 Hệ thống nhận diện từ khóa few-shot cho đồ án tốt nghiệp: người dùng chỉ cần
 thu 3-5 mẫu cho mỗi từ khóa, hệ thống tạo prototype embedding và nhận diện từ
 khóa trong audio tĩnh hoặc luồng microphone streaming. Trọng tâm của project là
@@ -24,15 +35,17 @@ khóa.
 
 ## Trạng Thái Khuyến Nghị
 
-- Train chính: dùng `notebooks/02_train_enhanced.ipynb` trên Colab GPU.
-- Train Tier-1 EdgeSpot: dùng `notebooks/03_tier1_edgespot_colab.ipynb` trên
-  Colab A100, tách riêng khỏi notebook DSCNN cũ.
-- Dataset cache: `mswc_en_wav_top500_full` trên Google Drive.
-  Cache `mswc_en_wav_top500_mpw200/mpw500` chi dung cho smoke test/debug.
-- Baseline ổn định: `dscnn_top500_full_clean`, loss `triplet`, early stopping
-  theo `val_auc`.
-- Demo/eval: luôn lấy `best.pt` trong run tốt nhất, không dùng `latest.pt` nếu
-  checkpoint train tiếp bị degrade.
+- Train hien tai: dung Colab notebook trong va copy cells tu
+  `docs/colab_microset_runbook_vi.md`.
+- Data profile hien tai: `MSWC Microset English` tam thoi de tiet kiem
+  Colab units/disk. Day khong phai Top500 full, khong phai full MSWC,
+  va khong phai EdgeSpot paper reproduction.
+- `notebooks/02_train_enhanced.ipynb` va `notebooks/03_tier1_edgespot_colab.ipynb`
+  chi con la legacy/experimental references, khong phai workflow train chinh.
+- Khi co may/disk on dinh, tao runbook rieng cho `top500_full`; khong sua lan
+  vao runbook Microset.
+- Demo/eval: luon lay `best.pt` trong run tot nhat, khong dung `latest.pt` neu
+  checkpoint train tiep bi degrade.
 - Artifact lớn như `data/`, `checkpoints/`, `results/`, `outputs/`, `*.zip` không
   được commit vào Git. Lưu chúng ở Google Drive hoặc ổ local.
 
@@ -278,7 +291,7 @@ Demo hỗ trợ:
 configs/              YAML cấu hình model, data, training, evaluation
 data/                 Script download/cache dataset, không commit dataset thật
 docs/                 Tài liệu báo cáo, proposal, phân tích thí nghiệm
-notebooks/            Colab notebooks, đặc biệt 02_train_enhanced.ipynb
+notebooks/            Legacy/experimental notebooks; workflow hien tai o docs/colab_microset_runbook_vi.md
 scripts/              Train, evaluate, benchmark, confusion analysis
 src/
   classifiers/        OpenNCM, OpenMAX, energy OOD classifiers

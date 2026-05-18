@@ -22,6 +22,15 @@ def _load_words(path: Path) -> list[str]:
     return [str(w) for w in payload]
 
 
+def _load_files(path: Path) -> list[str]:
+    if not path.exists():
+        return []
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError(f"Expected list in {path}")
+    return [str(p) for p in payload]
+
+
 def _count_audio(word_dir: Path) -> int:
     if not word_dir.is_dir():
         return 0
@@ -44,8 +53,23 @@ def _print_split_report(
     clips_dir: Path,
     metadata_counts: dict[str, int],
     top_n: int,
+    manifest_files: list[str] | None = None,
 ) -> None:
-    counts = {word: _count_audio(clips_dir / word) for word in words}
+    if manifest_files:
+        manifest_counts = {word: 0 for word in words}
+        for rel in manifest_files:
+            parts = Path(rel).parts
+            if len(parts) >= 3 and parts[0] == "clips":
+                word = parts[1]
+            else:
+                word = Path(rel).parent.name
+            if word in manifest_counts:
+                manifest_counts[word] += 1
+        counts = manifest_counts
+        folder_counts = {word: _count_audio(clips_dir / word) for word in words}
+    else:
+        counts = {word: _count_audio(clips_dir / word) for word in words}
+        folder_counts = counts
     present = {word: count for word, count in counts.items() if count > 0}
     total = sum(counts.values())
     avg = total / len(words) if words else 0.0
@@ -55,6 +79,12 @@ def _print_split_report(
     print(f"words: {len(words)}")
     print(f"words_with_audio: {len(present)}")
     print(f"audio_files: {total:,}")
+    if manifest_files:
+        print(f"manifest_audio_files: {len(manifest_files):,}")
+        print(f"folder_audio_files_for_words: {sum(folder_counts.values()):,}")
+        print("count_mode: official file manifest")
+    else:
+        print("count_mode: folder scan")
     print(f"avg_files_per_word: {avg:,.1f}")
     print(f"avg_files_per_audio_word: {nonzero_avg:,.1f}")
     if present:
@@ -113,17 +143,27 @@ def main() -> None:
     train_words = _load_words(splits_dir / "train_words.json")
     val_words = _load_words(splits_dir / "val_words.json")
     eval_words = _load_words(splits_dir / "eval_words.json")
+    train_files = _load_files(splits_dir / "train_files.json")
+    val_files = _load_files(splits_dir / "val_files.json")
+    eval_files = _load_files(splits_dir / "eval_files.json")
     metadata_counts = _load_metadata_counts(data_dir)
 
     print(f"data_dir: {data_dir}")
     print(f"clips_dir: {clips_dir}")
     print(f"metadata_counts: {'yes' if metadata_counts else 'no'}")
 
-    _print_split_report("train", train_words, clips_dir, metadata_counts, args.top_n)
-    _print_split_report("val", val_words, clips_dir, metadata_counts, args.top_n)
+    _print_split_report("train", train_words, clips_dir, metadata_counts, args.top_n, train_files)
+    _print_split_report("val", val_words, clips_dir, metadata_counts, args.top_n, val_files)
     if eval_words:
-        _print_split_report("eval", eval_words, clips_dir, metadata_counts, args.top_n)
-    _print_split_report("train+val", train_words + val_words, clips_dir, metadata_counts, args.top_n)
+        _print_split_report("eval", eval_words, clips_dir, metadata_counts, args.top_n, eval_files)
+    _print_split_report(
+        "train+val",
+        train_words + val_words,
+        clips_dir,
+        metadata_counts,
+        args.top_n,
+        train_files + val_files if train_files or val_files else None,
+    )
 
 
 if __name__ == "__main__":

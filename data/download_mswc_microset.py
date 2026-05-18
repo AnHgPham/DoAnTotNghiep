@@ -13,6 +13,7 @@ Usage:
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import logging
 import random
@@ -135,29 +136,264 @@ def extract_language(archive: Path, language: str, output_dir: Path, force: bool
     logger.info("Extracted %d members to %s", extracted, output_dir)
 
 
-def write_word_splits(output_dir: Path, val_fraction: float, seed: int) -> None:
+def _discover_audio_words(output_dir: Path) -> list[str]:
     clips = output_dir / "clips"
-    words = sorted(
+    return sorted(
         d.name
         for d in clips.iterdir()
         if d.is_dir() and (any(d.glob("*.wav")) or any(d.glob("*.opus")))
     )
-    if len(words) < 2:
-        raise RuntimeError(f"Need at least 2 words, found {len(words)} in {clips}")
 
-    rng = random.Random(seed)
-    shuffled = words.copy()
-    rng.shuffle(shuffled)
-    n_val = max(1, min(round(len(words) * val_fraction), len(words) - 1))
-    val_words = sorted(shuffled[:n_val])
-    train_words = sorted(shuffled[n_val:])
+
+def _infer_word_from_cell(value: str, known_words: set[str]) -> str | None:
+    value = value.strip().strip('"').strip("'")
+    if not value:
+        return None
+
+    lowered = value.lower()
+    if lowered in known_words:
+        return lowered
+
+    parts = [p.lower() for p in value.replace("\\", "/").split("/") if p]
+    for idx, part in enumerate(parts):
+        if part == "clips" and idx + 1 < len(parts) and parts[idx + 1] in known_words:
+            return parts[idx + 1]
+        if part in known_words:
+            return part
+
+    return None
+
+
+def _csv_rows(csv_path: Path) -> list[list[str]]:
+    rows = list(csv.reader(csv_path.read_text(encoding="utf-8-sig").splitlines()))
+    if not rows:
+        return []
+
+    header_tokens = {cell.strip().lower() for cell in rows[0]}
+    has_header = bool(
+        header_tokens
+        & {
+            "word",
+            "words",
+            "label",
+            "target",
+            "keyword",
+            "path",
+            "file",
+            "filename",
+            "audio",
+            "audio_path",
+            "clip",
+            "clip_path",
+            "split",
+        }
+    )
+    return rows[1:] if has_header else rows
+
+
+def _normalise_audio_rel_path(value: str, known_words: set[str]) -> str | None:
+    raw = value.strip().strip('"').strip("'").replace("\\", "/")
+    if not raw:
+        return None
+
+    lower = raw.lower()
+    if ".opus" not in lower and ".wav" not in lower:
+        return None
+
+    parts = [p for p in raw.split("/") if p not in ("", ".", "..")]
+    lower_parts = [p.lower() for p in parts]
+    if "clips" in lower_parts:
+        idx = lower_parts.index("clips")
+        rel_parts = parts[idx:]
+    else:
+        word_idx = next((i for i, part in enumerate(lower_parts) if part in known_words), None)
+        if word_idx is None:
+            return None
+        rel_parts = ["clips", *parts[word_idx:]]
+
+    if len(rel_parts) < 3 or rel_parts[0].lower() != "clips":
+        return None
+    if rel_parts[1].lower() not in known_words:
+        return None
+
+    rel = Path(*rel_parts).as_posix()
+    if rel.lower().endswith(".opus"):
+        rel = rel[:-5] + ".wav"
+    return rel
+
+
+def _read_csv_entries(csv_path: Path, known_words: set[str]) -> list[tuple[str, str | None]]:
+    entries: list[tuple[str, str | None]] = []
+    for row in _csv_rows(csv_path):
+        row_word: str | None = None
+        row_path: str | None = None
+        for cell in row:
+            if row_path is None:
+                row_path = _normalise_audio_rel_path(cell, known_words)
+            if row_word is None:
+                row_word = _infer_word_from_cell(cell, known_words)
+        if row_word is None and row_path is not None:
+            parts = row_path.split("/")
+            if len(parts) >= 3 and parts[0] == "clips" and parts[1] in known_words:
+                row_word = parts[1]
+        if row_word is not None:
+            entries.append((row_word, row_path))
+    return entries
+
+
+def _words_from_entries(entries: list[tuple[str, str | None]]) -> list[str]:
+    return sorted({word for word, _ in entries})
+
+
+def _files_from_entries(entries: list[tuple[str, str | None]]) -> list[str]:
+    return sorted({path for _, path in entries if path is not None})
+
+
+def _read_words_from_csv(csv_path: Path, known_words: set[str]) -> list[str]:
+    found: set[str] = set()
+    for word, _ in _read_csv_entries(csv_path, known_words):
+        found.add(word)
+    return sorted(found)
+
+
+def _official_csv_word_splits(
+    output_dir: Path,
+    language: str,
+    known_words: list[str],
+) -> tuple[list[str], list[str], list[str], list[str], list[str], list[str]] | None:
+    known = set(known_words)
+    train_csv = output_dir / f"{language}_train.csv"
+    dev_csv = output_dir / f"{language}_dev.csv"
+    test_csv = output_dir / f"{language}_test.csv"
+    splits_csv = output_dir / f"{language}_splits.csv"
+
+    if train_csv.exists():
+        train_entries = _read_csv_entries(train_csv, known)
+        dev_entries = _read_csv_entries(dev_csv, known) if dev_csv.exists() else []
+        test_entries = _read_csv_entries(test_csv, known) if test_csv.exists() else []
+        train_words = _words_from_entries(train_entries)
+        dev_words = _words_from_entries(dev_entries)
+        test_words = _words_from_entries(test_entries)
+        train_files = _files_from_entries(train_entries)
+        dev_files = _files_from_entries(dev_entries)
+        test_files = _files_from_entries(test_entries)
+    elif splits_csv.exists():
+        # Last-resort support for a combined CSV. If there is no explicit train
+        # CSV, include every word observed in the official split manifest.
+        entries = _read_csv_entries(splits_csv, known)
+        train_words = _words_from_entries(entries)
+        dev_words = []
+        test_words = []
+        train_files = _files_from_entries(entries)
+        dev_files = []
+        test_files = []
+    else:
+        return None
+
+    # Microset CSV files are sample-level splits, not held-out-word splits:
+    # the same 31 keywords can appear in train/dev/test with disjoint files.
+    val_words = dev_words
+    eval_words = test_words
+
+    if train_words and dev_words and set(dev_words).issubset(set(train_words)):
+        logger.info(
+            "Official Microset CSV is sample-level: dev words overlap train. "
+            "Using train/dev/test file manifests to avoid folder-scan leakage.",
+            len(train_words),
+        )
+    return train_words, val_words, eval_words, train_files, dev_files, test_files
+
+
+def write_word_splits(
+    output_dir: Path,
+    val_fraction: float,
+    seed: int,
+    all_words_train: bool = False,
+    language: str = "en",
+    split_source: str = "official",
+) -> None:
+    words = _discover_audio_words(output_dir)
+    if not words:
+        raise RuntimeError(f"Need at least 1 word, found {len(words)} in {output_dir / 'clips'}")
+    if (
+        not all_words_train
+        and split_source == "random"
+        and val_fraction > 0
+        and len(words) < 2
+    ):
+        raise RuntimeError(f"Need at least 2 words for train/val split, found {len(words)} in {output_dir / 'clips'}")
+
+    eval_words: list[str] = []
+    train_files: list[str] = []
+    val_files: list[str] = []
+    eval_files: list[str] = []
+
+    if all_words_train:
+        split_source = "all_words"
+
+    if split_source == "official":
+        official = _official_csv_word_splits(output_dir, language, words)
+        if official is None:
+            logger.warning(
+                "Official Microset CSV split files not found in %s; using all words for training.",
+                output_dir,
+            )
+            train_words = words
+            val_words = []
+        else:
+            train_words, val_words, eval_words, train_files, val_files, eval_files = official
+            if not train_words:
+                logger.warning(
+                    "Official Microset CSV did not yield train words; using all words for training.",
+                )
+                train_words = words
+                val_words = []
+                eval_words = []
+                train_files = []
+                val_files = []
+                eval_files = []
+    elif split_source == "all_words" or val_fraction <= 0:
+        train_words = words
+        val_words: list[str] = []
+    elif split_source == "random":
+        if val_fraction >= 1:
+            raise ValueError("--val-fraction must be < 1.0 unless --all-words-train is set")
+
+        rng = random.Random(seed)
+        shuffled = words.copy()
+        rng.shuffle(shuffled)
+        n_val = max(1, min(round(len(words) * val_fraction), len(words) - 1))
+        val_words = sorted(shuffled[:n_val])
+        train_words = sorted(shuffled[n_val:])
+    else:
+        raise ValueError("split_source must be one of: official, all_words, random")
 
     splits = output_dir / "splits"
     splits.mkdir(parents=True, exist_ok=True)
     (splits / "train_words.json").write_text(json.dumps(train_words, indent=2), encoding="utf-8")
     (splits / "val_words.json").write_text(json.dumps(val_words, indent=2), encoding="utf-8")
-    (splits / "eval_words.json").write_text("[]", encoding="utf-8")
-    logger.info("Splits: %d train, %d val -> %s", len(train_words), len(val_words), splits)
+    (splits / "eval_words.json").write_text(json.dumps(eval_words, indent=2), encoding="utf-8")
+    if train_files or val_files or eval_files:
+        (splits / "train_files.json").write_text(json.dumps(train_files, indent=2), encoding="utf-8")
+        (splits / "val_files.json").write_text(json.dumps(val_files, indent=2), encoding="utf-8")
+        (splits / "eval_files.json").write_text(json.dumps(eval_files, indent=2), encoding="utf-8")
+        logger.info(
+            "Official file manifests: %d train, %d val/dev, %d eval/test files",
+            len(train_files),
+            len(val_files),
+            len(eval_files),
+        )
+    else:
+        for name in ("train_files.json", "val_files.json", "eval_files.json"):
+            (splits / name).unlink(missing_ok=True)
+    logger.info(
+        "Splits (%s): %d train, %d val, %d eval -> %s",
+        split_source,
+        len(train_words),
+        len(val_words),
+        len(eval_words),
+        splits,
+    )
 
 
 def convert_opus(output_dir: Path, workers: int, delete_opus: bool) -> None:
@@ -227,6 +463,28 @@ def main() -> None:
     parser.add_argument("--keep-archive", action="store_true")
     parser.add_argument("--force", action="store_true")
     parser.add_argument("--val-fraction", type=float, default=0.1)
+    parser.add_argument(
+        "--split-source",
+        choices=["official", "all_words", "random"],
+        default="official",
+        help=(
+            "How to create split JSONs. 'official' reads language CSV files from "
+            "the Microset archive and falls back to all words if the CSV files are missing."
+        ),
+    )
+    parser.add_argument(
+        "--all-words-train",
+        action="store_true",
+        help=(
+            "Put every Microset word into train_words.json and leave val_words.json empty. "
+            "Recommended for the 31-word English Microset when checkpoints are selected by GSC-dev."
+        ),
+    )
+    parser.add_argument(
+        "--rewrite-splits",
+        action="store_true",
+        help="Rewrite split JSON files even when existing Microset audio/splits are already present.",
+    )
     parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
@@ -244,8 +502,15 @@ def main() -> None:
 
     if not args.skip_convert:
         convert_opus(output_dir, workers=args.workers, delete_opus=not args.keep_opus)
-    if not _has_splits(output_dir) or args.force:
-        write_word_splits(output_dir, val_fraction=args.val_fraction, seed=args.seed)
+    if not _has_splits(output_dir) or args.force or args.rewrite_splits:
+        write_word_splits(
+            output_dir,
+            val_fraction=args.val_fraction,
+            seed=args.seed,
+            all_words_train=args.all_words_train,
+            language=args.language,
+            split_source=args.split_source,
+        )
     else:
         logger.info("Existing Microset splits found at %s", output_dir / "splits")
     summarize(output_dir)

@@ -327,6 +327,18 @@ def _load_word_splits(data_dir: Path, cfg: dict) -> tuple[list[str] | None, list
     return None, []
 
 
+def _load_file_split(data_dir: Path, split: str) -> list[str] | None:
+    path = data_dir / "splits" / f"{split}_files.json"
+    if not path.exists():
+        return None
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError(f"Expected list in {path}")
+    files = [str(item) for item in payload]
+    logger.info("Loaded %d %s file paths from %s", len(files), split, path)
+    return files
+
+
 def discover_words(data_dir: Path) -> list[str]:
     """Find all word directories with WAV files."""
     words = []
@@ -469,6 +481,8 @@ def main() -> None:
 
     # Load train/val word splits if available (from MSWC download)
     train_words, val_word_list = _load_word_splits(data_dir, cfg)
+    train_file_paths: list[str] | None = _load_file_split(data_dir, "train")
+    val_file_paths: list[str] | None = _load_file_split(data_dir, "val")
     if train_words is None:
         all_words = discover_words(data_dir)
         logger.info("Discovered %d words in %s", len(all_words), data_dir)
@@ -531,6 +545,7 @@ def main() -> None:
         spec_augmenter=spec_aug,
         feature_type=feature_type,
         return_path=requires_kd,
+        file_paths=train_file_paths,
     )
 
     train_cfg = cfg["training"]
@@ -653,14 +668,16 @@ def main() -> None:
     if args.resume:
         start_epoch = load_checkpoint(Path(args.resume), encoder, optimizer, scheduler, loss_head)
 
-    # Validation set (separate val words, never seen during training)
+    # Validation set. For full MSWC this is usually held-out words; for
+    # Microset this can be a sample-level dev manifest over the same words.
     val_loader = None
     if val_word_list:
-        logger.info("Building validation set from %d held-out words", len(val_word_list))
+        logger.info("Building validation set from %d words", len(val_word_list))
         val_cap = int(cfg["data"].get("val_max_per_word", 200))
         val_dataset = MSWCDataset(
             root_dir=data_dir, words=val_word_list, max_per_word=val_cap,
             feature_type=feature_type,
+            file_paths=val_file_paths,
         )
         if len(val_dataset) > 0:
             val_n_classes = min(
@@ -823,11 +840,17 @@ def main() -> None:
                 gsc_results["frr_at_5far"],
             )
 
-        current_metric = (
-            gsc_dev_metric
-            if gsc_dev_metric is not None
-            else (val_auc if val_auc > 0 else -metrics["loss"])
-        )
+        selection_checked = False
+        if args.select_by_gsc_dev:
+            # When GSC-dev selection is requested, best.pt must be selected only
+            # from GSC-dev checks. Mixing earlier MSWC val AUC with later GSC
+            # ACC@FAR makes the metrics incomparable and can keep a weaker
+            # pre-GSC checkpoint as best.pt.
+            current_metric = gsc_dev_metric
+            selection_checked = gsc_dev_metric is not None
+        else:
+            current_metric = val_auc if val_auc > 0 else -metrics["loss"]
+            selection_checked = True
 
         if (epoch + 1) % save_every == 0:
             save_checkpoint(
@@ -835,8 +858,15 @@ def main() -> None:
                 ckpt_dir / f"epoch_{epoch+1:02d}.pt", loss_head,
             )
 
-        improved = current_metric > best_metric + (
-            args.early_stop_min_delta if val_auc > 0 else 0.0
+        metric_delta = (
+            args.early_stop_min_delta
+            if (gsc_dev_metric is not None or val_auc > 0)
+            else 0.0
+        )
+        improved = (
+            selection_checked
+            and current_metric is not None
+            and current_metric > best_metric + metric_delta
         )
         if improved:
             best_metric = current_metric
@@ -851,16 +881,16 @@ def main() -> None:
             else:
                 logger.info("  * New best loss: %.6f", metrics["loss"])
             stale_val_checks = 0
-        elif val_loader is not None and (epoch + 1) % val_every == 0:
+        elif selection_checked:
             stale_val_checks += 1
 
         if (
             args.early_stop_patience > 0
-            and val_loader is not None
+            and selection_checked
             and stale_val_checks >= args.early_stop_patience
         ):
             logger.info(
-                "Early stopping after %d stale validation checks (best=%.4f)",
+                "Early stopping after %d stale selection checks (best=%.4f)",
                 stale_val_checks,
                 best_metric,
             )

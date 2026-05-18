@@ -36,6 +36,8 @@ class MSWCDataset(Dataset):
         spec_augmenter: Optional SpecAugment applied to MFCC features (training only).
         feature_type: ``"mfcc"`` for DSCNN input or ``"mel"`` for EdgeSpot-lite input.
         return_path: If True, return the audio path string with each sample.
+        file_paths: Optional explicit audio manifest relative to ``root_dir``.
+            When set, only these files are used instead of scanning word folders.
     """
 
     def __init__(
@@ -48,6 +50,7 @@ class MSWCDataset(Dataset):
         spec_augmenter=None,
         feature_type: str = "mfcc",
         return_path: bool = False,
+        file_paths: list[str | Path] | None = None,
     ):
         self.root_dir = Path(root_dir)
         if feature_type == "mfcc":
@@ -66,10 +69,49 @@ class MSWCDataset(Dataset):
         self.word_to_idx: dict[str, int] = {}
         self.idx_to_word: dict[int, str] = {}
 
-        for i, word in enumerate(sorted(words)):
+        selected_words = sorted(words)
+        for i, word in enumerate(selected_words):
             self.word_to_idx[word] = i
             self.idx_to_word[i] = word
 
+        if file_paths is not None:
+            grouped: dict[str, list[Path]] = {word: [] for word in selected_words}
+            for item in file_paths:
+                path = Path(item)
+                if not path.is_absolute():
+                    path = self.root_dir / path
+                word = path.parent.name
+                if word in grouped:
+                    grouped[word].append(path)
+
+            rng = random.Random(42)
+            for word in selected_words:
+                wav_files = sorted(set(grouped.get(word, [])))
+                if max_per_word > 0 and len(wav_files) > max_per_word:
+                    wav_files = rng.sample(wav_files, max_per_word)
+                label = self.word_to_idx[word]
+                for f in wav_files:
+                    self.samples.append((f, label))
+
+            missing = [word for word in selected_words if not grouped.get(word)]
+            if missing:
+                logger.warning(
+                    "No manifest files found for %d words, first few: %s",
+                    len(missing),
+                    missing[:10],
+                )
+            logger.info(
+                "Using explicit file manifest with %d files across %d words",
+                len(self.samples),
+                len(self.word_to_idx),
+            )
+            logger.info(
+                "Dataset: %d samples, %d words from %s",
+                len(self.samples), len(self.word_to_idx), self.root_dir,
+            )
+            return
+
+        for i, word in enumerate(selected_words):
             # Support both layouts
             word_dir = self.root_dir / word
             if not word_dir.exists():
