@@ -161,7 +161,7 @@ cfg["data"]["val_max_per_word"] = 0
 cfg["training"]["epochs"] = 25
 cfg["training"]["episodes_per_epoch"] = 200
 cfg["training"]["n_classes"] = 31
-cfg["training"]["n_samples"] = 20
+cfg["training"]["n_samples"] = 16
 cfg["training"]["loss"] = "scaf_ge2e"
 cfg["training"]["grad_clip"] = 5.0
 cfg["training"]["optimizer"]["lr"] = 0.001
@@ -188,6 +188,11 @@ out.write_text(yaml.safe_dump(cfg, sort_keys=False), encoding="utf-8")
 print("Wrote:", out)
 print("CURRENT DATA PROFILE: MSWC MICROSET ENGLISH TEMPORARY")
 ```
+
+Ghi chu: Microset English co 31 keyword nhung `en_train.csv` khong can bang
+tuyet doi. Tu `sheila` chi co 16 clips trong train split, nen `n_samples` phai
+la `16` neu muon moi episode dung du 31 keyword. Dat `n_samples=20` se loi:
+`Need at least 31 classes with >=20 samples each, but only 30 classes qualify`.
 
 ## 7. Tai GSC V2 Cho Evaluation
 
