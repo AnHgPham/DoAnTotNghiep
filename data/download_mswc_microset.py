@@ -297,7 +297,7 @@ def _official_csv_word_splits(
 
     if train_words and dev_words and set(dev_words).issubset(set(train_words)):
         logger.info(
-            "Official Microset CSV is sample-level: dev words overlap train. "
+            "Official Microset CSV is sample-level: %d dev words overlap train. "
             "Using train/dev/test file manifests to avoid folder-scan leakage.",
             len(train_words),
         )
