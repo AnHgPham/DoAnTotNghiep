@@ -21,6 +21,7 @@ NOT EDGESPOT PAPER REPRODUCTION
 - Muc dich: tiet kiem Colab units va dung luong Drive/disk trong khi chua co may train on dinh.
 - Workflow chay: Colab notebook trong + copy tung cell lenh tu runbook.
 - Runbook chinh: `docs/colab_microset_runbook_vi.md`.
+- Bao cao ket qua Colab hien tai: `docs/colab_microset_experiment_report_vi.md`.
 - Runtime tam thoi: A100 khuyen nghi, G4 chap nhan neu tiet kiem units; khong dung H100.
 
 ## Khong Duoc Claim
