@@ -22,6 +22,7 @@ NOT EDGESPOT PAPER REPRODUCTION
 - Workflow chay: Colab notebook trong + copy tung cell lenh tu runbook.
 - Runbook chinh: `docs/colab_microset_runbook_vi.md`.
 - Bao cao ket qua Colab hien tai: `docs/colab_microset_experiment_report_vi.md`.
+- Pipeline tiep theo cho Top500 full: `docs/colab_top500_full_runbook_vi.md`.
 - Runtime tam thoi: A100 khuyen nghi, G4 chap nhan neu tiet kiem units; khong dung H100.
 
 ## Khong Duoc Claim
