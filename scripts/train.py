@@ -735,6 +735,16 @@ def main() -> None:
     logger.info("Training: %s loss, %d epochs, %d episodes/epoch", args.loss, n_epochs, n_episodes)
     logger.info("=" * 60)
 
+    if start_epoch >= n_epochs:
+        logger.info(
+            "Resume checkpoint is already complete: start_epoch=%d, target_epochs=%d. "
+            "No additional training needed.",
+            start_epoch,
+            n_epochs,
+        )
+        writer.close()
+        return
+
     val_auc = 0.0
     gsc_dev_metric: float | None = None
     metrics: dict = {"loss": float("nan")}
