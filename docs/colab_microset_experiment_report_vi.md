@@ -1,29 +1,35 @@
-# Báo Cáo Kết Quả Thực Nghiệm Colab - MSWC Microset English
+# Báo Cáo Thực Nghiệm Colab - MSWC Microset English
 
 Ngày tổng hợp: 2026-05-19  
 Nguồn chạy: Google Colab Pro/A100  
 Notebook tham chiếu: https://colab.research.google.com/drive/1q2Dzh3Og27H9o02wh56mFXA2rbVV2cm2?usp=sharing  
 Repository: https://github.com/AnHgPham/DoAnTotNghiep
 
-Ghi chú truy xuất: link Colab yêu cầu đăng nhập Google nên báo cáo này tổng hợp từ các log/result JSON được in trực tiếp trong Colab và các đường dẫn kết quả dưới `/content/drive/MyDrive/DoAnTotNghiep_output/results`.
+Ghi chú truy xuất: link Colab yêu cầu đăng nhập Google, vì vậy báo cáo này tổng hợp từ log chạy, result JSON, checkpoint trong Google Drive và code hiện tại của project.
 
 ## 1. Mục Tiêu Thực Nghiệm
 
-Mục tiêu của giai đoạn này là kiểm tra lại pipeline few-shot open-set keyword spotting trong điều kiện tài nguyên Colab hạn chế, chuyển từ pipeline cũ DSCNN sang nhánh EdgeSpot-style mạnh hơn, đồng thời chuẩn hóa cách đánh giá bằng giao thức `gsc_edgespot_exact`.
+Trong tuần này, em tập trung cải tiến pipeline few-shot open-set keyword spotting dựa trên hai hướng nghiên cứu chính: kiến trúc EdgeSpot trong paper **EdgeSpot: Efficient and High-Performance Few-Shot Model for Keyword Spotting** và ý tưởng loss GE2E trong các nghiên cứu về speaker/keyword verification. Từ đó, em bổ sung thêm nhánh `EdgeSpotFull T4` và loss `GE2E` vào dự án để chạy thực nghiệm trên Colab.
+
+Mục tiêu chính là kiểm tra xem việc chuyển từ baseline cũ `DSCNN-L + MFCC + Triplet` sang nhánh `EdgeSpotFull + mel-PCEN + SCAF/GE2E` có cải thiện kết quả few-shot open-set KWS hay không. Kết quả thực nghiệm cho thấy hướng cải tiến này cho kết quả tốt hơn rõ rệt, đặc biệt ở các chỉ số `ACC@5% FAR`, `EER`, `Keyword ACC`, `F1` và `FRR@5% FAR`.
 
 Các mục tiêu cụ thể:
 
-- dùng MSWC Microset English chính thức thay vì Top500/full MSWC để tiết kiệm disk và Colab units;
-- sửa pipeline để dùng đúng split CSV chính thức của Microset, tránh quét toàn bộ folder gây leakage giữa train/dev/test;
-- chạy baseline DSCNN-L + Triplet;
-- chạy EdgeSpotFull T4 + SCAF;
-- chạy EdgeSpotFull T4 + SCAF+GE2E;
-- đánh giá bằng Google Speech Commands v2 với true `_silence_`, 10-shot, open-set protocol;
-- chọn model cuối dựa trên GSC-dev, sau đó báo cáo kết quả cuối trên GSC-test 100 runs.
+- dùng MSWC Microset English chính thức để train trong điều kiện tiết kiệm disk và Colab units;
+- sửa pipeline để đọc đúng official CSV split của Microset, tránh leakage do quét toàn bộ folder `clips/<word>`;
+- chạy lại baseline `DSCNN-L + Triplet` để có mốc so sánh;
+- cải tiến thêm `EdgeSpotFull T4 + SCAF` theo hướng EdgeSpot paper;
+- mở rộng thêm `EdgeSpotFull T4 + SCAF+GE2E` để training sát hơn với cơ chế few-shot enrollment/prototype;
+- đánh giá bằng Google Speech Commands v2 theo protocol `gsc_edgespot_exact`, có true `_silence_`, 10-shot, open-set;
+- chọn model cuối dựa trên kết quả GSC-dev và báo cáo kết quả cuối trên GSC-test 100 runs.
 
-## 2. Cấu Hình Dữ Liệu
+Kết quả trong báo cáo này chỉ là **official Microset experiment / pipeline validation under resource constraints**. Không claim đây là reproduction đầy đủ của EdgeSpot paper, vì paper dùng dữ liệu và training setup lớn hơn.
 
-Profile dữ liệu hiện tại:
+## 2. Dữ Liệu Và Protocol
+
+### 2.1. Dữ Liệu Train
+
+Profile dữ liệu:
 
 ```text
 CURRENT DATA PROFILE = MSWC MICROSET ENGLISH
@@ -33,95 +39,181 @@ NOT FULL MSWC
 NOT EDGESPOT PAPER REPRODUCTION
 ```
 
-Dataset train:
+MSWC Microset English sau khi xử lý:
 
-- nguồn: MLCommons Multilingual Spoken Words Corpus Microset, English;
-- thư mục trên Colab: `data/mswc_microset_en`;
-- tổng audio sau convert: `96,099 WAV`;
-- số keyword: `31`;
-- split chính thức:
-  - train: `69,868` file từ `en_train.csv`;
-  - dev/val: `13,114` file từ `en_dev.csv`;
-  - test/eval: `13,117` file từ `en_test.csv`.
+| Split | Nguồn | Số file |
+|---|---|---:|
+| Train | `en_train.csv` | 69,868 |
+| Dev/Val | `en_dev.csv` | 13,114 |
+| Test/Eval | `en_test.csv` | 13,117 |
+| Tổng | official Microset English | 96,099 |
 
-Điểm quan trọng: Microset là split theo sample-level. Cả train/dev/test đều có cùng 31 keyword, nhưng file audio khác nhau. Vì vậy code đã được sửa để train bằng `train_files.json`, validation bằng `val_files.json`, không quét toàn bộ `clips/<word>` nữa.
+Microset là sample-level split: train/dev/test có cùng 31 keyword nhưng file audio khác nhau. Vì vậy project dùng manifest file-level:
 
-Dataset đánh giá:
+- `train_files.json`;
+- `val_files.json`;
+- `eval_files.json`.
 
-- Google Speech Commands v2;
-- protocol: `gsc_edgespot_exact`;
-- setup: 10 command keywords + true `_silence_`;
-- negative/open-set: 25 speech words không thuộc target;
-- k-shot: `10`;
-- classifier: `OpenNCMClassifier`;
-- scoring: L2 distance;
-- dev: dùng chọn/check model;
-- test: dùng báo cáo cuối, 100 runs.
+Cách này thay thế việc quét trực tiếp toàn bộ `clips/<word>`, tránh vô tình trộn file train/dev/test.
 
-## 3. Các Phần Đã Hoàn Thành Trong Code
+### 2.2. Dữ Liệu Đánh Giá
 
-Các thay đổi chính đã hoàn thành:
+Dataset đánh giá là Google Speech Commands v2.
 
-- tạo workflow Colab command-based, không phụ thuộc notebook train cũ;
-- thêm runbook `docs/colab_microset_runbook_vi.md`;
-- thêm note trạng thái `docs/current_training_profile_vi.md`;
-- thêm script xử lý Microset `data/download_mswc_microset.py`;
-- sửa Microset loader để đọc đúng CSV official split;
-- sinh `train_files.json`, `val_files.json`, `eval_files.json`;
-- sửa `MSWCDataset` để nhận manifest file-level;
-- sửa `scripts/train.py` để dùng manifest split khi có;
-- thêm EdgeSpotFull T1-T4;
-- thêm BCResNetFS;
-- thêm GE2E loss;
-- thêm hybrid loss SCAF+GE2E;
-- thêm protocol `gsc_edgespot_exact` với true silence;
-- thêm checkpoint/eval workflow cho GSC-dev và GSC-test;
-- sửa lỗi resume khi checkpoint đã đủ epoch: nếu `start_epoch >= target_epochs` thì script thoát sạch thay vì crash `UnboundLocalError`.
+Protocol chính:
 
-## 4. Model Và Thiết Lập Train
+```text
+protocol: gsc_edgespot_exact
+query split: dev cho checkpoint selection, test cho final report
+target keywords: 10 GSC commands + true _silence_
+unknown/open-set: 25 speech words còn lại
+k-shot: 10
+n-runs final: 100
+classifier: OpenNCMClassifier
+scoring: L2 distance
+```
+
+Protocol này phù hợp với mục tiêu few-shot open-set KWS: hệ thống cần nhận diện đúng keyword đã enrollment và từ chối từ lạ ở mức FAR cố định.
+
+## 3. Cơ Sở Cải Tiến Từ Các Bài Báo
+
+### 3.1. Phần Dựa Trên EdgeSpot Paper
+
+Từ paper EdgeSpot, em triển khai nhánh `EdgeSpotFull T4` để thay thế baseline DSCNN-L trong các thực nghiệm mới. Mục tiêu là giữ tinh thần của EdgeSpot-4: model nhỏ, phù hợp edge deployment, nhưng vẫn học được embedding tốt cho few-shot keyword spotting.
+
+Các thành phần lấy cảm hứng trực tiếp từ paper:
+
+- input là **40x101 Mel-Spectrogram** cho audio 1 giây 16 kHz;
+- frontend có **trainable PCEN**;
+- backbone dùng các block kiểu **BC-ResNet / Fused BC-ResNet**;
+- có positional temporal Conv1D và lightweight temporal self-attention/SDPA;
+- output là **64-D embedding**;
+- biến thể lớn nhất trong paper là **EdgeSpot-4**, khoảng 128k parameters.
+
+Trong project, `EdgeSpotFull T4` dùng `tau=4`, tương ứng với hướng `EdgeSpot-4`. Model local có `130,598` tham số, gần với footprint paper báo cáo cho EdgeSpot-4.
+
+### 3.2. Input Mel 40x101 Là Gì
+
+Model không nhận trực tiếp waveform thô. Audio 1 giây được đổi thành một bản đồ thời gian-tần số:
+
+- `40`: số mel frequency bands;
+- `101`: số frame thời gian;
+- hình dạng input của model: `(B, 1, 40, 101)`.
+
+Cách biểu diễn này giữ cấu trúc âm học tốt cho CNN/attention hơn MFCC trong nhánh EdgeSpot-style, đồng thời vẫn đủ nhỏ để train và evaluate nhanh.
+
+### 3.3. Vì Sao Bật PCEN
+
+PCEN là **Per-Channel Energy Normalization**. Có thể hiểu PCEN như một lớp chuẩn hóa năng lượng học được, giúp giảm ảnh hưởng của:
+
+- nói to/nhỏ khác nhau;
+- thay đổi microphone;
+- nhiễu nền;
+- lệch domain giữa MSWC train và GSC test.
+
+EdgeSpot paper dùng trainable PCEN ở frontend, nên project bật PCEN trong `EdgeSpotFull`.
+
+### 3.4. Vì Sao Dùng Embedding 64-D
+
+Few-shot KWS không chỉ là classifier cố định. Khi chạy thật, hệ thống cần:
+
+1. lấy vài mẫu enrollment cho mỗi keyword;
+2. encode từng mẫu thành embedding;
+3. lấy trung bình thành prototype;
+4. so query mới với prototype để nhận diện hoặc từ chối.
+
+Vì vậy output của model là embedding. Kích thước 64-D đến từ thiết kế EdgeSpot paper và được giữ trong project để cân bằng giữa khả năng biểu diễn và chi phí tính toán.
+
+### 3.5. Vì Sao Có SCAF
+
+SCAF là **Sub-center ArcFace**. Thành phần này có cơ sở từ EdgeSpot paper: paper dùng Sub-center ArcFace trong pipeline teacher/student để học embedding phân biệt tốt.
+
+Lý do SCAF phù hợp với few-shot open-set KWS:
+
+- ArcFace ép các class tách nhau theo góc trong embedding space;
+- sub-center cho phép một keyword có nhiều cụm phát âm khác nhau;
+- điều này phù hợp với tiếng nói vì cùng một từ có thể do nhiều speaker, accent, tốc độ và âm lượng khác nhau tạo ra;
+- embedding tách rõ giúp prototype matching và open-set rejection ổn định hơn.
+
+Vì vậy `EdgeSpotFull T4 SCAF` được dùng như cấu hình EdgeSpot-style chính: kiến trúc EdgeSpotFull + Sub-center ArcFace loss.
+
+### 3.6. Vì Sao Thêm GE2E
+
+GE2E không phải thành phần gốc của EdgeSpot paper. GE2E đến từ hướng **Generalized End-to-End Loss** cho speaker verification, sau đó cũng có hướng áp dụng vào keyword spotting như **GE2E-KWS: Generalized End-to-End Training and Evaluation for Zero-shot Keyword Spotting**. Vì vậy, trong đồ án này GE2E được xem là phần cải tiến thêm, không phải reproduction nguyên bản của EdgeSpot.
+
+Lý do đưa GE2E vào đồ án là vì few-shot KWS có cơ chế gần với speaker verification/custom keyword verification:
+
+- có support/enrollment examples;
+- lấy trung bình embedding thành centroid/prototype;
+- query được so với centroid để quyết định match hoặc reject.
+
+GE2E mô phỏng đúng cơ chế này trong training. Trong mỗi episode, nó tách mẫu của từng class thành support và query, tạo centroid từ support, rồi bắt query gần centroid đúng và xa centroid sai.
+
+### 3.7. Vì Sao Kết Hợp SCAF+GE2E
+
+SCAF và GE2E giải quyết hai mặt khác nhau:
+
+- **SCAF** tạo embedding space có biên phân tách class mạnh;
+- **GE2E** làm training giống cơ chế enrollment/prototype lúc inference;
+- hybrid `SCAF+GE2E` vừa giữ khả năng tách class, vừa tăng tính phù hợp với few-shot open-set deployment.
+
+Do đó `EdgeSpotFull T4 SCAF+GE2E` là biến thể mở rộng của project, không phải cấu hình nguyên bản trong EdgeSpot paper. Model này được chọn làm final vì kết quả GSC-test 100 runs tốt nhất ở các chỉ số quan trọng cho mục tiêu đồ án.
+
+## 4. Các Model Được Chạy
 
 ### 4.1. DSCNN-L Triplet Baseline
 
-- model: DSCNN-L;
-- input: MFCC;
-- loss: Triplet;
-- mục đích: baseline cũ để so với EdgeSpot-style;
-- checkpoint đánh giá: `dscnn_l_triplet_microset_en_v1/epoch_05.pt`;
-- kết quả hiện mới có GSC-dev 30 runs, chưa có GSC-test 100 runs.
+```text
+model: DSCNN-L
+input: MFCC
+loss: Triplet
+parameter count: 412,896
+checkpoint dev30 ban đầu: dscnn_l_triplet_microset_en_v1/epoch_05.pt
+checkpoint test100 cập nhật: dscnn_l_triplet_microset_en_v1/best.pt
+```
+
+`best.pt` tương ứng với `epoch_10.pt` trong log train, được chọn theo GSC-dev ACC@1% FAR.
 
 ### 4.2. EdgeSpotFull T4 SCAF
 
-- model: EdgeSpotFull T4;
-- input: mel `40x101`;
-- PCEN: bật;
-- embedding: 64-D;
-- parameter count: `130,598`;
-- loss: Sub-center ArcFace/SCAF;
-- checkpoint đánh giá: `edgespot_full_t4_scaf_microset_en_v1/epoch_05.pt`.
+```text
+model: EdgeSpotFull T4
+input: mel 40x101
+PCEN: bật
+embedding: 64-D
+parameter count: 130,598
+loss: Sub-center ArcFace / SCAF
+checkpoint: edgespot_full_t4_scaf_microset_en_v1/epoch_05.pt
+```
 
 ### 4.3. EdgeSpotFull T4 SCAF+GE2E
 
-- model: EdgeSpotFull T4;
-- input: mel `40x101`;
-- PCEN: bật;
-- embedding: 64-D;
-- loss: hybrid SCAF + GE2E;
-- checkpoint đánh giá: `edgespot_full_t4_scaf_ge2e_microset_en_v1/epoch_05.pt`;
-- đây là model final hiện tại vì đạt `Keyword ACC`, `Open-set ACC@5% FAR`, `EER`, và `F1` tốt nhất trên GSC-test 100 runs.
+```text
+model: EdgeSpotFull T4
+input: mel 40x101
+PCEN: bật
+embedding: 64-D
+loss: hybrid SCAF + GE2E
+checkpoint: edgespot_full_t4_scaf_ge2e_microset_en_v1/epoch_05.pt
+```
 
-## 5. Kết Quả Từ Colab
+Đây là model final hiện tại.
 
-### 5.1. Bảng Kết Quả Raw Từ Result JSON
+## 5. Artifact Kết Quả
 
-Các file kết quả Colab đã in:
+Các result JSON chính trên Google Drive:
 
 ```text
 /content/drive/MyDrive/DoAnTotNghiep_output/results/dscnn_l_triplet_microset_en_v1_epoch05_dev30/gsc_edgespot_exact_k10_results.json
+/content/drive/MyDrive/DoAnTotNghiep_output/results/dscnn_l_triplet_microset_en_v1_best_test100/gsc_edgespot_exact_k10_results.json
+/content/drive/MyDrive/DoAnTotNghiep_output/results/dscnn_l_triplet_microset_en_v1_epoch10_test100/gsc_edgespot_exact_k10_results.json
 /content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_microset_en_v1_epoch05_dev30/gsc_edgespot_exact_k10_results.json
 /content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_microset_en_v1_epoch05_test100/gsc_edgespot_exact_k10_results.json
 /content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_microset_en_v1_epoch05_dev30/gsc_edgespot_exact_k10_results.json
 /content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_microset_en_v1_epoch05_test100/gsc_edgespot_exact_k10_results.json
 ```
+
+`dscnn_l_triplet_microset_en_v1/best.pt` và `epoch_10.pt` cho cùng kết quả vì `best.pt` được lưu từ epoch 10.
 
 Một file cũ không dùng làm kết luận chính:
 
@@ -129,31 +221,46 @@ Một file cũ không dùng làm kết luận chính:
 /content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_microset_en_v1_dev30/gsc_edgespot_exact_k10_results.json
 ```
 
-Lý do không dùng file cũ này: tên không có `epoch05`, kết quả thấp hơn rõ, khả năng là checkpoint cũ hoặc checkpoint chọn theo tiêu chí khác.
+Lý do: tên file không có `epoch05`, kết quả thấp hơn rõ, có khả năng là checkpoint cũ hoặc checkpoint chọn theo tiêu chí khác.
 
-### 5.2. Bảng Kết Quả Chính
+## 6. Kết Quả Định Lượng
+
+### 6.1. Bảng Kết Quả Chính
 
 | Model | Split | Runs | ACC@1% FAR | ACC@5% FAR | FRR@5% FAR | AUC | EER | Keyword ACC | F1 |
 |---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | DSCNN-L Triplet | dev | 30 | 76.48% | 79.17% | 47.91% | 89.63% | 19.77% | 69.65% | 71.27% |
+| DSCNN-L Triplet | test | 100 | - | 80.54% | 40.58% | 91.22% | 18.22% | 68.39% | 73.30% |
 | EdgeSpotFull T4 SCAF | dev | 30 | 82.48% | 84.85% | 21.52% | 95.73% | 11.28% | 72.76% | 82.78% |
 | EdgeSpotFull T4 SCAF+GE2E | dev | 30 | 83.78% | 85.56% | 21.85% | 95.60% | 11.63% | 76.15% | 82.29% |
 | EdgeSpotFull T4 SCAF | test | 100 | 84.64% | 85.21% | 20.61% | 95.69% | 11.89% | 74.52% | 81.92% |
 | EdgeSpotFull T4 SCAF+GE2E | test | 100 | 84.61% | 86.12% | 21.39% | 95.61% | 11.54% | 77.66% | 82.41% |
 
-### 5.3. Kết Quả Final Được Chọn
+Ghi chú: run DSCNN-L test100 được chạy với `target_far=5%`, nên bảng chưa có `ACC@1% FAR` cho baseline test100.
 
-Model final:
+### 6.2. Chi Tiết DSCNN-L Test100
+
+```text
+DSCNN-L Triplet best.pt
+GSC-test 100 runs, 10-shot
+AUC            = 91.22% +/- 0.74%
+EER            = 18.22% +/- 1.12%
+FRR@5% FAR     = 40.58% +/- 3.60%
+ACC@5% FAR     = 80.54% +/- 0.87%
+Keyword ACC    = 68.39% +/- 1.81%
+Precision      = 66.41% +/- 1.68%
+Recall         = 81.79% +/- 1.12%
+F1             = 73.30% +/- 1.47%
+```
+
+### 6.3. Kết Quả Model Final
 
 ```text
 EdgeSpotFull T4 + SCAF+GE2E
+GSC-test 100 runs, 10-shot
 Checkpoint: /content/drive/MyDrive/DoAnTotNghiep_output/checkpoints/edgespot_full_t4_scaf_ge2e_microset_en_v1/epoch_05.pt
 Result: /content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_microset_en_v1_epoch05_test100/gsc_edgespot_exact_k10_results.json
-```
 
-Kết quả final trên GSC-test 100 runs:
-
-```text
 ACC@1% FAR     = 84.61%
 ACC@5% FAR     = 86.12%
 FRR@5% FAR     = 21.39%
@@ -165,28 +272,28 @@ Recall         = 88.45%
 F1             = 82.41%
 ```
 
-## 6. Phân Tích Kết Quả
+## 7. Phân Tích Kết Quả
 
-### 6.1. So Sánh Với DSCNN-L
+### 7.1. So Với Baseline DSCNN-L
 
-So với DSCNN-L Triplet baseline dev30, EdgeSpotFull T4 + SCAF+GE2E test100 cải thiện rõ:
+So với DSCNN-L Triplet test100, `EdgeSpotFull T4 + SCAF+GE2E` cải thiện:
 
-- `ACC@5% FAR`: 79.17% -> 86.12%, tăng 6.95 điểm %;
-- `FRR@5% FAR`: 47.91% -> 21.39%, giảm 26.52 điểm %;
-- `AUC`: 89.63% -> 95.61%, tăng 5.98 điểm %;
-- `EER`: 19.77% -> 11.54%, giảm 8.23 điểm %;
-- `Keyword ACC`: 69.65% -> 77.66%, tăng 8.01 điểm %;
-- `F1`: 71.27% -> 82.41%, tăng 11.14 điểm %.
+| Metric | DSCNN-L test100 | EdgeSpotFull T4 SCAF+GE2E test100 | Chênh lệch |
+|---|---:|---:|---:|
+| ACC@5% FAR | 80.54% | 86.12% | +5.58 điểm % |
+| FRR@5% FAR | 40.58% | 21.39% | -19.19 điểm % |
+| AUC | 91.22% | 95.61% | +4.39 điểm % |
+| EER | 18.22% | 11.54% | -6.68 điểm % |
+| Keyword ACC | 68.39% | 77.66% | +9.27 điểm % |
+| F1 | 73.30% | 82.41% | +9.11 điểm % |
 
-Điều này cho thấy việc chuyển từ DSCNN-L/MFCC/Triplet sang EdgeSpotFull/mel-PCEN/SCAF+GE2E cải thiện mạnh khả năng phân tách embedding và open-set rejection.
+Kết quả này cho thấy việc chuyển từ `DSCNN-L/MFCC/Triplet` sang `EdgeSpotFull/mel-PCEN/SCAF+GE2E` cải thiện rõ khả năng phân tách embedding, giảm false rejection và tăng độ chính xác keyword.
 
-Lưu ý khoa học: DSCNN-L hiện mới có dev30, chưa có test100. Nếu cần bảng baseline tuyệt đối công bằng, nên chạy thêm DSCNN-L test100. Tuy vậy, kết quả hiện tại vẫn đủ cho kết luận định hướng vì EdgeSpot cải thiện rất rõ trên cùng protocol.
-
-### 6.2. SCAF Và SCAF+GE2E
+### 7.2. So Sánh SCAF Và SCAF+GE2E
 
 Trên GSC-test 100 runs:
 
-- SCAF nhỉnh hơn rất nhẹ ở `AUC` và `FRR@5% FAR`:
+- SCAF nhỉnh hơn rất nhẹ ở AUC và FRR@5% FAR:
   - AUC: 95.69% so với 95.61%;
   - FRR@5% FAR: 20.61% so với 21.39%.
 - SCAF+GE2E tốt hơn ở các chỉ số quan trọng hơn cho mục tiêu nhận diện keyword:
@@ -195,26 +302,25 @@ Trên GSC-test 100 runs:
   - Keyword ACC: 77.66% so với 74.52%;
   - F1: 82.41% so với 81.92%.
 
-Vì mục tiêu của đề tài là vừa nhận diện đúng keyword vừa kiểm soát open-set, SCAF+GE2E được chọn làm model final hiện tại.
+Vì mục tiêu của đề tài là vừa nhận diện đúng keyword vừa kiểm soát open-set, `SCAF+GE2E` được chọn làm model final hiện tại.
 
-### 6.3. Ý Nghĩa Của Kết Quả
+### 7.3. Ý Nghĩa Thực Nghiệm
 
-Kết quả final cho thấy pipeline mới đã vượt xa baseline cũ ở các điểm chính:
+Kết quả final có ba ý nghĩa chính:
 
-- giảm mạnh false rejection ở mức FAR cố định;
-- tăng khả năng nhận diện keyword;
-- tăng độ ổn định open-set;
-- test100 không bị tụt so với dev30, cho thấy model không chỉ may mắn trên dev.
+- model mới giảm mạnh tỷ lệ bỏ sót keyword thật ở mức FAR cố định;
+- keyword classification tốt hơn baseline cũ;
+- test100 không tụt so với dev30, cho thấy kết quả không chỉ là may mắn trên dev.
 
-Đây là một kết quả đủ tốt để viết báo cáo đồ án và làm nền cho hướng nghiên cứu tiếp theo. Tuy nhiên, chưa nên claim đã reproduce EdgeSpot paper, vì paper sử dụng setup dữ liệu và training lớn hơn Microset.
+Tuy nhiên, chưa nên so trực tiếp với số EdgeSpot paper như một reproduction đầy đủ. Lý do là paper dùng full-scale MSWC setup, teacher-student distillation và số epoch/training profile khác. Kết quả hiện tại nên được báo cáo là **EdgeSpot-style Microset experiment**.
 
-## 7. Các Vấn Đề Đã Phát Hiện Và Đã Sửa
+## 8. Các Vấn Đề Đã Phát Hiện Và Đã Sửa
 
-### 7.1. Vấn đề Microset folder scan
+### 8.1. Microset Folder Scan
 
-Ban đầu nếu chỉ quét folder `clips/<word>`, một keyword như `one` có thể có hơn 11 nghìn file vì folder chứa cả train/dev/test. Điều này dễ gây hiểu nhầm rằng train dùng toàn bộ folder, đồng thời có nguy cơ leakage.
+Ban đầu nếu chỉ quét folder `clips/<word>`, một keyword như `one` có thể có hơn 11 nghìn file vì folder chứa cả train/dev/test. Điều này dễ gây hiểu nhầm rằng train dùng toàn bộ folder và có nguy cơ leakage.
 
-Đã sửa bằng cách đọc CSV official:
+Đã sửa bằng cách đọc official CSV:
 
 - `en_train.csv`;
 - `en_dev.csv`;
@@ -227,15 +333,9 @@ Sau đó sinh manifest:
 - `val_files.json`;
 - `eval_files.json`.
 
-Training và validation hiện dùng đúng manifest này.
+### 8.2. `n_samples=20` Không Phù Hợp Microset
 
-### 7.2. Vấn đề n_samples=20 không phù hợp Microset
-
-Trong Microset official train split, một số từ có rất ít mẫu train. Đặc biệt `sheila` chỉ có 16 mẫu train. Nếu đặt `n_samples=20` và `n_classes=31`, sampler báo lỗi:
-
-```text
-Need at least 31 classes with >=20 samples each, but only 30 classes qualify.
-```
+Trong Microset official train split, một số từ có ít mẫu train. `sheila` chỉ có 16 mẫu train, nên `n_samples=20` làm sampler loại mất class.
 
 Đã sửa cấu hình Microset:
 
@@ -244,11 +344,11 @@ n_classes = 31
 n_samples = 16
 ```
 
-Như vậy mỗi episode dùng đủ 31 class, không loại mất keyword nào.
+Như vậy mỗi episode dùng đủ 31 class.
 
-### 7.3. Vấn đề resume checkpoint đã hoàn tất
+### 8.3. Resume Checkpoint Đã Hoàn Tất
 
-Khi resume từ `latest.pt` ở epoch 24 nhưng cấu hình `--epochs 25`, script không còn epoch nào để chạy. Code cũ vẫn gọi `save_checkpoint(..., epoch, ...)` nên lỗi:
+Khi resume từ checkpoint đã đạt số epoch target, script cũ vẫn cố lưu biến `epoch` và gây lỗi:
 
 ```text
 UnboundLocalError: cannot access local variable 'epoch'
@@ -256,29 +356,31 @@ UnboundLocalError: cannot access local variable 'epoch'
 
 Đã sửa trong `scripts/train.py`: nếu `start_epoch >= n_epochs`, script log rằng run đã hoàn tất và thoát sạch.
 
-Commit sửa lỗi:
+Commit liên quan:
 
 ```text
 375ab4c Handle completed resume runs
 ```
 
-## 8. Giới Hạn Hiện Tại
+## 9. Giới Hạn Hiện Tại
 
-Các giới hạn cần ghi rõ khi báo cáo:
+Các giới hạn cần ghi rõ:
 
 - đây là MSWC Microset English, không phải Top500 full và không phải full MSWC;
 - chưa claim reproduce EdgeSpot paper;
-- DSCNN-L mới có dev30, chưa có test100;
-- chưa chạy streaming benchmark thật với mic;
+- DSCNN-L test100 đã bổ sung, nhưng còn thiếu `ACC@1% FAR` vì run này dùng `target_far=5%`;
+- chưa chạy KD với Wav2Vec2 teacher như EdgeSpot paper;
 - chưa có calibration nâng cao như impostor bank, multi-prototype, support uncertainty;
-- chưa chạy KD với Wav2Vec2 teacher;
-- chưa có confusion matrix/per-word error analysis trong bản tổng hợp này.
+- chưa có confusion matrix/per-word error analysis trong bản tổng hợp này;
+- chưa chạy streaming benchmark thật với microphone.
 
-## 9. Kết Luận
+## 10. Kết Luận
 
-Trong giai đoạn này, project đã chuyển từ pipeline DSCNN baseline sang pipeline EdgeSpot-style có benchmark rõ ràng hơn. Dữ liệu Microset đã được xử lý đúng theo official CSV split, tránh leakage do quét toàn bộ folder. Giao thức đánh giá `gsc_edgespot_exact` đã được dùng để đo few-shot open-set KWS với true silence.
+Từ hai hướng nghiên cứu trên, tuần này em đã cải tiến dự án bằng cách bổ sung nhánh `EdgeSpotFull T4` và loss `GE2E`, sau đó chạy thực nghiệm lại trên cùng protocol GSC open-set. Kết quả cho thấy hướng cải tiến này tốt hơn baseline DSCNN-L rõ rệt.
 
-Kết quả tốt nhất hiện tại là:
+`EdgeSpotFull T4` giúp project tiến gần hơn đến kiến trúc EdgeSpot-4 trong paper, gồm mel 40x101, PCEN, backbone kiểu BC-ResNet/Fused BC-ResNet, temporal attention và 64-D embedding. `SCAF` được dùng vì có cơ sở trực tiếp từ EdgeSpot paper, còn `GE2E` là phần em bổ sung thêm để training sát hơn với cơ chế few-shot support/query-prototype khi inference.
+
+Model final hiện tại:
 
 ```text
 EdgeSpotFull T4 + SCAF+GE2E
@@ -290,23 +392,30 @@ EER         = 11.54%
 FRR@5% FAR  = 21.39%
 ```
 
-So với baseline DSCNN-L, phương pháp mới cải thiện đáng kể ở cả open-set accuracy, keyword accuracy, F1 và FRR. Đây là kết quả đủ mạnh để dùng làm mốc hiện tại của đồ án, đồng thời là nền để tiếp tục mở rộng sang Top500 full, calibration và streaming.
+So với DSCNN-L Triplet test100, model final tăng `ACC@5% FAR` thêm 5.58 điểm %, tăng `Keyword ACC` thêm 9.27 điểm %, tăng `F1` thêm 9.11 điểm %, đồng thời giảm `EER` 6.68 điểm % và giảm `FRR@5% FAR` 19.19 điểm %. Như vậy, việc cải tiến thêm EdgeSpot và GE2E vào dự án đã cho kết quả thực nghiệm tốt, đủ để dùng làm mốc hiện tại của đồ án và làm nền cho các phase tiếp theo.
 
-## 10. Hướng Tiếp Theo
+## 11. Hướng Tiếp Theo
 
 Ưu tiên tiếp theo:
 
-1. Chạy thêm DSCNN-L test100 để bảng baseline hoàn toàn công bằng.
-2. Xuất confusion matrix/per-word metrics cho EdgeSpotFull T4 + SCAF+GE2E.
+1. Chạy DSCNN-L test100 với `--target-far 0.01` nếu cần điền đủ `ACC@1% FAR` cho baseline.
+2. Xuất confusion matrix và per-word metrics cho `EdgeSpotFull T4 + SCAF+GE2E`.
 3. Thêm calibration:
    - per-keyword threshold;
    - impostor bank;
    - multi-prototype;
    - support uncertainty scaling.
-4. Khi có máy trường hoặc disk đủ, chuyển sang `top500_full_v1`.
-5. Sau khi static/open-set ổn, làm streaming benchmark:
+4. Khi có máy/disk đủ, chuyển sang `top500_full_v1`.
+5. Nếu muốn bám EdgeSpot paper hơn, chạy KD với Wav2Vec2 teacher và so với SCAF/SCAF+GE2E hiện tại.
+6. Sau khi static/open-set ổn, làm streaming benchmark:
    - false alarms/hour;
    - miss rate;
    - latency;
    - duplicate detection.
 
+## 12. Tài Liệu Tham Chiếu
+
+- EdgeSpot: Efficient and High-Performance Few-Shot Model for Keyword Spotting.
+- Deng et al., Sub-center ArcFace: Boosting Face Recognition by Large-scale Noisy Web Faces, ECCV 2020.
+- Wan et al., Generalized End-to-End Loss for Speaker Verification, ICASSP 2018.
+- Zhu et al., GE2E-KWS: Generalized End-to-End Training and Evaluation for Zero-shot Keyword Spotting, 2024.

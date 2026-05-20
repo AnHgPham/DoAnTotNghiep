@@ -7,6 +7,7 @@ keyword and then speak into a continuous microphone stream.
 
 from __future__ import annotations
 
+import time
 from collections import Counter, deque
 from dataclasses import dataclass
 from typing import Iterable
@@ -58,9 +59,12 @@ class StreamingEvent:
 
     def to_dict(self) -> dict:
         return {
+            "state": "detected",
             "keyword": self.keyword,
             "start_sec": self.start_sec,
             "end_sec": self.end_sec,
+            "start_ms": round(self.start_sec * 1000),
+            "end_ms": round(self.end_sec * 1000),
             "confidence": self.confidence,
             "distance": self.distance,
             "threshold": self.threshold,
@@ -68,6 +72,7 @@ class StreamingEvent:
             "second_label": self.second_label,
             "speech_start_sec": self.speech_start_sec,
             "speech_end_sec": self.speech_end_sec,
+            "timestamp": time.time(),
         }
 
 
@@ -291,6 +296,8 @@ class RobustStreamingKWS:
                 continue
             event["start_sec"] = start_abs / self.config.sample_rate
             event["end_sec"] = end_abs / self.config.sample_rate
+            event["start_ms"] = round(event["start_sec"] * 1000)
+            event["end_ms"] = round(event["end_sec"] * 1000)
             event["speech_start_sec"] = (
                 buffer_start_abs / self.config.sample_rate + event["speech_start_sec"]
             )

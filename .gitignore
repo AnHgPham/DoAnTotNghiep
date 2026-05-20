@@ -75,3 +75,9 @@ docs/*.toc
 # ──────────────── Misc ────────────────
 *.log
 *.tmp
+
+# Local dataset/cache folders
+mswc_microset/
+
+# Local UI validation screenshots
+reports/ui_validation/

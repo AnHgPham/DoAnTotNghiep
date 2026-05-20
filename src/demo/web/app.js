@@ -1,38 +1,104 @@
-// ═══════════════════════════════════════════════════════════
-//  Few-Shot KWS — Premium Web UI v2
-// ═══════════════════════════════════════════════════════════
+// Few-Shot KWS web UI
 
 const API = '';
 
-// ── State ───────────────────────────────
+// State
 let audioBlobs = { enroll: null, detect: null, long: null };
+let detectionHistory = [];
 let mediaRecorder = null;
 let audioCtx = null;
 let analyser = null;
 let recAnimFrame = null;
 
-// ── Navigation ──────────────────────────
-document.querySelectorAll('.nav-item[data-tab]').forEach(btn => {
+function cssVar(name) {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, char => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  }[char]));
+}
+
+function metricText(value, digits = 3) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(digits) : '-';
+}
+
+function setBusy(id, busy, label) {
+  const btn = document.getElementById(id);
+  if (!btn) return;
+  if (busy) {
+    btn.dataset.originalHtml = btn.innerHTML;
+    btn.disabled = true;
+    btn.classList.add('is-busy');
+    if (label) btn.innerHTML = `<span class="btn-loader" aria-hidden="true"></span>${label}`;
+    return;
+  }
+  btn.disabled = false;
+  btn.classList.remove('is-busy');
+  if (btn.dataset.originalHtml) {
+    btn.innerHTML = btn.dataset.originalHtml;
+    delete btn.dataset.originalHtml;
+  }
+}
+
+// Navigation
+const tabButtons = Array.from(document.querySelectorAll('.nav-item[data-tab]'));
+
+function setActiveTab(tab) {
+  tabButtons.forEach(btn => {
+    const isActive = btn.dataset.tab === tab;
+    btn.classList.toggle('active', isActive);
+    btn.setAttribute('role', 'tab');
+    btn.setAttribute('aria-selected', String(isActive));
+    btn.setAttribute('aria-controls', 'tab-' + btn.dataset.tab);
+    btn.setAttribute('type', 'button');
+  });
+  document.querySelectorAll('.tab-panel').forEach(panel => {
+    const isActive = panel.id === 'tab-' + tab;
+    panel.classList.toggle('active', isActive);
+    panel.hidden = !isActive;
+    panel.setAttribute('role', 'tabpanel');
+    if (isActive) {
+      const activeButton = tabButtons.find(btn => btn.dataset.tab === tab);
+      panel.setAttribute('aria-label', activeButton?.textContent.trim() || tab);
+    }
+  });
+}
+
+tabButtons.forEach(btn => {
   btn.addEventListener('click', () => {
-    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
-    // Activate both sidebar and mobile instances
-    document.querySelectorAll(`.nav-item[data-tab="${btn.dataset.tab}"]`).forEach(b => b.classList.add('active'));
-    document.querySelectorAll('.tab-panel').forEach(t => t.classList.remove('active'));
-    document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+    setActiveTab(btn.dataset.tab);
+  });
+  btn.addEventListener('keydown', event => {
+    if (!['ArrowRight', 'ArrowLeft'].includes(event.key)) return;
+    event.preventDefault();
+    const group = Array.from(btn.closest('nav, aside')?.querySelectorAll('.nav-item[data-tab]') || tabButtons);
+    const delta = event.key === 'ArrowRight' ? 1 : -1;
+    const next = group[(group.indexOf(btn) + delta + group.length) % group.length];
+    next.focus();
+    setActiveTab(next.dataset.tab);
   });
 });
+setActiveTab(document.querySelector('.nav-item.active')?.dataset.tab || 'enroll');
 
-// ── Toast ────────────────────────────────
+// Toast
 function toast(type, msg) {
   const c = document.getElementById('toasts');
   const t = document.createElement('div');
   t.className = 'toast ' + type;
+  t.setAttribute('role', type === 'error' ? 'alert' : 'status');
   t.textContent = msg;
   c.appendChild(t);
-  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .3s'; setTimeout(() => t.remove(), 300); }, 3000);
+  setTimeout(() => { t.style.opacity = '0'; t.style.transition = 'opacity .18s'; setTimeout(() => t.remove(), 180); }, 3000);
 }
 
-// ── Drag & Drop ──────────────────────────
+// Drag and drop
 function setupDrop(zoneId, fileId, target) {
   const zone = document.getElementById(zoneId);
   const input = document.getElementById(fileId);
@@ -43,20 +109,20 @@ function setupDrop(zoneId, fileId, target) {
     e.preventDefault(); zone.classList.remove('dragover');
     if (e.dataTransfer.files.length) {
       audioBlobs[target] = e.dataTransfer.files[0];
-      zone.querySelector('p').textContent = '✓ ' + e.dataTransfer.files[0].name;
+      zone.querySelector('p').textContent = 'Loaded: ' + e.dataTransfer.files[0].name;
       toast('success', 'File loaded');
     }
   });
   input.addEventListener('change', () => {
     if (input.files.length) {
       audioBlobs[target] = input.files[0];
-      zone.querySelector('p').textContent = '✓ ' + input.files[0].name;
+      zone.querySelector('p').textContent = 'Loaded: ' + input.files[0].name;
       toast('success', 'File loaded');
     }
   });
 }
 
-// ── Microphone ───────────────────────────
+// Microphone
 async function toggleMicRecord(target) {
   if (mediaRecorder && mediaRecorder.state === 'recording') { mediaRecorder.stop(); return; }
   try {
@@ -76,7 +142,7 @@ async function toggleMicRecord(target) {
       const btnId = target === 'enroll' ? 'micBtn' : 'detectMicBtn';
       document.getElementById(btnId).classList.remove('recording');
       const statusId = target === 'enroll' ? 'micStatus' : 'detectMicStatus';
-      document.getElementById(statusId).textContent = '✓ Recorded';
+      document.getElementById(statusId).textContent = 'Recorded';
       toast('success', 'Audio recorded');
       if (target === 'enroll') autoEnrollMic();
     };
@@ -84,7 +150,7 @@ async function toggleMicRecord(target) {
     const btnId = target === 'enroll' ? 'micBtn' : 'detectMicBtn';
     document.getElementById(btnId).classList.add('recording');
     const statusId = target === 'enroll' ? 'micStatus' : 'detectMicStatus';
-    document.getElementById(statusId).textContent = '● Recording...';
+    document.getElementById(statusId).textContent = 'Recording...';
     drawWaveform(target);
     setTimeout(() => { if (mediaRecorder?.state === 'recording') mediaRecorder.stop(); }, 1500);
   } catch { toast('error', 'Microphone access denied'); }
@@ -102,10 +168,10 @@ function drawWaveform(target) {
   function draw() {
     recAnimFrame = requestAnimationFrame(draw);
     analyser.getByteTimeDomainData(data);
-    ctx.fillStyle = '#f5f5fa';
+    ctx.fillStyle = cssVar('--bg-input') || '#f8fafc';
     ctx.fillRect(0, 0, w, h);
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#818cf8';
+    ctx.strokeStyle = cssVar('--accent-500') || '#0f766e';
     ctx.beginPath();
     const sliceW = w / data.length;
     for (let i = 0; i < data.length; i++) {
@@ -117,7 +183,7 @@ function drawWaveform(target) {
   draw();
 }
 
-// ── Auto-enroll mic ──────────────────────
+// Auto-enroll mic
 async function autoEnrollMic() {
   const keyword = document.getElementById('micKeyword').value.trim();
   if (!keyword) { toast('error', 'Enter keyword name first'); return; }
@@ -136,11 +202,12 @@ async function autoEnrollMic() {
   } catch { toast('error', 'Network error'); }
 }
 
-// ── Enroll GSC ───────────────────────────
+// Enroll GSC
 async function enrollGSC() {
   const words = document.getElementById('gscWords').value.trim();
   if (!words) { toast('error', 'Enter keywords'); return; }
   toast('info', 'Enrolling from GSC...');
+  setBusy('enrollGscBtn', true, 'Enrolling...');
   const fd = new FormData();
   fd.append('words', words);
   fd.append('k', '5');
@@ -150,47 +217,59 @@ async function enrollGSC() {
     if (d.results) {
       d.results.forEach(res => {
         addLog(res.status === 'ok'
-          ? `✓ "${res.word}" (${res.samples} samples, thr=${res.threshold})`
-          : `✗ "${res.word}": ${res.status}`);
+          ? `[OK] "${res.word}" (${res.samples} samples, thr=${res.threshold})`
+          : `[ERR] "${res.word}": ${res.status}`);
       });
       toast('success', `Enrolled ${d.enrolled} keywords`);
       refreshEnrolled();
     }
-  } catch { toast('error', 'Network error'); }
+  } catch {
+    toast('error', 'Network error');
+  } finally {
+    setBusy('enrollGscBtn', false);
+  }
 }
 
-// ── Clear ────────────────────────────────
+// Clear
 async function clearAll() {
+  if (!window.confirm('Clear all enrolled keywords?')) return;
   await fetch(API + '/api/enroll/clear', { method: 'POST' });
   toast('info', 'All keywords cleared');
   addLog('Cleared all keywords');
   refreshEnrolled();
 }
 
-// ── Refresh enrolled ─────────────────────
+// Refresh enrolled
 async function refreshEnrolled() {
   try {
     const r = await fetch(API + '/api/enroll/status');
     const d = await r.json();
     const c = document.getElementById('enrolledChips');
     if (d.total === 0) {
-      c.innerHTML = '<p class="text-sm text-muted">No keywords enrolled yet</p>';
+      c.innerHTML = `<div class="empty-state compact">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
+        <p>No keywords enrolled yet</p>
+      </div>`;
       return;
     }
     c.innerHTML = Object.entries(d.enrolled).map(([w, info]) =>
-      `<div class="chip">${w}<span class="chip-count">${info.count}</span></div>`
+      `<div class="chip chip-rich">
+        <span>${escapeHtml(w)}</span>
+        <span class="chip-count">${escapeHtml(info.count)}</span>
+        <span class="chip-detail">thr ${escapeHtml(info.threshold)} &middot; ${escapeHtml(info.profile)}</span>
+      </div>`
     ).join('');
   } catch {}
 }
 
-// ── Log ──────────────────────────────────
+// Log
 function addLog(msg) {
   const el = document.getElementById('enrollLog');
   const t = new Date().toLocaleTimeString();
-  el.innerHTML = `<div class="log-entry"><span class="log-time">${t}</span>${msg}</div>` + el.innerHTML;
+  el.innerHTML = `<div class="log-entry"><span class="log-time">${escapeHtml(t)}</span>${escapeHtml(msg)}</div>` + el.innerHTML;
 }
 
-// ── Profiles ─────────────────────────────
+// Profiles
 async function saveProfile() {
   const name = document.getElementById('profileName').value.trim() || 'default';
   const fd = new FormData(); fd.append('name', name);
@@ -218,11 +297,12 @@ async function loadProfileList() {
   } catch {}
 }
 
-// ── Detect Single ────────────────────────
+// Detect single
 async function detectSingle() {
   let file = audioBlobs.detect;
   if (!file) { toast('error', 'Upload or record audio first'); return; }
   const out = document.getElementById('detectResult');
+  setBusy('detectBtn', true, 'Detecting...');
   out.innerHTML = '<div class="flex-center" style="padding:40px"><div class="spinner"></div></div>';
   const fd = new FormData();
   fd.append('audio', file, 'audio.wav');
@@ -233,17 +313,37 @@ async function detectSingle() {
     const d = await r.json();
     if (!r.ok) { toast('error', d.error); out.innerHTML = ''; return; }
     const cls = d.detected ? 'detected' : 'rejected';
+    const top2 = d.second_label ? `${escapeHtml(d.keyword)} vs ${escapeHtml(d.second_label)}` : escapeHtml(d.keyword);
     out.innerHTML = `<div class="result-card ${cls}">
-      <div class="result-keyword">${d.detected ? d.keyword.toUpperCase() : 'UNKNOWN'}</div>
+      <div class="result-keyword">${d.detected ? escapeHtml(d.keyword).toUpperCase() : 'UNKNOWN'}</div>
       <div class="result-meta">
         <span><span class="badge ${d.detected ? 'badge-success' : 'badge-danger'}">${d.detected ? 'Detected' : 'Rejected'}</span></span>
-        <span class="text-sm">dist: <strong>${d.distance}</strong></span>
-        <span class="text-sm">thr: <strong>${d.threshold}</strong></span>
+        <span class="text-sm">dist: <strong>${metricText(d.distance, 4)}</strong></span>
+        <span class="text-sm">thr: <strong>${metricText(d.threshold, 3)}</strong></span>
+      </div>
+      <div class="result-metrics">
+        <div class="result-metric"><strong>${metricText(d.confidence)}</strong><span>confidence</span></div>
+        <div class="result-metric"><strong>${metricText(d.margin, 4)}</strong><span>top-2 margin</span></div>
+        <div class="result-metric"><strong>${top2}</strong><span>top candidates</span></div>
       </div>
     </div>`;
+    pushDetectionHistory({
+      detected: d.detected,
+      keyword: d.detected ? d.keyword : 'unknown',
+      confidence: d.confidence,
+      threshold: d.threshold,
+      margin: d.margin,
+      distance: d.distance,
+      state: d.detected ? 'detected' : 'rejected',
+    });
     renderDistBars(d.all_distances, d.threshold);
     if (d.mfcc) renderMFCC(d.mfcc);
-  } catch { toast('error', 'Network error'); out.innerHTML = ''; }
+  } catch {
+    toast('error', 'Network error');
+    out.innerHTML = '';
+  } finally {
+    setBusy('detectBtn', false);
+  }
 }
 
 function renderDistBars(dists, thr) {
@@ -256,7 +356,7 @@ function renderDistBars(dists, thr) {
     const pct = Math.min((d / mx) * 100, 100);
     const cls = d <= thr ? 'match' : 'no-match';
     return `<div class="dist-row">
-      <div class="dist-label">${w}</div>
+      <div class="dist-label">${escapeHtml(w)}</div>
       <div class="dist-track"><div class="dist-fill ${cls}" style="width:0%" data-w="${pct}%"></div></div>
       <div class="dist-val">${d.toFixed(3)}</div>
     </div>`;
@@ -286,7 +386,46 @@ function renderMFCC(mfcc) {
   }
 }
 
-// ── Detect Long ──────────────────────────
+function pushDetectionHistory(item) {
+  detectionHistory.unshift({
+    time: new Date(),
+    ...item,
+  });
+  detectionHistory = detectionHistory.slice(0, 12);
+  renderDetectionHistory();
+}
+
+function clearDetectionHistory() {
+  detectionHistory = [];
+  renderDetectionHistory();
+}
+
+function renderDetectionHistory() {
+  const el = document.getElementById('detectHistory');
+  if (!el) return;
+  if (!detectionHistory.length) {
+    el.innerHTML = '<p class="text-sm text-muted">No detections yet</p>';
+    return;
+  }
+  el.innerHTML = detectionHistory.map(item => {
+    const status = item.detected ? 'badge-success' : 'badge-danger';
+    const label = item.detected ? String(item.keyword).toUpperCase() : 'REJECTED';
+    return `<div class="history-entry">
+      <div class="history-main">
+        <span class="badge ${status}">${escapeHtml(label)}</span>
+        <strong>${escapeHtml(item.state || (item.detected ? 'detected' : 'rejected'))}</strong>
+      </div>
+      <div class="history-meta">
+        <span>${escapeHtml(item.time.toLocaleTimeString())}</span>
+        <span>conf ${metricText(item.confidence)}</span>
+        <span>thr ${metricText(item.threshold)}</span>
+        <span>margin ${metricText(item.margin, 4)}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Detect long
 let groundTruthFile = null;
 
 async function detectLong() {
@@ -295,6 +434,7 @@ async function detectLong() {
   if (!file) { toast('error', 'Upload audio first'); return; }
   const out = document.getElementById('longResult');
   const accDiv = document.getElementById('longAccuracy');
+  setBusy('longDetectBtn', true, 'Analyzing...');
   out.innerHTML = '<div class="flex-center" style="padding:40px"><div class="spinner"></div></div>';
   accDiv.classList.add('hidden');
 
@@ -307,7 +447,7 @@ async function detectLong() {
   try {
     const r = await fetch(API + '/api/detect/long', { method: 'POST', body: fd });
     const d = await r.json();
-    if (!r.ok) { toast('error', d.error); return; }
+    if (!r.ok) { toast('error', d.error); out.innerHTML = ''; return; }
 
     // Parse ground truth if provided
     let gtLabels = null;
@@ -340,9 +480,9 @@ async function detectLong() {
 
     let html = `<div class="card">
       <div class="card-header"><div class="card-title">Results</div>
-        <span class="badge badge-neutral">${d.duration}s · ${d.segments} segments</span></div>
+        <span class="badge badge-neutral">${d.duration}s - ${d.segments} segments</span></div>
       <p class="mb-16 text-sm">Sequence: ${d.sequence.length
-        ? d.sequence.map(w => `<span class="badge badge-success">${w}</span>`).join(' ')
+        ? d.sequence.map(w => `<span class="badge badge-success">${escapeHtml(w)}</span>`).join(' ')
         : '<span class="text-muted">No keywords detected</span>'}</p>`;
     if (d.results.length && d.duration > 0) {
       html += '<div class="timeline-track">';
@@ -350,7 +490,7 @@ async function detectLong() {
         const l = (s.t0 / d.duration) * 100;
         const w = Math.max(((s.t1 - s.t0) / d.duration) * 100, 1.5);
         html += `<div class="timeline-seg ${s.detected ? 'det' : 'unk'}" style="left:${l}%;width:${w}%"
-                      title="${s.t0}s-${s.t1}s: ${s.keyword} (d=${s.distance})">${s.detected ? s.keyword : '?'}</div>`;
+                      title="${escapeHtml(s.t0)}s-${escapeHtml(s.t1)}s: ${escapeHtml(s.keyword)} (d=${escapeHtml(s.distance)})">${s.detected ? escapeHtml(s.keyword) : '?'}</div>`;
       }
       html += '</div>';
     }
@@ -364,26 +504,30 @@ async function detectLong() {
       const predicted = s.detected ? s.keyword : 'unknown';
       const expected = hasGT && i < gtLabels.length ? gtLabels[i] : null;
       const match = expected !== null ? (predicted === expected) : null;
-      const matchBadge = match === true ? '<span class="badge badge-success">✓</span>'
-        : match === false ? '<span class="badge badge-danger">✗</span>' : '';
+      const matchBadge = match === true ? '<span class="badge badge-success">OK</span>'
+        : match === false ? '<span class="badge badge-danger">ERR</span>' : '';
       const top3 = (s.top_3 || []).map((c, idx) =>
-        `<span class="text-xs ${idx === 0 ? 'fw-600' : 'text-muted'}">${idx+1}. ${c.word} <span class="font-mono">(${c.dist})</span></span>`
+        `<span class="text-xs ${idx === 0 ? 'fw-600' : 'text-muted'}">${idx+1}. ${escapeHtml(c.word)} <span class="font-mono">(${escapeHtml(c.dist)})</span></span>`
       ).join('<br>');
       html += `<tr>
-        <td>${i + 1}</td><td>${s.t0}s – ${s.t1}s</td>
-        <td><strong>${predicted}</strong></td>
-        ${hasGT ? `<td>${expected || '—'}</td><td>${matchBadge}</td>` : ''}
+        <td>${i + 1}</td><td>${escapeHtml(s.t0)}s - ${escapeHtml(s.t1)}s</td>
+        <td><strong>${escapeHtml(predicted)}</strong></td>
+        ${hasGT ? `<td>${escapeHtml(expected || '-')}</td><td>${matchBadge}</td>` : ''}
         <td>${top3}</td>
-        <td class="font-mono">${s.distance}</td>
-        <td class="font-mono">${s.threshold}</td>
+        <td class="font-mono">${escapeHtml(s.distance)}</td>
+        <td class="font-mono">${escapeHtml(s.threshold)}</td>
         <td><span class="badge ${s.detected ? 'badge-success' : 'badge-danger'}">${s.detected ? 'Detected' : 'Rejected'}</span></td></tr>`;
     });
     html += '</tbody></table></div>';
     out.innerHTML = html;
-  } catch { toast('error', 'Network error'); }
+  } catch {
+    toast('error', 'Network error');
+  } finally {
+    setBusy('longDetectBtn', false);
+  }
 }
 
-// ── Streaming ────────────────────────────
+// Streaming
 let streamWs = null;
 let streamAudioCtx = null;
 let streamSource = null;
@@ -429,7 +573,7 @@ async function toggleStreaming() {
       streamDetectionCount = 0;
       streamStartTime = Date.now();
       document.getElementById('statDetections').textContent = '0';
-      document.getElementById('statLastWord').textContent = '—';
+      document.getElementById('statLastWord').textContent = '-';
       document.getElementById('streamFeed').innerHTML = '';
       startStreamTimer();
       drawStreamWaveform();
@@ -447,19 +591,21 @@ async function toggleStreaming() {
       // Add to feed
       const feed = document.getElementById('streamFeed');
       const t = new Date().toLocaleTimeString();
-      const top3 = (d.top_3 || []).map((c, i) => `${c.word}(${c.dist})`).join(', ');
+      const top3 = (d.top_3 || []).map(c => `${escapeHtml(c.word)}(${escapeHtml(c.dist)})`).join(', ');
       const cls = d.detected ? 'badge-success' : 'badge-neutral';
+      const state = d.state || (d.detected ? 'detected' : 'listening');
       const entry = document.createElement('div');
       entry.className = 'log-entry';
-      entry.innerHTML = `<span class="log-time">${t}</span>
-        <span class="badge ${cls}" style="margin-right:6px">${d.detected ? d.keyword.toUpperCase() : 'listening'}</span>
-        <span class="text-xs text-muted">L2=${d.distance} thr=${d.threshold}</span>
+      entry.innerHTML = `<span class="log-time">${escapeHtml(t)}</span>
+        <span class="badge ${cls}" style="margin-right:6px">${d.detected ? escapeHtml(d.keyword).toUpperCase() : 'listening'}</span>
+        <span class="text-xs text-muted">${escapeHtml(state)} | L2=${escapeHtml(d.distance)} thr=${escapeHtml(d.threshold)} conf=${metricText(d.confidence)} margin=${metricText(d.margin, 4)}</span>
         <span class="text-xs text-muted" style="margin-left:6px">[${top3}]</span>`;
       feed.insertBefore(entry, feed.firstChild);
 
       // Flash effect on detection
       if (d.detected) {
-        entry.style.background = 'rgba(99,102,241,.12)';
+        pushDetectionHistory(d);
+        entry.style.background = 'rgba(15,118,110,.12)';
         entry.style.borderLeft = '3px solid var(--accent-500)';
         entry.style.padding = '8px 12px';
         entry.style.borderRadius = 'var(--radius-sm)';
@@ -503,7 +649,7 @@ function stopStreaming() {
   btn.classList.remove('recording');
   status.textContent = 'Stopped';
   status.className = 'badge badge-danger';
-  toast('info', `Streaming stopped — ${streamDetectionCount} detections`);
+  toast('info', `Streaming stopped - ${streamDetectionCount} detections`);
 }
 
 function startStreamTimer() {
@@ -528,10 +674,10 @@ function drawStreamWaveform() {
     streamAnimFrame = requestAnimationFrame(draw);
     if (!streamAnalyser) return;
     streamAnalyser.getByteTimeDomainData(data);
-    ctx.fillStyle = '#f5f5fa';
+    ctx.fillStyle = cssVar('--bg-input') || '#f8fafc';
     ctx.fillRect(0, 0, w, h);
     ctx.lineWidth = 2;
-    ctx.strokeStyle = '#818cf8';
+    ctx.strokeStyle = cssVar('--accent-500') || '#0f766e';
     ctx.beginPath();
     const sliceW = w / data.length;
     for (let i = 0; i < data.length; i++) {
@@ -543,27 +689,27 @@ function drawStreamWaveform() {
   draw();
 }
 
-// ── Model Info ───────────────────────────
+// Model info
 async function loadModelInfo() {
   try {
     const r = await fetch(API + '/api/model/info');
     const d = await r.json();
     document.getElementById('modelCards').innerHTML = [
       ['Architecture', d.architecture],
-      ['Parameters', d.parameters?.toLocaleString() || '—'],
+      ['Parameters', d.parameters?.toLocaleString() || '-'],
       ['Embedding', d.embedding_dim],
       ['Device', d.device],
       ['Input', d.input_shape],
       ['Checkpoint', d.checkpoint],
-    ].map(([l, v]) => `<div class="metric-card"><div class="metric-value">${v}</div><div class="metric-label">${l}</div></div>`).join('');
+    ].map(([l, v]) => `<div class="metric-card"><div class="metric-value">${escapeHtml(v)}</div><div class="metric-label">${escapeHtml(l)}</div></div>`).join('');
     const ev = document.getElementById('evalResults');
     if (d.evaluations && Object.keys(d.evaluations).length) {
       ev.innerHTML = Object.entries(d.evaluations).map(([name, data]) => {
         if (typeof data === 'object' && !Array.isArray(data) && data.auc !== undefined) {
-          return `<div class="mt-12"><p class="text-sm fw-600 mb-8">${name}</p>
+          return `<div class="mt-12"><p class="text-sm fw-600 mb-8">${escapeHtml(name)}</p>
             <div class="grid-auto">${[
               ['AUC', data.auc], ['EER', data.eer], ['KW-ACC', data.keyword_acc], ['F1', data.f1]
-            ].map(([l, v]) => `<div class="metric-card"><div class="metric-value">${(v || 0).toFixed(3)}</div><div class="metric-label">${l}</div></div>`).join('')}</div></div>`;
+            ].map(([l, v]) => `<div class="metric-card"><div class="metric-value">${escapeHtml((v || 0).toFixed(3))}</div><div class="metric-label">${escapeHtml(l)}</div></div>`).join('')}</div></div>`;
         }
         return '';
       }).join('') || '<p class="text-muted text-sm">No evaluation data</p>';
@@ -571,14 +717,21 @@ async function loadModelInfo() {
   } catch { document.getElementById('evalResults').innerHTML = '<p class="text-muted text-sm">Could not load</p>'; }
 }
 
-// ── Presets ───────────────────────────────
+// Presets
 async function loadPresets() {
   try {
     const r = await fetch(API + '/api/presets');
     const d = await r.json();
-    document.getElementById('presetPills').innerHTML = Object.entries(d.presets).map(([n, w]) =>
-      `<span class="preset-pill" onclick="selectPreset(this,'${w}')">${n}</span>`
-    ).join('');
+    const wrap = document.getElementById('presetPills');
+    wrap.innerHTML = '';
+    Object.entries(d.presets).forEach(([name, words]) => {
+      const pill = document.createElement('button');
+      pill.type = 'button';
+      pill.className = 'preset-pill';
+      pill.textContent = name;
+      pill.addEventListener('click', () => selectPreset(pill, words));
+      wrap.appendChild(pill);
+    });
   } catch {}
 }
 function selectPreset(el, words) {
@@ -587,7 +740,7 @@ function selectPreset(el, words) {
   document.getElementById('gscWords').value = words;
 }
 
-// ── Batch Evaluation ─────────────────────
+// Batch evaluation
 let batchTxtFile = null;
 
 async function runBatchEval() {
@@ -620,32 +773,32 @@ async function runBatchEval() {
         <th>#</th><th>File</th><th>Expected</th><th>Predicted</th><th>Distance</th><th>Status</th>
       </tr></thead><tbody>`;
     d.results.forEach((r, i) => {
-      const icon = r.correct ? '✓' : '✗';
+      const icon = r.correct ? 'OK' : 'ERR';
       const cls = r.correct ? 'badge-success' : r.status === 'file_not_found' ? 'badge-neutral' : 'badge-danger';
       const label = r.correct ? 'Correct' : r.status === 'file_not_found' ? 'Not Found' : 'Wrong';
       html += `<tr>
         <td>${i + 1}</td>
-        <td class="font-mono text-xs">${r.file}</td>
-        <td><strong>${r.expected}</strong></td>
-        <td>${r.predicted}</td>
-        <td class="font-mono">${r.distance || '—'}</td>
+        <td class="font-mono text-xs">${escapeHtml(r.file)}</td>
+        <td><strong>${escapeHtml(r.expected)}</strong></td>
+        <td>${escapeHtml(r.predicted)}</td>
+        <td class="font-mono">${escapeHtml(r.distance || '-')}</td>
         <td><span class="badge ${cls}">${icon} ${label}</span></td>
       </tr>`;
     });
     html += '</tbody></table></div>';
     out.innerHTML = html;
-    toast('success', `Evaluated ${d.total} files — ${d.accuracy}% accuracy`);
+    toast('success', `Evaluated ${d.total} files - ${d.accuracy}% accuracy`);
   } catch { toast('error', 'Network error'); out.innerHTML = ''; }
 }
 
-// ── Init ─────────────────────────────────
+// Init
 document.addEventListener('DOMContentLoaded', () => {
   setupDrop('detectDrop', 'detectFile', 'detect');
   setupDrop('longDrop', 'longFile', 'long');
   document.getElementById('micFile').addEventListener('change', function () {
     if (this.files.length) {
       audioBlobs.enroll = this.files[0];
-      document.getElementById('micStatus').textContent = '✓ ' + this.files[0].name;
+      document.getElementById('micStatus').textContent = 'Loaded: ' + this.files[0].name;
       autoEnrollMic();
     }
   });
@@ -657,7 +810,7 @@ document.addEventListener('DOMContentLoaded', () => {
     batchInput.addEventListener('change', () => {
       if (batchInput.files.length) {
         batchTxtFile = batchInput.files[0];
-        batchDrop.querySelector('p').textContent = '✓ ' + batchTxtFile.name;
+        batchDrop.querySelector('p').textContent = 'Loaded: ' + batchTxtFile.name;
         toast('success', 'Ground truth file loaded');
       }
     });
@@ -667,7 +820,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault(); batchDrop.classList.remove('dragover');
       if (e.dataTransfer.files.length) {
         batchTxtFile = e.dataTransfer.files[0];
-        batchDrop.querySelector('p').textContent = '✓ ' + batchTxtFile.name;
+        batchDrop.querySelector('p').textContent = 'Loaded: ' + batchTxtFile.name;
         toast('success', 'Ground truth file loaded');
       }
     });
@@ -680,7 +833,7 @@ document.addEventListener('DOMContentLoaded', () => {
     gtInput.addEventListener('change', () => {
       if (gtInput.files.length) {
         groundTruthFile = gtInput.files[0];
-        gtDrop.querySelector('p').textContent = '✓ ' + groundTruthFile.name;
+        gtDrop.querySelector('p').textContent = 'Loaded: ' + groundTruthFile.name;
         toast('success', 'Ground truth loaded');
       }
     });
@@ -690,7 +843,7 @@ document.addEventListener('DOMContentLoaded', () => {
       e.preventDefault(); gtDrop.classList.remove('dragover');
       if (e.dataTransfer.files.length) {
         groundTruthFile = e.dataTransfer.files[0];
-        gtDrop.querySelector('p').textContent = '✓ ' + groundTruthFile.name;
+        gtDrop.querySelector('p').textContent = 'Loaded: ' + groundTruthFile.name;
         toast('success', 'Ground truth loaded');
       }
     });

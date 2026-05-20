@@ -3,22 +3,28 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Few-Shot KWS — Keyword Spotting</title>
-  <meta name="description" content="Few-Shot Open-Set Keyword Spotting Demo — DSCNN-L Encoder">
+  <title>Few-Shot KWS - Keyword Spotting</title>
+  <meta name="description" content="Few-Shot Open-Set Keyword Spotting Demo - DSCNN-L Encoder">
   <link rel="stylesheet" href="/static/styles.css">
 </head>
 <body>
-  <div class="toast-container" id="toasts"></div>
+  <a class="skip-link" href="#mainContent">Skip to main content</a>
+  <div class="toast-container" id="toasts" role="status" aria-live="polite" aria-atomic="true"></div>
 
   <div class="app-layout">
-    <!-- ═══ Sidebar ═══ -->
-    <aside class="sidebar">
+    <!-- Sidebar -->
+    <aside class="sidebar" aria-label="Primary navigation">
       <div class="sidebar-brand">
-        <h1>Few-Shot KWS</h1>
-        <p>Open-Set Keyword Spotting</p>
+        <div class="brand-lockup">
+          <div class="brand-mark" aria-hidden="true"></div>
+          <div>
+            <h1>Few-Shot KWS</h1>
+            <p>Research operations console</p>
+          </div>
+        </div>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" role="tablist" aria-label="Main sections">
         <div class="nav-section-title">Main</div>
         <button class="nav-item active" data-tab="enroll">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
@@ -38,7 +44,7 @@
         </button>
       </div>
 
-      <div class="nav-section">
+      <div class="nav-section" role="tablist" aria-label="Advanced sections">
         <div class="nav-section-title">Advanced</div>
         <button class="nav-item" data-tab="openset">
           <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
@@ -55,35 +61,58 @@
           <span class="status-dot"></span>
           <span id="sidebarStatus">Model loaded</span>
         </p>
-        <p class="text-xs text-muted mt-4">DSCNN-L · Prototypical Net</p>
+        <p class="text-xs text-muted mt-4">DSCNN-L - Prototypical Net</p>
       </div>
     </aside>
 
+    <!-- Mobile Header -->
+    <header class="mobile-topbar" aria-label="Mobile app header">
+      <div class="brand-lockup mobile-brand-lockup">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <h1>Few-Shot KWS</h1>
+          <p>Keyword lab</p>
+        </div>
+      </div>
+      <span class="mobile-status"><span class="status-dot"></span>Ready</span>
+    </header>
+
     <!-- Mobile Nav -->
-    <nav class="mobile-nav">
+    <nav class="mobile-nav" aria-label="Section navigation" role="tablist">
       <button class="nav-item active" data-tab="enroll">Enrollment</button>
       <button class="nav-item" data-tab="detect">Detect</button>
       <button class="nav-item" data-tab="longfile">Long File</button>
+      <button class="nav-item" data-tab="stream">Streaming</button>
       <button class="nav-item" data-tab="openset">Open-Set</button>
       <button class="nav-item" data-tab="info">Info</button>
     </nav>
 
-    <!-- ═══ Main Content ═══ -->
-    <main class="main-content">
+    <!-- Main Content -->
+    <main class="main-content" id="mainContent" tabindex="-1">
 
-      <!-- ─── Enrollment ─── -->
+      <!-- Enrollment -->
       <div class="tab-panel active" id="tab-enroll">
         <div class="hero">
           <div class="hero-grid"></div>
           <div class="hero-content">
-            <h2>Few-Shot Keyword Spotting</h2>
-            <p>Register custom keywords with just 3-5 audio samples. The model creates prototype embeddings for real-time detection using metric learning.</p>
+            <div class="hero-kicker">KWS Research Console</div>
+            <div class="hero-title-row">
+              <h2>Keyword Command Center</h2>
+              <span class="system-chip"><span class="status-dot"></span>Ready</span>
+            </div>
+            <p>Enroll a compact support set, calibrate open-set thresholds, and test static or streaming keyword detection from one workspace.</p>
             <div class="hero-badges">
-              <span class="hero-badge">DSCNN-L Encoder</span>
-              <span class="hero-badge">Triplet Loss</span>
-              <span class="hero-badge">Prototypical Network</span>
-              <span class="hero-badge">Open NCM Classifier</span>
-              <span class="hero-badge">k=5 Few-Shot</span>
+              <span class="hero-badge">Few-shot enrollment</span>
+              <span class="hero-badge">Open-set rejection</span>
+              <span class="hero-badge">Streaming test</span>
+              <span class="hero-badge">Prototype calibration</span>
+              <span class="hero-badge">Best checkpoint</span>
+            </div>
+            <div class="signal-strip" aria-hidden="true">
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span><span></span>
+              <span></span><span></span><span></span><span></span><span></span><span></span>
             </div>
           </div>
         </div>
@@ -106,7 +135,7 @@
                 <label class="form-label">Keywords</label>
                 <input class="form-input" type="text" id="gscWords" value="yes,no,stop,go,up,down,left,right,on,off">
               </div>
-              <button class="btn btn-primary btn-block" onclick="enrollGSC()">
+              <button class="btn btn-primary btn-block" id="enrollGscBtn" onclick="enrollGSC()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M5 12h14"/><path d="M12 5v14"/></svg>
                 Enroll from GSC
               </button>
@@ -125,7 +154,7 @@
                 <input class="form-input" type="text" id="micKeyword" placeholder="e.g. hello, hey_jarvis">
               </div>
               <div class="flex-center mt-12" style="gap:16px">
-                <button class="mic-button" id="micBtn" onclick="toggleMicRecord('enroll')">
+                <button class="mic-button" id="micBtn" onclick="toggleMicRecord('enroll')" aria-label="Record enrollment sample">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
                 </button>
                 <div>
@@ -173,7 +202,7 @@
                 </div>
                 <button class="btn btn-danger btn-sm" onclick="clearAll()">Clear all</button>
               </div>
-              <div class="chips" id="enrolledChips">
+              <div class="chips" id="enrolledChips" aria-live="polite">
                 <div class="empty-state">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
                   <p>No keywords enrolled yet</p>
@@ -197,7 +226,7 @@
         </div>
       </div>
 
-      <!-- ─── Detection ─── -->
+      <!-- Detection -->
       <div class="tab-panel" id="tab-detect">
         <div class="page-header">
           <h2>Detection</h2>
@@ -212,14 +241,14 @@
                   Audio Input
                 </div>
               </div>
-              <div class="drop-zone" id="detectDrop" onclick="document.getElementById('detectFile').click()">
+              <div class="drop-zone" id="detectDrop" role="button" tabindex="0" aria-label="Choose detection audio file" onclick="document.getElementById('detectFile').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
                 <p>Drop audio file here or click to browse</p>
-                <p class="drop-sub">WAV, MP3, OGG · ~1 second</p>
+                <p class="drop-sub">WAV, MP3, OGG - about 1 second</p>
               </div>
               <input type="file" id="detectFile" accept="audio/*" class="hidden">
               <div class="flex-center mt-16" style="gap:14px">
-                <button class="mic-button" id="detectMicBtn" onclick="toggleMicRecord('detect')">
+                <button class="mic-button" id="detectMicBtn" onclick="toggleMicRecord('detect')" aria-label="Record detection sample">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" x2="12" y1="19" y2="22"/></svg>
                 </button>
                 <span class="text-sm text-muted" id="detectMicStatus">Or record with mic</span>
@@ -240,14 +269,14 @@
                 <input type="checkbox" id="perClassChk" checked>
                 <label for="perClassChk">Use per-class threshold</label>
               </div>
-              <button class="btn btn-primary btn-block mt-12" onclick="detectSingle()">
+              <button class="btn btn-primary btn-block mt-12" id="detectBtn" onclick="detectSingle()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 Detect Keyword
               </button>
             </div>
           </div>
           <div>
-            <div id="detectResult">
+            <div id="detectResult" aria-live="polite">
               <div class="empty-state" style="padding:60px 20px">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 <p>Upload or record audio, then click Detect</p>
@@ -261,11 +290,20 @@
               <div class="card-header"><div class="card-title">MFCC Features</div></div>
               <canvas class="mfcc-canvas" id="mfccCanvas"></canvas>
             </div>
+            <div class="card">
+              <div class="card-header">
+                <div class="card-title">Detection History</div>
+                <button class="btn btn-ghost btn-sm" onclick="clearDetectionHistory()">Clear</button>
+              </div>
+              <div class="history-list" id="detectHistory">
+                <p class="text-sm text-muted">No detections yet</p>
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- ─── Long File ─── -->
+      <!-- Long File -->
       <div class="tab-panel" id="tab-longfile">
         <div class="page-header">
           <h2>Long File Detection</h2>
@@ -275,7 +313,7 @@
           <div>
             <div class="card">
               <div class="card-header"><div class="card-title">Audio File</div></div>
-              <div class="drop-zone" id="longDrop" onclick="document.getElementById('longFile').click()">
+              <div class="drop-zone" id="longDrop" role="button" tabindex="0" aria-label="Choose long audio file" onclick="document.getElementById('longFile').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" x2="12" y1="3" y2="15"/></svg>
                 <p>Drop long audio file (5-30 seconds)</p>
               </div>
@@ -314,7 +352,7 @@
                 <label class="form-label">Distance metric</label>
                 <div class="badge badge-neutral" style="padding:6px 12px;font-size:13px">L2 (Euclidean Distance)</div>
               </div>
-              <button class="btn btn-primary btn-block mt-12" onclick="detectLong()">
+              <button class="btn btn-primary btn-block mt-12" id="longDetectBtn" onclick="detectLong()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><path d="M2 12h5l3-9 4 18 3-9h5"/></svg>
                 Detect Words
               </button>
@@ -329,13 +367,13 @@
                 </div>
               </div>
               <p class="text-xs text-muted mb-8">Upload a TXT file to check accuracy after detection</p>
-              <div class="drop-zone" id="gtDrop" onclick="document.getElementById('gtFile').click()" style="padding:20px 16px">
+              <div class="drop-zone" id="gtDrop" role="button" tabindex="0" aria-label="Choose ground truth file" onclick="document.getElementById('gtFile').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" style="padding:20px 16px">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:24px;height:24px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
                 <p>Drop .txt file here</p>
                 <p class="drop-sub">Format: expected_keyword (one per line, matching segment order)</p>
               </div>
               <input type="file" id="gtFile" accept=".txt,.csv" class="hidden">
-              <div class="card mt-8" style="background:var(--bg-elevated);border:1px dashed var(--border);padding:10px 14px">
+              <div class="hint-box mt-8">
                 <p class="text-xs text-muted mb-4"><strong>TXT format:</strong></p>
                 <pre class="text-xs font-mono text-secondary" style="white-space:pre-wrap;line-height:1.7">yes
 no
@@ -357,7 +395,7 @@ yes,no,stop,go,up,down</pre>
               </div>
             </div>
 
-            <div id="longResult">
+            <div id="longResult" aria-live="polite">
               <div class="empty-state" style="padding:60px 20px">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 12h5l3-9 4 18 3-9h5"/></svg>
                 <p>Upload a long audio file to analyze</p>
@@ -367,7 +405,7 @@ yes,no,stop,go,up,down</pre>
         </div>
       </div>
 
-      <!-- ─── Streaming ─── -->
+      <!-- Streaming -->
       <div class="tab-panel" id="tab-stream">
         <div class="page-header">
           <h2>Real-Time Streaming</h2>
@@ -396,7 +434,7 @@ yes,no,stop,go,up,down</pre>
               <div class="card-header"><div class="card-title">Live Stats</div></div>
               <div class="grid-3">
                 <div class="metric-card"><div class="metric-value" id="statDetections">0</div><div class="metric-label">Detections</div></div>
-                <div class="metric-card"><div class="metric-value" id="statLastWord" style="color:var(--accent-500)">—</div><div class="metric-label">Last Keyword</div></div>
+                <div class="metric-card"><div class="metric-value" id="statLastWord" style="color:var(--accent-500)">-</div><div class="metric-label">Last Keyword</div></div>
                 <div class="metric-card"><div class="metric-value" id="statElapsed">0s</div><div class="metric-label">Elapsed</div></div>
               </div>
             </div>
@@ -409,7 +447,7 @@ yes,no,stop,go,up,down</pre>
                 <div class="card-title">Detection Feed</div>
                 <button class="btn btn-sm" onclick="document.getElementById('streamFeed').innerHTML='';" style="padding:4px 10px;font-size:12px">Clear</button>
               </div>
-              <div id="streamFeed">
+              <div id="streamFeed" aria-live="polite">
                 <div class="empty-state" style="padding:40px 20px">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 10v3"/><path d="M6 6v11"/><path d="M10 3v18"/><path d="M14 8v7"/><path d="M18 5v13"/><path d="M22 10v3"/></svg>
                   <p>Start streaming to see live detections</p>
@@ -420,7 +458,7 @@ yes,no,stop,go,up,down</pre>
         </div>
       </div>
 
-      <!-- ─── Open-Set Test ─── -->
+      <!-- Open-Set Test -->
       <div class="tab-panel" id="tab-openset">
         <div class="page-header">
           <h2>Open-Set Rejection Test</h2>
@@ -449,7 +487,7 @@ yes,no,stop,go,up,down</pre>
                   <span class="range-value" id="osThrVal">0.85</span>
                 </div>
               </div>
-              <button class="btn btn-primary mt-8" onclick="toast('info','Coming soon — requires GSC data')">Run Test</button>
+              <button class="btn btn-primary mt-8" onclick="toast('info','Coming soon - requires GSC data')">Run Test</button>
             </div>
             <div id="osResult">
               <div class="empty-state">
@@ -461,7 +499,7 @@ yes,no,stop,go,up,down</pre>
         </div>
       </div>
 
-      <!-- ─── Model Info ─── -->
+      <!-- Model Info -->
       <div class="tab-panel" id="tab-info">
         <div class="page-header">
           <h2>Model Information</h2>
@@ -470,10 +508,10 @@ yes,no,stop,go,up,down</pre>
         <div class="card mb-16">
           <div class="card-header"><div class="card-title">Architecture</div></div>
           <div class="grid-auto" id="modelCards">
-            <div class="metric-card"><div class="metric-value">—</div><div class="metric-label">Architecture</div></div>
-            <div class="metric-card"><div class="metric-value">—</div><div class="metric-label">Parameters</div></div>
-            <div class="metric-card"><div class="metric-value">—</div><div class="metric-label">Embedding</div></div>
-            <div class="metric-card"><div class="metric-value">—</div><div class="metric-label">Device</div></div>
+            <div class="metric-card"><div class="metric-value">-</div><div class="metric-label">Architecture</div></div>
+            <div class="metric-card"><div class="metric-value">-</div><div class="metric-label">Parameters</div></div>
+            <div class="metric-card"><div class="metric-value">-</div><div class="metric-label">Embedding</div></div>
+            <div class="metric-card"><div class="metric-value">-</div><div class="metric-label">Device</div></div>
           </div>
         </div>
         <div class="card">

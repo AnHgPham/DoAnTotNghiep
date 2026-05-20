@@ -13,7 +13,7 @@ NOT EDGESPOT PAPER REPRODUCTION
 ## Trang Thai Hien Tai
 
 - Dataset train hien tai: `data/mswc_microset_en`.
-- Nguon dataset: official MLCommons MSWC Microset English.
+- Nguon dataset: MSWC Microset English official CSV split.
 - Split hien tai: doc CSV chinh thuc cua Microset theo sample-level split:
   `en_train.csv`, `en_dev.csv`, `en_test.csv`. Ca 3 split deu co 31 keywords,
   nhung file audio khac nhau. Train dung `train_files.json`, khong quet toan bo
@@ -22,8 +22,22 @@ NOT EDGESPOT PAPER REPRODUCTION
 - Workflow chay: Colab notebook trong + copy tung cell lenh tu runbook.
 - Runbook chinh: `docs/colab_microset_runbook_vi.md`.
 - Bao cao ket qua Colab hien tai: `docs/colab_microset_experiment_report_vi.md`.
+- Manifest ket qua da khoa: `reports/microset/locked_results_manifest.json`.
+- Bang ket qua tu dong: `reports/microset/result_table.md`, `.csv`, `.tex`.
 - Pipeline tiep theo cho Top500 full: `docs/colab_top500_full_runbook_vi.md`.
 - Runtime tam thoi: A100 khuyen nghi, G4 chap nhan neu tiet kiem units; khong dung H100.
+
+## Ket Qua Da Khoa
+
+Khong tune tiep theo GSC test100 sau moc nay.
+
+```text
+Final model: EdgeSpotFull T4 + SCAF+GE2E
+Final checkpoint: edgespot_full_t4_scaf_ge2e_microset_en_v1/epoch_05.pt
+GSC test100 ACC@5% FAR: 86.12%
+GSC test100 Keyword ACC: 77.66%
+GSC test100 F1: 82.41%
+```
 
 ## Khong Duoc Claim
 

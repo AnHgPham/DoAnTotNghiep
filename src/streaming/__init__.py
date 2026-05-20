@@ -14,12 +14,20 @@ from src.streaming.robust_engine import (
     StreamingEvent,
     energy_segments,
 )
+from src.streaming.state_machine import (
+    DetectionCandidate,
+    StreamingStateConfig,
+    StreamingStateMachine,
+)
 
 __all__ = [
     "AudioQuality",
+    "DetectionCandidate",
     "EmbeddingBackend",
     "EnrollmentProfile",
     "KeywordProfile",
+    "StreamingStateConfig",
+    "StreamingStateMachine",
     "build_enrollment_profile",
     "crop_to_active_region",
     "RobustStreamingKWS",

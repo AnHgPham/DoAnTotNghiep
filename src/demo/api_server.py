@@ -8,6 +8,7 @@ import base64
 import io
 import json
 import sys
+import time
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
@@ -30,8 +31,16 @@ import struct
 
 from src.features.mfcc import MFCCExtractor
 from src.models.dscnn import DSCNN
+from src.streaming.enrollment import (
+    EmbeddingBackend,
+    EnrollmentProfile,
+    build_enrollment_profile,
+    crop_to_active_region,
+    pad_or_trim as enrollment_pad_or_trim,
+)
+from src.streaming.robust_engine import RobustStreamingKWS, StreamingDecisionConfig
 
-# ── Globals ──────────────────────────────────────────────────
+# -- Globals --------------------------------------------------
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SR = 16000
 CKPT = PROJECT_ROOT / "checkpoints" / "triplet" / "best_v2_margin1.0_colab.pt"
@@ -40,13 +49,18 @@ GSC_DIR = PROJECT_ROOT / "data" / "gsc_v2"
 
 encoder: DSCNN | None = None
 mfcc_ext: MFCCExtractor | None = None
+embedding_backend: EmbeddingBackend | None = None
+enrollment_profile = EnrollmentProfile()
+profile_version = 0
 prototypes: dict[str, torch.Tensor] = {}
 sample_count: dict[str, int] = {}
 sample_embeddings: dict[str, list[torch.Tensor]] = {}
+sample_waveforms: dict[str, list[torch.Tensor]] = {}
 proto_thresholds: dict[str, float] = {}
 
 ALPHA_THRESHOLD = 2.0
-THR_FLOOR, THR_CEIL = 0.30, 1.50
+THR_FLOOR, THR_CEIL = 0.35, 1.25
+MIN_ACCEPT_MARGIN = 0.05
 
 KNOWN_GSC_WORDS = sorted([
     "yes","no","up","down","left","right","on","off","stop","go",
@@ -63,9 +77,9 @@ WORD_PRESETS = {
 }
 
 
-# ── Init ─────────────────────────────────────────────────────
+# -- Init -----------------------------------------------------
 def init_model():
-    global encoder, mfcc_ext
+    global encoder, mfcc_ext, embedding_backend
     mfcc_ext = MFCCExtractor(n_mfcc=40, num_features=10, sample_rate=SR)
     encoder = DSCNN(model_size="L", feature_mode="NORM", input_shape=(47, 10))
     if CKPT.exists():
@@ -75,12 +89,13 @@ def init_model():
         ls = ckpt.get("loss", 0)
         print(f"  Model: {CKPT.name} (epoch={ep}, loss={ls:.6f})")
     else:
-        print(f"  WARNING: {CKPT} not found — random weights")
+        print(f"  WARNING: {CKPT} not found - random weights")
     encoder = encoder.to(DEVICE).eval()
+    embedding_backend = EmbeddingBackend(encoder, mfcc_ext, DEVICE, SR)
     print(f"  Device: {DEVICE}, Params: {sum(p.numel() for p in encoder.parameters()):,}")
 
 
-# ── Audio helpers ────────────────────────────────────────────
+# -- Audio helpers --------------------------------------------
 def bytes_to_wav(data: bytes) -> torch.Tensor | None:
     buf = io.BytesIO(data)
     try:
@@ -99,15 +114,12 @@ def bytes_to_wav(data: bytes) -> torch.Tensor | None:
 
 
 def pad_trim(wav: torch.Tensor) -> torch.Tensor:
-    if wav.dim() == 1:
-        wav = wav.unsqueeze(0)
-    L = wav.shape[-1]
-    if L < SR:
-        return F.pad(wav, (0, SR - L))
-    return wav[..., :SR]
+    return enrollment_pad_or_trim(wav, SR)
 
 
 def embed(wav_1s: torch.Tensor) -> torch.Tensor:
+    if embedding_backend is not None:
+        return embedding_backend.embed(wav_1s)
     mfcc = mfcc_ext.extract(wav_1s).unsqueeze(0).to(DEVICE)
     with torch.no_grad():
         emb = F.normalize(encoder(mfcc), p=2, dim=-1)
@@ -115,6 +127,10 @@ def embed(wav_1s: torch.Tensor) -> torch.Tensor:
 
 
 def recompute(word: str):
+    if sample_waveforms.get(word) and embedding_backend is not None:
+        rebuild_enrollment_profile()
+        return
+
     embs = sample_embeddings.get(word, [])
     if not embs:
         prototypes.pop(word, None)
@@ -131,6 +147,186 @@ def recompute(word: str):
     proto_thresholds[word] = max(THR_FLOOR, min(THR_CEIL, raw))
 
 
+def normalize_waveform(wav: torch.Tensor) -> torch.Tensor:
+    if wav.dim() == 1:
+        wav = wav.unsqueeze(0)
+    if wav.shape[0] > 1:
+        wav = wav.mean(dim=0, keepdim=True)
+    return wav.float().cpu()
+
+
+def load_wav_file(path: Path) -> torch.Tensor:
+    wav, sr = torchaudio.load(str(path))
+    if sr != SR:
+        wav = torchaudio.transforms.Resample(sr, SR)(wav)
+    return normalize_waveform(wav)
+
+
+def quality_to_dict(quality) -> dict:
+    return {
+        "accepted": bool(quality.accepted),
+        "reason": quality.reason,
+        "duration_ms": round(float(quality.duration_ms), 1),
+        "active_ms": round(float(quality.active_ms), 1),
+        "rms_dbfs": round(float(quality.rms_dbfs), 1),
+        "peak": round(float(quality.peak), 4),
+        "snr_proxy_db": round(float(quality.snr_proxy_db), 1),
+    }
+
+
+def select_diverse_files(files: list[Path], k: int) -> list[Path]:
+    if k <= 0 or len(files) <= k:
+        return files[:max(k, 0)]
+    step = len(files) / k
+    return [files[min(len(files) - 1, int(i * step))] for i in range(k)]
+
+
+def profile_ready() -> bool:
+    return bool(enrollment_profile.keywords)
+
+
+def sync_legacy_from_profile() -> None:
+    prototypes.clear()
+    sample_embeddings.clear()
+    proto_thresholds.clear()
+    sample_count.clear()
+
+    for label, profile in enrollment_profile.keywords.items():
+        prototypes[label] = profile.prototype.detach().cpu()
+        proto_thresholds[label] = float(profile.threshold)
+        sample_embeddings[label] = [
+            emb.detach().cpu() for emb in profile.exemplars
+        ]
+        sample_count[label] = len(sample_waveforms.get(label, [])) or len(profile.qualities)
+
+
+def rebuild_enrollment_profile() -> None:
+    global enrollment_profile, profile_version
+
+    if embedding_backend is None:
+        return
+
+    active_samples = {
+        label: wavs for label, wavs in sample_waveforms.items() if wavs
+    }
+    if not active_samples:
+        enrollment_profile = EnrollmentProfile()
+        sync_legacy_from_profile()
+        profile_version += 1
+        return
+
+    rebuilt = build_enrollment_profile(
+        active_samples,
+        embedding_backend,
+        views_per_sample=5,
+        threshold_alpha=ALPHA_THRESHOLD,
+        threshold_floor=THR_FLOOR,
+        threshold_ceil=THR_CEIL,
+        target_far=0.01,
+    )
+    merged = dict(enrollment_profile.keywords)
+    merged.update(rebuilt.keywords)
+    enrollment_profile = EnrollmentProfile(merged)
+    sync_legacy_from_profile()
+    profile_version += 1
+
+
+def score_embedding(
+    embedding: torch.Tensor,
+    threshold: float,
+    use_per_class: bool,
+    min_margin: float = MIN_ACCEPT_MARGIN,
+) -> dict:
+    if profile_ready():
+        result = enrollment_profile.score(
+            embedding,
+            min_margin=min_margin,
+            threshold_scale=1.0,
+        )
+        dists = result.distances
+    else:
+        dists = {
+            word: torch.cdist(embedding.unsqueeze(0), proto.unsqueeze(0)).item()
+            for word, proto in prototypes.items()
+        }
+
+    ordered = sorted(dists.items(), key=lambda item: item[1])
+    if not ordered:
+        return {
+            "detected": False,
+            "keyword": "unknown",
+            "best_label": "unknown",
+            "distance": float("inf"),
+            "threshold": threshold,
+            "margin": 0.0,
+            "confidence": 0.0,
+            "second_label": None,
+            "all_distances": {},
+            "top_3": [],
+        }
+
+    best_label, best_dist = ordered[0]
+    second_label = ordered[1][0] if len(ordered) > 1 else None
+    second_dist = ordered[1][1] if len(ordered) > 1 else best_dist + 2.0
+    margin = second_dist - best_dist
+    if use_per_class and profile_ready() and best_label in enrollment_profile.keywords:
+        eff_thr = enrollment_profile.keywords[best_label].threshold
+    elif use_per_class:
+        eff_thr = proto_thresholds.get(best_label, threshold)
+    else:
+        eff_thr = threshold
+    detected = best_dist <= eff_thr and margin >= min_margin
+    dist_score = max(0.0, 1.0 - best_dist / max(eff_thr, 1e-8))
+    margin_score = max(0.0, min(1.0, margin / 0.50))
+    confidence = 0.75 * dist_score + 0.25 * margin_score
+
+    return {
+        "detected": detected,
+        "keyword": best_label if detected else "unknown",
+        "best_label": best_label,
+        "distance": float(best_dist),
+        "threshold": float(eff_thr),
+        "margin": float(margin),
+        "confidence": float(confidence),
+        "second_label": second_label,
+        "all_distances": {word: float(dist) for word, dist in ordered},
+        "top_3": [{"word": word, "dist": float(dist)} for word, dist in ordered[:3]],
+    }
+
+
+def rounded_score_payload(score: dict) -> dict:
+    return {
+        "detected": bool(score["detected"]),
+        "keyword": score["keyword"],
+        "best_label": score["best_label"],
+        "distance": round(score["distance"], 4),
+        "threshold": round(score["threshold"], 3),
+        "margin": round(score["margin"], 4),
+        "confidence": round(score["confidence"], 3),
+        "second_label": score["second_label"],
+        "all_distances": {
+            word: round(dist, 4) for word, dist in score["all_distances"].items()
+        },
+        "top_3": [
+            {"word": item["word"], "dist": round(item["dist"], 4)}
+            for item in score["top_3"]
+        ],
+    }
+
+
+def make_stream_engine() -> RobustStreamingKWS | None:
+    if embedding_backend is None or not profile_ready():
+        return None
+    cfg = StreamingDecisionConfig(
+        sample_rate=SR,
+        min_margin=MIN_ACCEPT_MARGIN,
+        min_votes=2,
+        cooldown_ms=900,
+        chunk_process_stride_ms=250,
+    )
+    return RobustStreamingKWS(embedding_backend, enrollment_profile, config=cfg)
+
+
 def fig_to_b64(fig) -> str:
     buf = io.BytesIO()
     fig.savefig(buf, format="png", dpi=100, bbox_inches="tight",
@@ -140,7 +336,7 @@ def fig_to_b64(fig) -> str:
     return base64.b64encode(buf.read()).decode()
 
 
-# ── FastAPI app ──────────────────────────────────────────────
+# -- FastAPI app ----------------------------------------------
 app = FastAPI(title="Few-Shot KWS API")
 app.add_middleware(CORSMiddleware, allow_origins=["*"],
                    allow_methods=["*"], allow_headers=["*"])
@@ -156,7 +352,7 @@ async def index():
 app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 
 
-# ── Enrollment endpoints ─────────────────────────────────────
+# -- Enrollment endpoints -------------------------------------
 @app.get("/api/presets")
 async def get_presets():
     return {"presets": WORD_PRESETS, "gsc_words": KNOWN_GSC_WORDS}
@@ -166,41 +362,73 @@ async def get_presets():
 async def enroll_status():
     items = {}
     for w in prototypes:
+        qualities = []
+        if w in enrollment_profile.keywords:
+            qualities = [
+                quality_to_dict(q) for q in enrollment_profile.keywords[w].qualities
+            ]
         items[w] = {
             "count": sample_count.get(w, 0),
             "threshold": round(proto_thresholds.get(w, 0), 3),
+            "profile": "robust" if w in enrollment_profile.keywords else "legacy",
+            "qualities": qualities,
         }
-    return {"enrolled": items, "total": len(prototypes)}
+    return {
+        "enrolled": items,
+        "total": len(prototypes),
+        "profile_version": profile_version,
+        "streaming": "robust_state_machine" if profile_ready() else "legacy_window",
+    }
 
 
 @app.post("/api/enroll/gsc")
 async def enroll_gsc(words: str = Form(...), k: int = Form(5)):
     results = []
     word_list = [w.strip().lower() for w in words.split(",") if w.strip()]
+    changed_words = []
     for word in word_list:
         d = GSC_DIR / word
         if not d.exists():
             results.append({"word": word, "status": "not_found"})
             continue
-        files = sorted(d.glob("*.wav"))[:k]
+        files = select_diverse_files(sorted(d.glob("*.wav")), k)
         if not files:
             results.append({"word": word, "status": "no_files"})
             continue
+
+        wavs = []
+        qualities = []
         embs = []
         for f in files:
-            w_t, sr = torchaudio.load(str(f))
-            if sr != SR:
-                w_t = torchaudio.transforms.Resample(sr, SR)(w_t)
-            if w_t.shape[-1] < SR:
-                w_t = F.pad(w_t, (0, SR - w_t.shape[-1]))
-            embs.append(embed(w_t[..., :SR]))
-        sample_embeddings[word] = embs
-        recompute(word)
+            wav = load_wav_file(f)
+            cropped, _, quality = crop_to_active_region(wav, SR)
+            wavs.append(cropped)
+            qualities.append(quality_to_dict(quality))
+            if embedding_backend is None:
+                embs.append(embed(pad_trim(cropped)))
+
+        if embedding_backend is not None:
+            sample_waveforms[word] = wavs
+            changed_words.append(word)
+        else:
+            sample_embeddings[word] = embs
+            recompute(word)
+
         results.append({
             "word": word, "status": "ok",
             "samples": len(files),
-            "threshold": round(proto_thresholds.get(word, 0), 3),
+            "threshold": None,
+            "qualities": qualities,
         })
+
+    if changed_words:
+        rebuild_enrollment_profile()
+
+    for item in results:
+        if item.get("status") == "ok":
+            word = item["word"]
+            item["threshold"] = round(proto_thresholds.get(word, 0), 3)
+
     return {"results": results, "enrolled": len(prototypes)}
 
 
@@ -213,23 +441,41 @@ async def enroll_mic(keyword: str = Form(...), audio: UploadFile = File(...)):
     wav = bytes_to_wav(data)
     if wav is None:
         return JSONResponse({"error": "Invalid audio"}, 400)
-    wav = pad_trim(wav)
-    e = embed(wav)
-    sample_embeddings.setdefault(keyword, []).append(e)
-    recompute(keyword)
+    wav = normalize_waveform(wav)
+    cropped, _, quality = crop_to_active_region(wav, SR)
+    quality_payload = quality_to_dict(quality)
+    if not quality.accepted:
+        return JSONResponse({
+            "error": f"Audio quality rejected: {quality.reason}",
+            "quality": quality_payload,
+        }, 422)
+
+    if embedding_backend is not None:
+        sample_waveforms.setdefault(keyword, []).append(cropped)
+        rebuild_enrollment_profile()
+    else:
+        e = embed(pad_trim(cropped))
+        sample_embeddings.setdefault(keyword, []).append(e)
+        recompute(keyword)
+
     return {
         "word": keyword,
         "count": sample_count[keyword],
         "threshold": round(proto_thresholds.get(keyword, 0), 3),
+        "quality": quality_payload,
     }
 
 
 @app.post("/api/enroll/clear")
 async def clear_all():
+    global enrollment_profile, profile_version
     prototypes.clear()
     sample_count.clear()
     sample_embeddings.clear()
+    sample_waveforms.clear()
     proto_thresholds.clear()
+    enrollment_profile = EnrollmentProfile()
+    profile_version += 1
     return {"status": "cleared"}
 
 
@@ -240,6 +486,8 @@ async def save_profile(name: str = Form("default")):
     ENROLL_DIR.mkdir(parents=True, exist_ok=True)
     path = ENROLL_DIR / f"{name}.json"
     payload = {
+        "version": 2,
+        "profile": enrollment_profile.to_dict() if profile_ready() else None,
         "labels": list(prototypes.keys()),
         "sample_count": dict(sample_count),
         "embeddings": {k: v.tolist() for k, v in prototypes.items()},
@@ -254,12 +502,29 @@ async def save_profile(name: str = Form("default")):
 
 @app.post("/api/enroll/load")
 async def load_profile(name: str = Form("default")):
+    global enrollment_profile, profile_version
     path = ENROLL_DIR / f"{name}.json"
     if not path.exists():
         return JSONResponse({"error": f"Profile '{name}' not found"}, 404)
     payload = json.loads(path.read_text(encoding="utf-8"))
     prototypes.clear(); sample_count.clear()
-    sample_embeddings.clear(); proto_thresholds.clear()
+    sample_embeddings.clear(); sample_waveforms.clear(); proto_thresholds.clear()
+
+    if payload.get("profile"):
+        enrollment_profile = EnrollmentProfile.from_dict(payload["profile"])
+        sync_legacy_from_profile()
+        saved_counts = payload.get("sample_count", {})
+        for label, count in saved_counts.items():
+            if label in sample_count:
+                sample_count[label] = int(count)
+        profile_version += 1
+        return {
+            "loaded": name,
+            "keywords": len(prototypes),
+            "profile": "robust",
+        }
+
+    enrollment_profile = EnrollmentProfile()
     saved_embs = payload.get("sample_embeddings", {})
     for label, vec in payload.get("embeddings", {}).items():
         if label in saved_embs:
@@ -273,7 +538,8 @@ async def load_profile(name: str = Form("default")):
             t = payload.get("proto_thresholds", {}).get(label)
             if t is not None:
                 proto_thresholds[label] = float(t)
-    return {"loaded": name, "keywords": len(prototypes)}
+    profile_version += 1
+    return {"loaded": name, "keywords": len(prototypes), "profile": "legacy"}
 
 
 @app.get("/api/profiles")
@@ -283,7 +549,7 @@ async def list_profiles():
     return {"profiles": sorted(p.stem for p in ENROLL_DIR.glob("*.json"))}
 
 
-# ── Detection endpoints ──────────────────────────────────────
+# -- Detection endpoints --------------------------------------
 @app.post("/api/detect/single")
 async def detect_single(audio: UploadFile = File(...),
                         threshold: float = Form(0.6),
@@ -297,23 +563,13 @@ async def detect_single(audio: UploadFile = File(...),
     wav = pad_trim(wav)
     e = embed(wav)
 
-    dists = {w: torch.cdist(e.unsqueeze(0), p.unsqueeze(0)).item()
-             for w, p in prototypes.items()}
-    sd = sorted(dists.items(), key=lambda x: x[1])
-    best_w, best_d = sd[0]
-
-    eff_thr = proto_thresholds.get(best_w, threshold) if use_per_class else threshold
-    accept = best_d <= eff_thr
+    score = rounded_score_payload(score_embedding(e, threshold, use_per_class))
 
     # MFCC data for frontend rendering
     mfcc = mfcc_ext.extract(wav).squeeze(0).numpy().tolist()
 
     return {
-        "detected": accept,
-        "keyword": best_w if accept else "unknown",
-        "distance": round(best_d, 4),
-        "threshold": round(eff_thr, 3),
-        "all_distances": {w: round(d, 4) for w, d in sd},
+        **score,
         "mfcc": mfcc,
     }
 
@@ -331,6 +587,47 @@ async def detect_long(audio: UploadFile = File(...),
     if wav is None:
         return JSONResponse({"error": "Invalid audio"}, 400)
 
+    if embedding_backend is not None and profile_ready() and use_per_class:
+        cfg = StreamingDecisionConfig(
+            sample_rate=SR,
+            min_segment_ms=max(120, min(5000, min_duration_ms)),
+            min_margin=MIN_ACCEPT_MARGIN,
+            min_votes=2,
+            cooldown_ms=900,
+        )
+        engine = RobustStreamingKWS(embedding_backend, enrollment_profile, config=cfg)
+        events = engine.process_file(wav)
+        results = []
+        for event in events:
+            start = max(0, int(event["start_sec"] * SR))
+            end = min(wav.shape[-1], int(event["end_sec"] * SR))
+            event_wav = wav[..., start:end] if end > start else wav
+            score = rounded_score_payload(
+                score_embedding(embed(event_wav), threshold, True)
+            )
+            results.append({
+                "t0": round(event["start_sec"], 2),
+                "t1": round(event["end_sec"], 2),
+                "speech_t0": round(event["speech_start_sec"], 2),
+                "speech_t1": round(event["speech_end_sec"], 2),
+                "keyword": event["keyword"],
+                "distance": round(event["distance"], 4),
+                "threshold": round(event["threshold"], 3),
+                "margin": round(event["margin"], 4),
+                "confidence": round(event["confidence"], 3),
+                "second_label": event["second_label"],
+                "detected": True,
+                "top_3": score["top_3"],
+            })
+
+        return {
+            "duration": round(wav.shape[-1] / SR, 1),
+            "segments": len(results),
+            "results": results,
+            "sequence": [r["keyword"] for r in results],
+            "engine": "robust_state_machine",
+        }
+
     total = wav.shape[-1]
     min_dur = max(80, min(5000, min_duration_ms))
 
@@ -346,20 +643,18 @@ async def detect_long(audio: UploadFile = File(...),
         seg = wav[..., start:end]
         seg_1s = pad_trim(seg)
         e = embed(seg_1s)
-        dists = {w: torch.cdist(e.unsqueeze(0), p.unsqueeze(0)).item()
-                 for w, p in prototypes.items()}
-        sd = sorted(dists.items(), key=lambda x: x[1])
-        best_w, best_d = sd[0]
-        eff_thr = proto_thresholds.get(best_w, threshold) if use_per_class else threshold
-        accept = best_d <= eff_thr
+        score = rounded_score_payload(score_embedding(e, threshold, use_per_class))
         results.append({
             "t0": round(start / SR, 2),
             "t1": round(end / SR, 2),
-            "keyword": best_w if accept else "unknown",
-            "distance": round(best_d, 4),
-            "threshold": round(eff_thr, 3),
-            "detected": accept,
-            "top_3": [{"word": w, "dist": round(d, 4)} for w, d in sd[:3]],
+            "keyword": score["keyword"],
+            "distance": score["distance"],
+            "threshold": score["threshold"],
+            "margin": score["margin"],
+            "confidence": score["confidence"],
+            "second_label": score["second_label"],
+            "detected": score["detected"],
+            "top_3": score["top_3"],
         })
 
     preds = [r["keyword"] for r in results if r["detected"]]
@@ -368,6 +663,7 @@ async def detect_long(audio: UploadFile = File(...),
         "segments": len(results),
         "results": results,
         "sequence": preds,
+        "engine": "legacy_segments",
     }
 
 
@@ -418,7 +714,7 @@ def _vad_segments(wav, min_dur_ms):
         return []
 
 
-# ── Batch evaluation ─────────────────────────────────────────
+# -- Batch evaluation -----------------------------------------
 @app.post("/api/detect/batch")
 async def detect_batch(
     labels_file: UploadFile = File(...),
@@ -461,7 +757,7 @@ async def detect_batch(
         if audio_path is None:
             results.append({
                 "file": fname, "expected": expected,
-                "predicted": "—", "distance": 0,
+                "predicted": "-", "distance": 0,
                 "status": "file_not_found", "correct": False,
             })
             total += 1
@@ -474,13 +770,8 @@ async def detect_batch(
             w_t = pad_trim(w_t)
             e = embed(w_t)
 
-            dists = {w: torch.cdist(e.unsqueeze(0), p.unsqueeze(0)).item()
-                     for w, p in prototypes.items()}
-            sd = sorted(dists.items(), key=lambda x: x[1])
-            best_w, best_d = sd[0]
-            eff_thr = proto_thresholds.get(best_w, threshold) if use_per_class else threshold
-            accept = best_d <= eff_thr
-            predicted = best_w if accept else "unknown"
+            score = rounded_score_payload(score_embedding(e, threshold, use_per_class))
+            predicted = score["keyword"]
             is_correct = predicted == expected
 
             if is_correct:
@@ -489,15 +780,17 @@ async def detect_batch(
 
             results.append({
                 "file": fname, "expected": expected,
-                "predicted": predicted, "distance": round(best_d, 4),
-                "threshold": round(eff_thr, 3),
+                "predicted": predicted, "distance": score["distance"],
+                "threshold": score["threshold"],
+                "margin": score["margin"],
+                "confidence": score["confidence"],
                 "status": "ok", "correct": is_correct,
             })
         except Exception as ex:
             total += 1
             results.append({
                 "file": fname, "expected": expected,
-                "predicted": "—", "distance": 0,
+                "predicted": "-", "distance": 0,
                 "status": f"error: {ex}", "correct": False,
             })
 
@@ -510,7 +803,7 @@ async def detect_batch(
     }
 
 
-# ── Model info ───────────────────────────────────────────────
+# -- Model info -----------------------------------------------
 @app.get("/api/model/info")
 async def model_info():
     info = {
@@ -520,6 +813,8 @@ async def model_info():
         "input_shape": "(1, 47, 10)",
         "device": str(DEVICE),
         "checkpoint": CKPT.name if CKPT.exists() else "none",
+        "deployment_engine": "robust_state_machine" if profile_ready() else "legacy_window",
+        "profile_version": profile_version,
     }
     # Load eval results
     evals = {}
@@ -536,11 +831,14 @@ async def model_info():
     return info
 
 
-# ── Streaming WebSocket ──────────────────────────────────────
+# -- Streaming WebSocket --------------------------------------
 @app.websocket("/ws/stream")
 async def ws_stream(ws: WebSocket):
     await ws.accept()
-    # Sliding buffer for 1-second windows with 0.5s stride
+    stream_engine = make_stream_engine()
+    stream_profile_version = profile_version
+
+    # Legacy fallback: 1-second windows with 0.5-second stride.
     buffer = torch.zeros(0)
     window_size = SR  # 16000 samples = 1 second
     stride = SR // 2  # 8000 samples = 0.5 second
@@ -554,6 +852,44 @@ async def ws_stream(ws: WebSocket):
             chunk = torch.tensor(
                 struct.unpack(f"{n_samples}f", data), dtype=torch.float32
             )
+
+            if stream_profile_version != profile_version:
+                stream_engine = make_stream_engine()
+                stream_profile_version = profile_version
+
+            if stream_engine is not None:
+                events = stream_engine.process_chunk(chunk.unsqueeze(0))
+                for event in events:
+                    start = max(0, int(event["start_sec"] * SR))
+                    end = max(start + 1, int(event["end_sec"] * SR))
+                    top_3 = [{
+                        "word": event["keyword"],
+                        "dist": round(event["distance"], 4),
+                    }]
+                    if event["second_label"]:
+                        top_3.append({
+                            "word": event["second_label"],
+                            "dist": round(event["distance"] + event["margin"], 4),
+                        })
+                    await ws.send_json({
+                        "detected": True,
+                        "keyword": event["keyword"],
+                        "state": event.get("state", "detected"),
+                        "distance": round(event["distance"], 4),
+                        "threshold": round(event["threshold"], 3),
+                        "margin": round(event["margin"], 4),
+                        "confidence": round(event["confidence"], 3),
+                        "second_label": event["second_label"],
+                        "start_sec": round(start / SR, 2),
+                        "end_sec": round(end / SR, 2),
+                        "start_ms": event.get("start_ms", round(start / SR * 1000)),
+                        "end_ms": event.get("end_ms", round(end / SR * 1000)),
+                        "timestamp": event.get("timestamp", time.time()),
+                        "top_3": top_3,
+                        "engine": "robust_state_machine",
+                    })
+                continue
+
             buffer = torch.cat([buffer, chunk])
 
             # Process when we have enough samples
@@ -568,24 +904,19 @@ async def ws_stream(ws: WebSocket):
                 if not prototypes:
                     continue
 
-                e = embed(window)
-                dists = {w: torch.cdist(e.unsqueeze(0), p.unsqueeze(0)).item()
-                         for w, p in prototypes.items()}
-                sd = sorted(dists.items(), key=lambda x: x[1])
-                best_w, best_d = sd[0]
-                eff_thr = proto_thresholds.get(best_w, 0.7)
-                accept = best_d <= eff_thr
+                score = rounded_score_payload(score_embedding(embed(window), 0.7, True))
 
                 result = {
-                    "detected": accept,
-                    "keyword": best_w if accept else "unknown",
-                    "distance": round(best_d, 4),
-                    "threshold": round(eff_thr, 3),
-                    "top_3": [{"word": w, "dist": round(d, 4)} for w, d in sd[:3]],
+                    **score,
+                    "state": "detected" if score["detected"] else "rejected",
+                    "start_ms": None,
+                    "end_ms": None,
+                    "timestamp": time.time(),
+                    "engine": "legacy_window",
                 }
                 await ws.send_json(result)
 
-                if accept:
+                if score["detected"]:
                     cooldown = 2  # Skip 2 windows (~1s) after detection
 
     except WebSocketDisconnect:
@@ -594,10 +925,10 @@ async def ws_stream(ws: WebSocket):
         print(f"WS error: {e}")
 
 
-# ── Main ─────────────────────────────────────────────────────
+# -- Main -----------------------------------------------------
 if __name__ == "__main__":
     print("=" * 60)
-    print("  Few-Shot KWS — Premium Web UI")
+    print("  Few-Shot KWS - Premium Web UI")
     print("=" * 60)
     init_model()
     print("\n  Starting server at http://127.0.0.1:8000")

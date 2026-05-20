@@ -17,6 +17,16 @@ Canh bao quan trong:
 - Khong resume checkpoint Microset vao Top500 full bang `--resume`; SCAF head 31 class va Top500 450 class khac shape.
 - Chon checkpoint bang GSC-dev. Chi chay GSC-test 100 runs sau khi da khoa checkpoint.
 
+Pre-run checklist bat buoc:
+
+- Runtime dung A100/G4, khong dung H100 tru khi co ly do KD/full run rat nang.
+- `DATA_PROFILE = top500_full_v1`.
+- `MSWC_MAX_PER_WORD = 0`.
+- `RUN_TAG` co hau to `_top500_full_v1`.
+- Free disk truoc khi tai audio phai du theo estimate Step 8.
+- Smoke train phai pass truoc main train.
+- Neu bat ky cell nao canh bao capped/mpw200/missing WAV, dung ngay va doi run tag/profile.
+
 ## 1. Chon Runtime
 
 Trong Colab:
@@ -577,6 +587,20 @@ for f in files:
         print(k, "=", data.get(k))
 ```
 
+Co the sinh bang Markdown/CSV/LaTeX tu Drive result folder:
+
+```python
+%cd /content/DoAnTotNghiep
+
+!python scripts/make_result_table.py \
+  --results-dir /content/drive/MyDrive/DoAnTotNghiep_output/results \
+  --out-dir /content/drive/MyDrive/DoAnTotNghiep_output/reports/top500_full \
+  --profile top500_full
+```
+
+Neu da copy JSON ve local repo, dung cung lenh voi `--results-dir results`.
+Template bao cao sau train nam o `docs/top500_full_result_template_vi.md`.
+
 ## 19. Optional Baseline: EdgeSpotFull T4 SCAF-only
 
 Chi chay sau khi run SCAF+GE2E xong. Baseline nay dung de viet ablation.
@@ -633,4 +657,3 @@ Exact EdgeSpot paper reproduction.
 KD reproduction.
 Streaming result.
 ```
-

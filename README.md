@@ -1,5 +1,23 @@
 # Few-Shot Open-Set Keyword Spotting
 
+## Locked Microset Result
+
+The current thesis baseline/result is locked on **MSWC Microset English official
+CSV split**. Do not tune against GSC test100 after this point.
+
+- Final model: `EdgeSpotFull T4 + SCAF+GE2E`.
+- Final checkpoint: `epoch_05.pt`.
+- Final GSC test100: `ACC@5% FAR = 86.12%`, `KW-ACC = 77.66%`, `F1 = 82.41%`.
+- Canonical manifest: `reports/microset/locked_results_manifest.json`.
+- Generated tables: `reports/microset/result_table.md`, `.csv`, `.tex`.
+- Thesis chapter draft: `docs/thesis_experiment_chapter_vi.md`.
+
+Regenerate the result table after copying Colab JSON folders locally:
+
+```bash
+python scripts/make_result_table.py --results-dir results --out-dir reports/microset --profile microset_en
+```
+
 ## Current Training Workflow
 
 Current recommended Colab workflow is command-based, not notebook-driven:

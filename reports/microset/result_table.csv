@@ -1,0 +1,7 @@
+model,split,runs,open_set_acc_at_1far,open_set_acc_at_5far,frr_at_5far,auc,eer,keyword_acc,f1,source
+DSCNN-L Triplet,dev,30,0.764778,0.791685,0.479091,0.896267,0.197675,0.696485,0.712742,/content/drive/MyDrive/DoAnTotNghiep_output/results/dscnn_l_triplet_microset_en_v1_epoch05_dev30/gsc_edgespot_exact_k10_results.json
+DSCNN-L Triplet,test,100,,0.805400,0.405800,0.912200,0.182200,0.683900,0.733000,/content/drive/MyDrive/DoAnTotNghiep_output/results/dscnn_l_triplet_microset_en_v1_best_test100/gsc_edgespot_exact_k10_results.json
+EdgeSpotFull T4 SCAF,dev,30,0.824815,0.848481,0.215212,0.957259,0.112801,0.727576,0.827842,/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_microset_en_v1_epoch05_dev30/gsc_edgespot_exact_k10_results.json
+EdgeSpotFull T4 SCAF,test,100,0.846422,0.852067,0.206091,0.956900,0.118857,0.745182,0.819239,/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_microset_en_v1_epoch05_test100/gsc_edgespot_exact_k10_results.json
+EdgeSpotFull T4 SCAF+GE2E,dev,30,0.837759,0.855593,0.218545,0.955954,0.116322,0.761515,0.822882,/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_microset_en_v1_epoch05_dev30/gsc_edgespot_exact_k10_results.json
+EdgeSpotFull T4 SCAF+GE2E,test,100,0.846133,0.861178,0.213927,0.956051,0.115439,0.776618,0.824112,/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_microset_en_v1_epoch05_test100/gsc_edgespot_exact_k10_results.json

@@ -1,0 +1,117 @@
+{
+  "profile": "microset_en",
+  "dataset": "MSWC Microset English official CSV split",
+  "status": "locked",
+  "locked_at": "2026-05-20",
+  "warning": [
+    "CURRENT DATA PROFILE = MSWC MICROSET ENGLISH",
+    "TEMPORARY RUN FOR UNIT/DISK SAVING",
+    "NOT TOP500 FULL",
+    "NOT FULL MSWC",
+    "NOT EDGESPOT PAPER REPRODUCTION",
+    "GSC test100 is frozen; do not tune hyperparameters against test100."
+  ],
+  "protocol": {
+    "name": "gsc_edgespot_exact",
+    "dataset": "Google Speech Commands v2",
+    "k_shot": 10,
+    "target_far": 0.05,
+    "positive_words": "10 GSC command words + true _silence_",
+    "negative_words": "25 non-command GSC speech words",
+    "classifier": "OpenNCMClassifier",
+    "scoring": "l2"
+  },
+  "final_model": {
+    "label": "EdgeSpotFull T4 SCAF+GE2E",
+    "checkpoint": "/content/drive/MyDrive/DoAnTotNghiep_output/checkpoints/edgespot_full_t4_scaf_ge2e_microset_en_v1/epoch_05.pt",
+    "result_json": "/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_microset_en_v1_epoch05_test100/gsc_edgespot_exact_k10_results.json",
+    "selection_policy": "Selected before final test100 reporting; do not tune on test100."
+  },
+  "microset_split_counts": {
+    "keywords": 31,
+    "train_files": 69868,
+    "dev_files": 13114,
+    "test_files": 13117,
+    "wav_total_after_conversion": 96099
+  },
+  "experiments": [
+    {
+      "label": "DSCNN-L Triplet",
+      "split": "dev",
+      "runs": 30,
+      "result_json": "/content/drive/MyDrive/DoAnTotNghiep_output/results/dscnn_l_triplet_microset_en_v1_epoch05_dev30/gsc_edgespot_exact_k10_results.json",
+      "open_set_acc_at_1far": 0.7647777777777777,
+      "open_set_acc_at_5far": 0.7916851851851849,
+      "frr_at_5far": 0.47909090909090907,
+      "auc": 0.8962673212121212,
+      "eer": 0.19767515151515153,
+      "keyword_acc": 0.6964848484848485,
+      "f1": 0.7127419277436541
+    },
+    {
+      "label": "DSCNN-L Triplet",
+      "split": "test",
+      "runs": 100,
+      "result_json": "/content/drive/MyDrive/DoAnTotNghiep_output/results/dscnn_l_triplet_microset_en_v1_best_test100/gsc_edgespot_exact_k10_results.json",
+      "open_set_acc_at_1far": null,
+      "open_set_acc_at_5far": 0.8054,
+      "frr_at_5far": 0.4058,
+      "auc": 0.9122,
+      "eer": 0.1822,
+      "keyword_acc": 0.6839,
+      "f1": 0.7330
+    },
+    {
+      "label": "EdgeSpotFull T4 SCAF",
+      "split": "dev",
+      "runs": 30,
+      "result_json": "/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_microset_en_v1_epoch05_dev30/gsc_edgespot_exact_k10_results.json",
+      "open_set_acc_at_1far": 0.8248148148148149,
+      "open_set_acc_at_5far": 0.8484814814814814,
+      "frr_at_5far": 0.21521212121212122,
+      "auc": 0.9572593212121212,
+      "eer": 0.11280121212121211,
+      "keyword_acc": 0.7275757575757577,
+      "f1": 0.8278419947669631
+    },
+    {
+      "label": "EdgeSpotFull T4 SCAF",
+      "split": "test",
+      "runs": 100,
+      "result_json": "/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_microset_en_v1_epoch05_test100/gsc_edgespot_exact_k10_results.json",
+      "open_set_acc_at_1far": 0.8464222222222224,
+      "open_set_acc_at_5far": 0.8520666666666667,
+      "frr_at_5far": 0.20609090909090905,
+      "auc": 0.956900450909091,
+      "eer": 0.11885745454545456,
+      "keyword_acc": 0.7451818181818181,
+      "f1": 0.8192394035352392
+    },
+    {
+      "label": "EdgeSpotFull T4 SCAF+GE2E",
+      "split": "dev",
+      "runs": 30,
+      "result_json": "/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_microset_en_v1_epoch05_dev30/gsc_edgespot_exact_k10_results.json",
+      "open_set_acc_at_1far": 0.8377592592592591,
+      "open_set_acc_at_5far": 0.8555925925925927,
+      "frr_at_5far": 0.2185454545454545,
+      "auc": 0.9559541818181817,
+      "eer": 0.11632242424242424,
+      "keyword_acc": 0.7615151515151515,
+      "f1": 0.8228819141671292
+    },
+    {
+      "label": "EdgeSpotFull T4 SCAF+GE2E",
+      "split": "test",
+      "runs": 100,
+      "result_json": "/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_microset_en_v1_epoch05_test100/gsc_edgespot_exact_k10_results.json",
+      "open_set_acc_at_1far": 0.8461333333333332,
+      "open_set_acc_at_5far": 0.8611777777777777,
+      "frr_at_5far": 0.21392727272727277,
+      "auc": 0.9560512436363637,
+      "eer": 0.11543854545454545,
+      "keyword_acc": 0.7766181818181818,
+      "f1": 0.8241123365438194
+    }
+  ]
+}
