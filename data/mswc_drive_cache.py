@@ -511,6 +511,7 @@ def setup_mswc_from_drive(
     min_train_val_coverage: float = 0.9,
     n_cpu: int = 0,
     min_words: int | None = None,
+    save_cache: bool = True,
 ) -> bool:
     """Check Drive cache, load it if valid, otherwise build and save it.
 
@@ -522,6 +523,7 @@ def setup_mswc_from_drive(
         n_cpu: Workers for OPUS-to-WAV conversion. 0 means auto.
         min_words: Deprecated compatibility parameter. Ignored by the new
             split-aware validation.
+        save_cache: Save local WAV files back to Drive after a cache miss.
 
     Returns:
         True if loaded from Drive cache; False if the full pipeline ran.
@@ -626,11 +628,17 @@ def setup_mswc_from_drive(
         split_mode=split_mode,
         max_per_word=max_per_word,
     )
-    save_to_drive(
-        drive_project,
-        split_mode=split_mode,
-        max_per_word=max_per_word,
-    )
+    if save_cache:
+        save_to_drive(
+            drive_project,
+            split_mode=split_mode,
+            max_per_word=max_per_word,
+        )
+    else:
+        logger.info(
+            "Skipping Drive WAV cache save; local session data is ready at %s",
+            LOCAL_MSWC,
+        )
     return False
 
 
@@ -654,6 +662,11 @@ def main() -> None:
         action="store_true",
         help="Only save existing local WAV to Drive (no download)",
     )
+    parser.add_argument(
+        "--no-save-cache",
+        action="store_true",
+        help="On cache miss, build local WAV data but do not copy WAV cache to Drive",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -676,9 +689,12 @@ def main() -> None:
         min_train_val_coverage=args.min_train_val_coverage,
         n_cpu=args.workers,
         min_words=args.min_words,
+        save_cache=not args.no_save_cache,
     )
     if from_cache:
         logger.info("Loaded from Drive cache - no conversion needed!")
+    elif args.no_save_cache:
+        logger.info("Full pipeline complete - local WAV ready; Drive cache save skipped")
     else:
         logger.info("Full pipeline complete - WAV saved to Drive for next time")
 

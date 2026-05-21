@@ -90,11 +90,13 @@ DRIVE_PROJECT = "/content/drive/MyDrive/DoAnTotNghiep_output"
 Path(DRIVE_PROJECT).mkdir(parents=True, exist_ok=True)
 Path(f"{DRIVE_PROJECT}/checkpoints").mkdir(parents=True, exist_ok=True)
 Path(f"{DRIVE_PROJECT}/results").mkdir(parents=True, exist_ok=True)
+Path(f"{DRIVE_PROJECT}/packages").mkdir(parents=True, exist_ok=True)
 
 DATA_PROFILE = "top500_full_v1"
 MSWC_SPLIT_MODE = "top500"
 MSWC_MAX_PER_WORD = 0          # 0 = full/unlimited clips per word
 MIN_CACHE_COVERAGE = 0.98
+SAVE_MSWC_CACHE_TO_DRIVE = False  # False = train from session data; do not copy 100GB+ WAV cache to Drive
 
 RUN_TAG_SCAF_GE2E = "edgespot_full_t4_scaf_ge2e_top500_full_v1"
 RUN_TAG_SCAF = "edgespot_full_t4_scaf_top500_full_v1"
@@ -240,7 +242,8 @@ Lan dau se lau. Cell nay:
 
 1. kiem tra Drive cache `mswc_en_wav_top500_full`;
 2. neu cache hop le thi dung lai;
-3. neu cache miss thi tai `en.tar.gz`, extract Top500 train+val, convert OPUS sang WAV, xoa OPUS, save cache len Drive.
+3. neu cache miss thi tai `en.tar.gz`, extract Top500 train+val, convert OPUS sang WAV, xoa OPUS;
+4. mac dinh khong copy WAV cache 100GB+ len Drive. Dataset nam trong session de train ngay, checkpoint/result van luu vao Drive.
 
 ```python
 %%time
@@ -267,6 +270,7 @@ from_drive_cache = setup_mswc_from_drive(
     max_per_word=MSWC_MAX_PER_WORD,
     min_train_val_coverage=MIN_CACHE_COVERAGE,
     n_cpu=min(8, os.cpu_count() or 8),
+    save_cache=SAVE_MSWC_CACHE_TO_DRIVE,
 )
 
 print("Loaded from Drive cache:", from_drive_cache)
@@ -281,6 +285,8 @@ print("Local split files:", list(Path("data/mswc_en/splits").glob("*.json")))
 ```
 
 Neu download bi timeout, chay lai cell nay. Downloader co resume `.partial`.
+Neu Colab reset thi session-local `data/mswc_en` se mat; chay lai Step 9 de tao lai data.
+Checkpoint/result/package trong Drive khong mat.
 
 ## 10. Kiem Tra MSWC Sau Khi Cache Xong
 
@@ -392,7 +398,9 @@ Chay cell nay truoc train that. Neu smoke fail thi dung, khong train main.
   --epochs 1 \
   --episodes 5 \
   --max-per-word 0 \
-  --num-workers 2
+  --num-workers 100 \
+  --save-every 1 \
+  --save-latest-every-epoch
 ```
 
 Dieu kien OK:
@@ -420,7 +428,9 @@ Day la run chinh nen chay truoc.
   --epochs 25 \
   --episodes 300 \
   --max-per-word 0 \
-  --num-workers 2 \
+  --num-workers 100 \
+  --save-every 1 \
+  --save-latest-every-epoch \
   --select-by-gsc-dev \
   --gsc-dev-every 5 \
   --gsc-dev-runs 3 \
@@ -428,14 +438,18 @@ Day la run chinh nen chay truoc.
   --early-stop-patience 0
 ```
 
-Neu A100/CPU doc data tot va GPU chua duoc dung nhieu, lan sau co the tang:
+Theo run hien tai, A100 co the chay `--num-workers 100`, nhung PyTorch co
+the canh bao suggested max worker thap hon. Neu runtime freeze/I/O cham bat
+thuong thi giam ve `12` hoac `20`.
+
+Neu muon chay ky hon sau khi pipeline on dinh, co the tang:
 
 ```text
 --episodes 400
---num-workers 4
+--num-workers 100
 ```
 
-Khong tang worker qua cao khi data nam tren Drive symlink; nhieu worker co the lam nghen I/O.
+Khong dung `--num-workers 100` cho may local yeu; chi ap dung cho Colab A100.
 
 ## 14. Resume Neu Colab Disconnect
 
@@ -456,7 +470,9 @@ Chi dung cho cung run tag Top500 full, khong dung de resume Microset.
   --epochs 25 \
   --episodes 300 \
   --max-per-word 0 \
-  --num-workers 2 \
+  --num-workers 100 \
+  --save-every 1 \
+  --save-latest-every-epoch \
   --select-by-gsc-dev \
   --gsc-dev-every 5 \
   --gsc-dev-runs 3 \
@@ -548,8 +564,8 @@ nhin test100.
 %%time
 %cd /content/DoAnTotNghiep
 
-SELECTED_CKPT = "/content/drive/MyDrive/DoAnTotNghiep_output/checkpoints/edgespot_full_t4_scaf_ge2e_top500_full_v1/epoch_05.pt"
-OUT = "/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_top500_full_v1_selected_test100"
+SELECTED_CKPT = "/content/drive/MyDrive/DoAnTotNghiep_output/checkpoints/edgespot_full_t4_scaf_ge2e_top500_full_v1/epoch_25.pt"
+OUT = "/content/drive/MyDrive/DoAnTotNghiep_output/results/edgespot_full_t4_scaf_ge2e_top500_full_v1_epoch25_test100"
 
 !python scripts/evaluate_edgespot_protocol.py \
   --checkpoint "$SELECTED_CKPT" \
@@ -601,7 +617,30 @@ Co the sinh bang Markdown/CSV/LaTeX tu Drive result folder:
 Neu da copy JSON ve local repo, dung cung lenh voi `--results-dir results`.
 Template bao cao sau train nam o `docs/top500_full_result_template_vi.md`.
 
-## 19. Optional Baseline: EdgeSpotFull T4 SCAF-only
+## 19. Dong Goi Artifact Final Len Drive Truoc Khi Download
+
+Cell nay tao ZIP trong Drive truoc. Neu runtime reset sau khi ZIP da tao, van
+lay lai duoc tu Google Drive.
+
+```python
+%%time
+%cd /content/DoAnTotNghiep
+
+!python scripts/package_top500_artifacts.py \
+  --drive-root /content/drive/MyDrive/DoAnTotNghiep_output \
+  --run-tag edgespot_full_t4_scaf_ge2e_top500_full_v1 \
+  --epoch 25 \
+  --output-zip /content/drive/MyDrive/DoAnTotNghiep_output/packages/edgespot_top500_final_package.zip
+```
+
+Neu muon tai ve may ngay trong Colab:
+
+```python
+from google.colab import files
+files.download("/content/drive/MyDrive/DoAnTotNghiep_output/packages/edgespot_top500_final_package.zip")
+```
+
+## 20. Optional Baseline: EdgeSpotFull T4 SCAF-only
 
 Chi chay sau khi run SCAF+GE2E xong. Baseline nay dung de viet ablation.
 
@@ -619,7 +658,9 @@ Chi chay sau khi run SCAF+GE2E xong. Baseline nay dung de viet ablation.
   --epochs 25 \
   --episodes 300 \
   --max-per-word 0 \
-  --num-workers 2 \
+  --num-workers 100 \
+  --save-every 1 \
+  --save-latest-every-epoch \
   --select-by-gsc-dev \
   --gsc-dev-every 5 \
   --gsc-dev-runs 3 \
@@ -627,7 +668,7 @@ Chi chay sau khi run SCAF+GE2E xong. Baseline nay dung de viet ablation.
   --early-stop-patience 0
 ```
 
-## 20. Khi Nao Dung Lai
+## 21. Khi Nao Dung Lai
 
 Dung lai va bao ket qua neu gap cac tinh huong sau:
 

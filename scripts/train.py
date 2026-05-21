@@ -85,7 +85,9 @@ def save_checkpoint(
     }
     if loss_head is not None:
         ckpt["loss_head_state_dict"] = loss_head.state_dict()
-    torch.save(ckpt, path)
+    tmp_path = path.with_name(f".{path.name}.tmp")
+    torch.save(ckpt, tmp_path)
+    tmp_path.replace(path)
     logger.info("Checkpoint saved: %s (epoch=%d, loss=%.6f)", path, epoch, loss)
 
 
@@ -381,6 +383,10 @@ def main() -> None:
                         help="DataLoader workers (lower for low-RAM systems)")
     parser.add_argument("--val-every", type=int, default=1,
                         help="Run validation every N epochs (default 1)")
+    parser.add_argument("--save-every", type=int, default=None,
+                        help="Checkpoint every N epochs. Overrides checkpoint.save_every.")
+    parser.add_argument("--save-latest-every-epoch", action="store_true",
+                        help="Write latest.pt after every epoch for safer Colab resume.")
     parser.add_argument("--ckpt-subdir", type=str, default=None,
                         help="Subdirectory under checkpoint.dir for this run")
     parser.add_argument("--model-family", type=str, default=None,
@@ -726,7 +732,7 @@ def main() -> None:
     logger.info("Checkpoints: %s", ckpt_dir)
 
     # Training loop
-    save_every = cfg["checkpoint"]["save_every"]
+    save_every = max(1, args.save_every or cfg["checkpoint"]["save_every"])
     best_metric = -float("inf")
     val_every = max(1, args.val_every)
     stale_val_checks = 0
@@ -866,6 +872,11 @@ def main() -> None:
             save_checkpoint(
                 encoder, optimizer, scheduler, epoch, val_auc, metrics["loss"],
                 ckpt_dir / f"epoch_{epoch+1:02d}.pt", loss_head,
+            )
+        if args.save_latest_every_epoch:
+            save_checkpoint(
+                encoder, optimizer, scheduler, epoch, val_auc, metrics["loss"],
+                ckpt_dir / "latest.pt", loss_head,
             )
 
         metric_delta = (
