@@ -112,6 +112,12 @@ def _coverage_for_words(clips_dir: Path, words: list[str]) -> tuple[int, int, fl
     return present, total, present / max(total, 1)
 
 
+def _min_required_word_count(split_mode: str) -> int:
+    if split_mode == "top500":
+        return 500
+    return 1
+
+
 def drive_cache_status(
     drive_project: str | Path,
     split_mode: str = "top500",
@@ -179,12 +185,14 @@ def is_drive_cache_valid(
 ) -> tuple[bool, dict]:
     """Validate that Drive has splits and enough WAV-backed train/val words."""
     status = drive_cache_status(drive_project, split_mode, max_per_word)
+    min_required_words = _min_required_word_count(split_mode)
     valid = (
         status["has_splits"]
-        and status["required_total"] > 0
+        and status["required_total"] >= min_required_words
         and status["required_coverage"] >= float(min_train_val_coverage)
     )
     status["valid"] = valid
+    status["min_required_words"] = min_required_words
     status["min_train_val_coverage"] = float(min_train_val_coverage)
     return valid, status
 
@@ -277,6 +285,12 @@ def repair_drive_cache_splits(
 
     wav_words = _discover_wav_words(drive_clips)
     if len(wav_words) < min_words:
+        return False
+    if split_mode == "top500" and len(wav_words) < _min_required_word_count(split_mode):
+        logger.info(
+            "Top500 cache has only %d WAV-backed words; not repairing partial cache",
+            len(wav_words),
+        )
         return False
 
     for candidate in _candidate_split_dirs(drive_project):
