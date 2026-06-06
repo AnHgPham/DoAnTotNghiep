@@ -1,8 +1,15 @@
 """Precompute Wav2Vec2 teacher embeddings for KD training.
 
+Supports WAV/FLAC/OPUS/OGG via ``src.audio_io`` (no torchaudio dependency, so it
+also works on the FLAC capped MSWC subsets). Prefer ``--train-files`` so the
+saved path keys match exactly the manifest the student uses; otherwise the
+script scans the split word folders.
+
 Example:
     python scripts/precompute_teacher_embeddings.py \
-      --data-dir data/mswc_en --split train --output-dir outputs/teacher_w2v2_train
+      --data-dir data/mswc_en --train-files train_files_cap220_flac.json \
+      --head-checkpoint outputs/teacher_head/teacher_head.pt \
+      --output-dir outputs/teacher_w2v2_train
 """
 
 from __future__ import annotations
@@ -13,18 +20,18 @@ import sys
 from pathlib import Path
 
 import torch
-import torch.nn.functional as F
-import torchaudio
 from tqdm import tqdm
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
+from src.audio_io import load_waveform
 from src.training.teacher import Wav2Vec2Teacher
 
 SAMPLE_RATE = 16000
 TARGET_LENGTH = 16000
+AUDIO_EXTENSIONS = (".opus", ".wav", ".ogg", ".flac")
 
 
 def load_words(data_dir: Path, split: str) -> list[str] | None:
@@ -34,43 +41,64 @@ def load_words(data_dir: Path, split: str) -> list[str] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def discover_wavs(data_dir: Path, words: list[str] | None, max_per_word: int) -> list[Path]:
+def discover_from_manifest(data_dir: Path, train_files: str) -> list[Path]:
+    """Resolve manifest items the same way the student MSWCDataset does."""
+    manifest_path = Path(train_files)
+    if not manifest_path.is_absolute():
+        manifest_path = data_dir / "splits" / train_files
+    items = json.loads(manifest_path.read_text(encoding="utf-8"))
+    paths: list[Path] = []
+    for item in items:
+        p = Path(item)
+        if not p.is_absolute():
+            p = data_dir / p
+        paths.append(p)
+    return paths
+
+
+def discover_by_scan(data_dir: Path, words: list[str] | None, max_per_word: int) -> list[Path]:
     roots = [data_dir / "clips", data_dir]
     base = next((p for p in roots if p.exists()), data_dir)
+
+    def has_audio(d: Path) -> bool:
+        return any(any(d.glob(f"*{ext}")) for ext in AUDIO_EXTENSIONS)
+
     selected_words = words or sorted(
         d.name for d in base.iterdir()
-        if d.is_dir() and not d.name.startswith(("_", ".")) and any(d.glob("*.wav"))
+        if d.is_dir() and not d.name.startswith(("_", ".")) and has_audio(d)
     )
     paths: list[Path] = []
     for word in selected_words:
         word_dir = base / word
-        wavs = sorted(word_dir.glob("*.wav"))
+        files: list[Path] = []
+        for ext in AUDIO_EXTENSIONS:
+            files.extend(word_dir.glob(f"*{ext}"))
+        files = sorted(set(files))
         if max_per_word > 0:
-            wavs = wavs[:max_per_word]
-        paths.extend(wavs)
+            files = files[:max_per_word]
+        paths.extend(files)
     return paths
 
 
 def load_wave(path: Path) -> torch.Tensor:
-    wav, sr = torchaudio.load(str(path))
-    if sr != SAMPLE_RATE:
-        wav = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(wav)
-    if wav.shape[0] > 1:
-        wav = wav.mean(dim=0, keepdim=True)
-    if wav.shape[-1] < TARGET_LENGTH:
-        wav = F.pad(wav, (0, TARGET_LENGTH - wav.shape[-1]))
-    return wav[..., :TARGET_LENGTH]
+    """Return mono waveform shaped ``(1, TARGET_LENGTH)``."""
+    return load_waveform(path, sample_rate=SAMPLE_RATE, target_length=TARGET_LENGTH)
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Precompute Wav2Vec2 teacher embeddings")
     parser.add_argument("--data-dir", type=Path, default=Path("data/mswc_en"))
     parser.add_argument("--split", type=str, default="train", choices=["train", "val", "eval", "all"])
+    parser.add_argument("--train-files", type=str, default=None,
+                        help="Manifest json (e.g. train_files_cap220_flac.json). "
+                             "Preferred so path keys match the student manifest.")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--model-name", type=str, default="facebook/wav2vec2-base")
     parser.add_argument("--layer", type=int, default=16)
     parser.add_argument("--embedding-dim", type=int, default=64)
-    parser.add_argument("--head-checkpoint", type=str, default=None)
+    parser.add_argument("--head-checkpoint", type=str, default=None,
+                        help="Trained teacher head from scripts/train_teacher_head.py. "
+                             "Without it the projection is random (smoke test only).")
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--shard-size", type=int, default=4096)
     parser.add_argument("--max-per-word", type=int, default=0)
@@ -78,17 +106,24 @@ def main() -> None:
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    words = None if args.split == "all" else load_words(args.data_dir, args.split)
-    wav_paths = discover_wavs(args.data_dir, words, args.max_per_word)
-    if not wav_paths:
-        raise FileNotFoundError(f"No WAV files found under {args.data_dir}")
+
+    if args.train_files:
+        audio_paths = discover_from_manifest(args.data_dir, args.train_files)
+    else:
+        words = None if args.split == "all" else load_words(args.data_dir, args.split)
+        audio_paths = discover_by_scan(args.data_dir, words, args.max_per_word)
+    if not audio_paths:
+        raise FileNotFoundError(f"No audio files found under {args.data_dir}")
+
+    if not args.head_checkpoint:
+        print("WARNING: no --head-checkpoint; projection head is random (smoke test only).")
 
     done_paths = set()
     for shard in args.output_dir.glob("teacher_*.pt"):
         payload = torch.load(shard, map_location="cpu", weights_only=False)
         done_paths.update(payload.get("paths", []))
 
-    pending = [p for p in wav_paths if p.as_posix() not in done_paths]
+    pending = [p for p in audio_paths if p.as_posix() not in done_paths]
     teacher = Wav2Vec2Teacher(
         model_name=args.model_name,
         layer=args.layer,
