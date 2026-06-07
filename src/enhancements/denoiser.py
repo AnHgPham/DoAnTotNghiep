@@ -7,6 +7,8 @@ Provides two backends:
 The wrapper auto-selects based on availability and configuration.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 

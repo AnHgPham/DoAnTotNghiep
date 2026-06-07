@@ -5,6 +5,8 @@ adding a speaker identity check on top of keyword spotting.
 Uses SpeechBrain's pre-trained ECAPA-TDNN model.
 """
 
+from __future__ import annotations
+
 import logging
 from pathlib import Path
 

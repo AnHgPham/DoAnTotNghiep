@@ -17,6 +17,8 @@ the protocol's prototype-management code. OpenMAX-specific scoring is
 exposed via :meth:`get_scores`.
 """
 
+from __future__ import annotations
+
 import numpy as np
 import torch
 from scipy.stats import weibull_min

@@ -11,6 +11,8 @@ Usage:
     python scripts/train.py --config configs/default.yaml --data-dir data/gsc_v2  # fallback for testing
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -81,6 +83,7 @@ def save_checkpoint(
         "loss": loss,
         "model_family": getattr(encoder, "model_family", None),
         "feature_type": getattr(encoder, "feature_type", None),
+        "frontend_type": getattr(encoder, "frontend_type", None),
         "embedding_dim": getattr(encoder, "embedding_dim", None),
     }
     if loss_head is not None:
@@ -92,7 +95,11 @@ def save_checkpoint(
 
 
 def load_checkpoint(path: Path, encoder, optimizer, scheduler, loss_head=None) -> int:
-    checkpoint = torch.load(path, weights_only=False)
+    try:
+        checkpoint = torch.load(path, weights_only=False)
+    except TypeError:
+        # PyTorch 1.12 on ict6 does not expose weights_only yet.
+        checkpoint = torch.load(path)
     encoder.load_state_dict(checkpoint["model_state_dict"])
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
@@ -329,9 +336,22 @@ def _load_word_splits(data_dir: Path, cfg: dict) -> tuple[list[str] | None, list
     return None, []
 
 
-def _load_file_split(data_dir: Path, split: str) -> list[str] | None:
-    path = data_dir / "splits" / f"{split}_files.json"
+def _resolve_file_split_path(data_dir: Path, split: str, manifest: str | None) -> tuple[Path, bool]:
+    if manifest:
+        raw_path = Path(manifest)
+        if raw_path.is_absolute():
+            return raw_path, True
+        if raw_path.parent == Path("."):
+            return data_dir / "splits" / raw_path, True
+        return raw_path, True
+    return data_dir / "splits" / f"{split}_files.json", False
+
+
+def _load_file_split(data_dir: Path, split: str, manifest: str | None = None) -> list[str] | None:
+    path, explicit = _resolve_file_split_path(data_dir, split, manifest)
     if not path.exists():
+        if explicit:
+            raise FileNotFoundError(f"{split} file manifest not found: {path}")
         return None
     payload = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(payload, list):
@@ -370,6 +390,10 @@ def main() -> None:
     parser.add_argument("--resume", type=str, default=None)
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--episodes", type=int, default=None)
+    parser.add_argument("--n-classes", type=int, default=None,
+                        help="Classes per training episode (override config)")
+    parser.add_argument("--n-samples", type=int, default=None,
+                        help="Samples per class per training episode (override config)")
     parser.add_argument("--mining", type=str, default=None,
                         choices=["random", "hard", "semi_hard"],
                         help="Triplet mining strategy (override config)")
@@ -379,6 +403,10 @@ def main() -> None:
                         help="Disable SpecAugment")
     parser.add_argument("--max-per-word", type=int, default=None,
                         help="Max samples per word (override config)")
+    parser.add_argument("--train-files", type=str, default=None,
+                        help="Optional train file manifest. Basenames resolve under data-dir/splits.")
+    parser.add_argument("--val-files", type=str, default=None,
+                        help="Optional validation file manifest. Basenames resolve under data-dir/splits.")
     parser.add_argument("--num-workers", type=int, default=4,
                         help="DataLoader workers (lower for low-RAM systems)")
     parser.add_argument("--val-every", type=int, default=1,
@@ -392,6 +420,14 @@ def main() -> None:
     parser.add_argument("--model-family", type=str, default=None,
                         choices=["dscnn", "edgespot_lite", "edgespot_full", "bcresnet_fs"],
                         help="Encoder family. Default: config model.family or dscnn")
+    parser.add_argument("--feature-type", type=str, default="auto",
+                        choices=["auto", "mfcc", "mel", "mel_pcen"],
+                        help=(
+                            "Frontend override. auto uses MFCC for DSCNN and "
+                            "mel+PCEN for EdgeSpot. mfcc is allowed for EdgeSpot "
+                            "as a no-PCEN ablation. mel_pcen uses mel features "
+                            "plus a trainable PCEN layer in supported models."
+                        ))
     parser.add_argument("--edge-tau", type=int, default=None,
                         help="Width multiplier for EdgeSpotFull/BCResNetFS/EdgeSpot-lite")
     parser.add_argument("--teacher-embeddings-dir", type=str, default=None,
@@ -411,6 +447,12 @@ def main() -> None:
                         help="Minimum val_auc gain for early stopping")
     parser.add_argument("--select-by-gsc-dev", action="store_true",
                         help="Select best checkpoint by GSC-dev ACC@1%% FAR instead of MSWC val_auc")
+    parser.add_argument("--initial-best-metric", type=float, default=None,
+                        help=(
+                            "Seed the best metric when resuming a matrix run. "
+                            "This prevents an existing best.pt from being "
+                            "overwritten by a worse post-resume checkpoint."
+                        ))
     parser.add_argument("--gsc-dev-every", type=int, default=1,
                         help="Run GSC-dev checkpoint selection every N epochs")
     parser.add_argument("--gsc-dev-runs", type=int, default=5,
@@ -430,36 +472,58 @@ def main() -> None:
 
     # Model
     model_family = args.model_family or cfg.get("model", {}).get("family", "dscnn")
+    requested_frontend = args.feature_type
     if model_family == "dscnn":
-        encoder = DSCNN(model_size=cfg["model"]["architecture"][-1]).to(device)
-        feature_type = "mfcc"
+        frontend_type = requested_frontend if requested_frontend != "auto" else "mfcc"
+        if frontend_type not in {"mfcc", "mel", "mel_pcen"}:
+            raise ValueError(f"Unsupported DSCNN frontend: {frontend_type}")
+        feature_type = "mfcc" if frontend_type == "mfcc" else "mel"
+        input_shape = (47, 10) if feature_type == "mfcc" else (40, 101)
+        encoder = DSCNN(
+            model_size=cfg["model"]["architecture"][-1],
+            input_shape=input_shape,
+            use_pcen=(frontend_type == "mel_pcen"),
+        ).to(device)
     elif model_family == "edgespot_lite":
+        frontend_type = requested_frontend if requested_frontend != "auto" else "mel_pcen"
+        if frontend_type not in {"mfcc", "mel", "mel_pcen"}:
+            raise ValueError(f"{model_family} supports mfcc, mel, or mel_pcen frontends")
         encoder = EdgeSpotLite(
             width_mult=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
             embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
-            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
+            use_pcen=(frontend_type == "mel_pcen"),
         ).to(device)
-        feature_type = "mel"
+        feature_type = "mfcc" if frontend_type == "mfcc" else "mel"
     elif model_family == "edgespot_full":
+        frontend_type = requested_frontend if requested_frontend != "auto" else "mel_pcen"
+        if frontend_type not in {"mfcc", "mel", "mel_pcen"}:
+            raise ValueError(f"{model_family} supports mfcc, mel, or mel_pcen frontends")
         encoder = EdgeSpotFull(
             tau=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
             embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
-            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
+            use_pcen=(frontend_type == "mel_pcen"),
         ).to(device)
-        feature_type = "mel"
+        feature_type = "mfcc" if frontend_type == "mfcc" else "mel"
     elif model_family == "bcresnet_fs":
+        frontend_type = requested_frontend if requested_frontend != "auto" else "mel_pcen"
+        if frontend_type not in {"mel", "mel_pcen"}:
+            raise ValueError(f"{model_family} supports only mel or mel_pcen frontends")
         encoder = BCResNetFS(
             tau=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
             embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
-            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
+            use_pcen=(frontend_type == "mel_pcen"),
         ).to(device)
         feature_type = "mel"
     else:
         raise ValueError(f"Unsupported model_family: {model_family}")
     encoder.model_family = model_family
     encoder.feature_type = feature_type
+    encoder.frontend_type = frontend_type
     param_count = sum(p.numel() for p in encoder.parameters())
-    logger.info("%s: %d parameters, feature_type=%s", model_family, param_count, feature_type)
+    logger.info(
+        "%s: %d parameters, feature_type=%s, frontend_type=%s",
+        model_family, param_count, feature_type, frontend_type,
+    )
 
     # Data: default to MSWC for training, GSC only for evaluation
     if args.data_dir:
@@ -487,8 +551,8 @@ def main() -> None:
 
     # Load train/val word splits if available (from MSWC download)
     train_words, val_word_list = _load_word_splits(data_dir, cfg)
-    train_file_paths: list[str] | None = _load_file_split(data_dir, "train")
-    val_file_paths: list[str] | None = _load_file_split(data_dir, "val")
+    train_file_paths: list[str] | None = _load_file_split(data_dir, "train", args.train_files)
+    val_file_paths: list[str] | None = _load_file_split(data_dir, "val", args.val_files)
     if train_words is None:
         all_words = discover_words(data_dir)
         logger.info("Discovered %d words in %s", len(all_words), data_dir)
@@ -555,8 +619,8 @@ def main() -> None:
     )
 
     train_cfg = cfg["training"]
-    n_classes = min(train_cfg["n_classes"], len(dataset.word_to_idx))
-    n_samples = train_cfg["n_samples"]
+    n_classes = min(args.n_classes or train_cfg["n_classes"], len(dataset.word_to_idx))
+    n_samples = args.n_samples or train_cfg["n_samples"]
     n_episodes = args.episodes or train_cfg["episodes_per_epoch"]
     n_epochs = args.epochs or train_cfg["epochs"]
 
@@ -733,7 +797,13 @@ def main() -> None:
 
     # Training loop
     save_every = max(1, args.save_every or cfg["checkpoint"]["save_every"])
-    best_metric = -float("inf")
+    best_metric = (
+        float(args.initial_best_metric)
+        if args.initial_best_metric is not None
+        else -float("inf")
+    )
+    if args.initial_best_metric is not None:
+        logger.info("Initial best metric from resume context: %.4f", best_metric)
     val_every = max(1, args.val_every)
     stale_val_checks = 0
 

@@ -5,6 +5,8 @@ ACC@FAR, FRR@FAR, and DET plotting.
 All metrics operate on binary (keyword vs non-keyword) decisions.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 
 import matplotlib.pyplot as plt
@@ -154,7 +156,6 @@ def compute_open_set_acc_at_far(
         y_true_labels,
         y_pred_labels,
         accepted,
-        strict=True,
     ):
         if is_known == 1:
             total_correct += int(is_accepted and pred_label == true_label)

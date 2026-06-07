@@ -5,6 +5,8 @@ Usage:
     python scripts/evaluate.py --config configs/default.yaml --checkpoint checkpoints/triplet/best_v2_margin1.0_colab.pt --protocol gsc_random
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import logging
@@ -41,6 +43,99 @@ PROTOCOL_MAP = {
 }
 
 
+def resolve_frontend_type(
+    checkpoint: dict,
+    cfg: dict,
+    model_family: str,
+    requested_frontend: str = "auto",
+) -> tuple[str, str]:
+    """Resolve frontend metadata for evaluation.
+
+    ``feature_type`` controls sample-provider feature extraction
+    (``mfcc`` or ``mel``). ``frontend_type`` additionally records whether a
+    mel frontend uses the model-side PCEN layer (``mel_pcen``).
+    """
+    if requested_frontend != "auto":
+        frontend_type = requested_frontend
+    else:
+        frontend_type = checkpoint.get("frontend_type")
+        if not frontend_type:
+            ckpt_feature = checkpoint.get("feature_type")
+            if ckpt_feature == "mfcc":
+                frontend_type = "mfcc"
+            elif ckpt_feature == "mel":
+                if model_family == "dscnn":
+                    frontend_type = "mel"
+                else:
+                    use_pcen = bool(cfg.get("model", {}).get("edge_use_pcen", True))
+                    frontend_type = "mel_pcen" if use_pcen else "mel"
+
+    if not frontend_type:
+        if model_family == "dscnn":
+            frontend_type = "mfcc"
+        elif model_family in {"edgespot_lite", "edgespot_full", "bcresnet_fs"}:
+            use_pcen = bool(cfg.get("model", {}).get("edge_use_pcen", True))
+            frontend_type = "mel_pcen" if use_pcen else "mel"
+        else:
+            raise ValueError(f"Unsupported model_family: {model_family}")
+
+    if frontend_type == "pcen":
+        frontend_type = "mel_pcen"
+    if frontend_type not in {"mfcc", "mel", "mel_pcen"}:
+        raise ValueError(f"Unsupported frontend_type: {frontend_type}")
+
+    if model_family == "bcresnet_fs" and frontend_type == "mfcc":
+        raise ValueError("bcresnet_fs evaluation supports only mel or mel_pcen frontends")
+
+    feature_type = "mfcc" if frontend_type == "mfcc" else "mel"
+    return frontend_type, feature_type
+
+
+def build_encoder_for_eval(
+    model_family: str,
+    frontend_type: str,
+    cfg: dict,
+    edge_tau: int | None = None,
+) -> torch.nn.Module:
+    """Construct an encoder matching checkpoint frontend metadata."""
+    feature_type = "mfcc" if frontend_type == "mfcc" else "mel"
+    use_pcen = frontend_type == "mel_pcen"
+
+    if model_family == "dscnn":
+        model_size = cfg["model"]["architecture"][-1]
+        input_shape = (47, 10) if feature_type == "mfcc" else (40, 101)
+        encoder = DSCNN(
+            model_size=model_size,
+            input_shape=input_shape,
+            use_pcen=use_pcen,
+        )
+    elif model_family == "edgespot_lite":
+        encoder = EdgeSpotLite(
+            width_mult=int(edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
+            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
+            use_pcen=use_pcen,
+        )
+    elif model_family == "edgespot_full":
+        encoder = EdgeSpotFull(
+            tau=int(edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
+            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
+            use_pcen=use_pcen,
+        )
+    elif model_family == "bcresnet_fs":
+        encoder = BCResNetFS(
+            tau=int(edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
+            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
+            use_pcen=use_pcen,
+        )
+    else:
+        raise ValueError(f"Unsupported model_family: {model_family}")
+
+    encoder.model_family = model_family
+    encoder.feature_type = feature_type
+    encoder.frontend_type = frontend_type
+    return encoder
+
+
 def _mean_det_curve(results: dict, n_points: int = 1000) -> tuple[np.ndarray, np.ndarray]:
     """Average saved per-run DET curves on a common FAR grid."""
     common_far = np.linspace(0, 1, n_points)
@@ -67,6 +162,10 @@ def main() -> None:
     parser.add_argument("--model-family", type=str, default="auto",
                         choices=["auto", "dscnn", "edgespot_lite", "edgespot_full", "bcresnet_fs"],
                         help="Encoder family. 'auto' uses checkpoint metadata, then config.")
+    parser.add_argument("--feature-type", type=str, default="auto",
+                        choices=["auto", "mfcc", "mel", "mel_pcen"],
+                        help="Frontend override. 'auto' uses checkpoint frontend_type, "
+                             "then checkpoint feature_type, then model-family defaults.")
     parser.add_argument("--edge-tau", type=int, default=None,
                         help="Width multiplier for EdgeSpot/BCResNet families")
     parser.add_argument(
@@ -146,46 +245,36 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Device: %s", device)
 
-    checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
+    try:
+        checkpoint = torch.load(args.checkpoint, map_location=device, weights_only=False)
+    except TypeError:
+        # PyTorch 1.12 on ict6 does not expose weights_only yet.
+        checkpoint = torch.load(args.checkpoint, map_location=device)
     model_family = args.model_family
     if model_family == "auto":
         model_family = checkpoint.get("model_family") or cfg.get("model", {}).get("family", "dscnn")
-    if model_family == "dscnn":
-        model_size = cfg["model"]["architecture"][-1]
-        encoder = DSCNN(model_size=model_size).to(device)
-        feature_type = "mfcc"
-    elif model_family == "edgespot_lite":
-        encoder = EdgeSpotLite(
-            width_mult=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
-            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
-            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
-        ).to(device)
-        feature_type = "mel"
-    elif model_family == "edgespot_full":
-        encoder = EdgeSpotFull(
-            tau=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
-            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
-            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
-        ).to(device)
-        feature_type = "mel"
-    elif model_family == "bcresnet_fs":
-        encoder = BCResNetFS(
-            tau=int(args.edge_tau or cfg.get("model", {}).get("edge_width_mult", 4)),
-            embedding_dim=int(cfg.get("model", {}).get("edge_embedding_dim", 64)),
-            use_pcen=bool(cfg.get("model", {}).get("edge_use_pcen", True)),
-        ).to(device)
-        feature_type = "mel"
-    else:
-        raise ValueError(f"Unsupported model_family: {model_family}")
+    frontend_type, feature_type = resolve_frontend_type(
+        checkpoint,
+        cfg,
+        model_family=model_family,
+        requested_frontend=args.feature_type,
+    )
+    encoder = build_encoder_for_eval(
+        model_family=model_family,
+        frontend_type=frontend_type,
+        cfg=cfg,
+        edge_tau=args.edge_tau,
+    ).to(device)
 
     encoder.load_state_dict(checkpoint["model_state_dict"])
     encoder.eval()
     logger.info(
-        "Loaded checkpoint: %s (epoch %d, model_family=%s, feature_type=%s)",
+        "Loaded checkpoint: %s (epoch %d, model_family=%s, feature_type=%s, frontend_type=%s)",
         args.checkpoint,
         checkpoint["epoch"],
         model_family,
         feature_type,
+        frontend_type,
     )
 
     # Setup protocol
@@ -247,6 +336,10 @@ def main() -> None:
         device=device,
         target_far=args.target_far if args.target_far is not None else cfg["evaluation"]["target_far"],
     )
+    results["checkpoint"] = str(args.checkpoint)
+    results["model_family"] = model_family
+    results["feature_type"] = feature_type
+    results["frontend_type"] = frontend_type
 
     output_dir = Path(args.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)

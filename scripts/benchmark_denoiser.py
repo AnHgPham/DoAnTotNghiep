@@ -8,6 +8,8 @@ Usage:
     python scripts/benchmark_denoiser.py
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import random

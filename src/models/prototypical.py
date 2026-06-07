@@ -11,6 +11,8 @@ Mining strategies:
                    (FaceNet-style). Falls back to hard if no semi-hard exists.
 """
 
+from __future__ import annotations
+
 import random
 from typing import Iterator
 

@@ -2,7 +2,8 @@
 
 This is a practical reimplementation of the ideas used in the EdgeSpot paper:
 40x101 mel input, optional trainable PCEN, fused early temporal blocks, temporal
-relative positional convolution, and single-head temporal self-attention.
+relative positional convolution, and single-head temporal self-attention. MFCC
+input is supported as an ablation path when PCEN is off.
 
 It intentionally omits the heavyweight Wav2Vec2 teacher distillation path so it
 can be trained in the existing project pipeline first.
@@ -244,14 +245,14 @@ class EdgeSpotLite(nn.Module):
         )
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for input ``(B, 1, 40, 101)`` mel features."""
+        """Forward pass for input ``(B, 1, F, T)`` features."""
         x = self.pcen(x)
         x = self.stem(x)
         x = self.stage1(x)
         x = self.stage2(x)
         x = self.stage3(x)
         x = self.stage4(x)
-        x = self.freq_collapse(x).squeeze(2)  # (B, C, T)
+        x = self.freq_collapse(x).mean(dim=2)  # (B, C, T)
         x = x + self.positional(x)
         x = x.transpose(1, 2)  # (B, T, C)
         x = self.to_attention_dim(x)

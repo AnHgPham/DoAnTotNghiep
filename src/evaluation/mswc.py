@@ -4,13 +4,15 @@ Loads audio from data/mswc_en/clips/<word>/, splits support/query
 using a 1:9 ratio, and returns batched MFCC tensors.
 """
 
+from __future__ import annotations
+
 import logging
 import random
 from pathlib import Path
 
 import torch
-import torchaudio
 
+from src.audio_io import load_waveform
 from src.features.mel import MelSpectrogramExtractor
 from src.features.mfcc import MFCCExtractor
 
@@ -22,17 +24,7 @@ TARGET_LENGTH = 16000
 
 def _load_wav(path: Path) -> torch.Tensor:
     """Load and preprocess a single audio file to (1, 16000)."""
-    waveform, sr = torchaudio.load(str(path))
-    if sr != SAMPLE_RATE:
-        waveform = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(waveform)
-    if waveform.shape[0] > 1:
-        waveform = waveform.mean(dim=0, keepdim=True)
-    length = waveform.shape[-1]
-    if length < TARGET_LENGTH:
-        waveform = torch.nn.functional.pad(waveform, (0, TARGET_LENGTH - length))
-    elif length > TARGET_LENGTH:
-        waveform = waveform[..., :TARGET_LENGTH]
-    return waveform
+    return load_waveform(path, sample_rate=SAMPLE_RATE, target_length=TARGET_LENGTH)
 
 
 class MSWCFewShotProvider:

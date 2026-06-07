@@ -5,11 +5,31 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Few-Shot KWS - Keyword Spotting</title>
   <meta name="description" content="Few-Shot Open-Set Keyword Spotting Demo - DSCNN-L Encoder">
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=open-set-calibration-v1">
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to main content</a>
   <div class="toast-container" id="toasts" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div class="modal-backdrop hidden" id="modelSwitchModal" role="dialog" aria-modal="true" aria-labelledby="modelSwitchTitle">
+    <div class="modal-card" role="document">
+      <div class="modal-header">
+        <div>
+          <p class="modal-kicker">Switch checkpoint</p>
+          <h2 id="modelSwitchTitle">Choose enrollment handling</h2>
+        </div>
+        <button class="icon-btn" id="modelSwitchCloseBtn" type="button" aria-label="Close model switch dialog" onclick="closeModelSwitchModal()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div class="modal-model-summary" id="modelSwitchSummary"></div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="modelConfirmRebuildBtn" type="button" onclick="confirmModelSwitch('rebuild')">Switch and rebuild enrollment</button>
+        <button class="btn btn-ghost" id="modelConfirmClearBtn" type="button" onclick="confirmModelSwitch('clear')">Switch and clear enrollment</button>
+        <button class="btn btn-ghost" type="button" onclick="closeModelSwitchModal()">Cancel</button>
+      </div>
+      <p class="text-xs text-muted mt-8" id="modelSwitchModalStatus"></p>
+    </div>
+  </div>
 
   <div class="app-layout">
     <!-- Sidebar -->
@@ -89,6 +109,25 @@
 
     <!-- Main Content -->
     <main class="main-content" id="mainContent" tabindex="-1">
+      <section class="model-switcher-shell" aria-label="Model checkpoint switcher">
+        <div class="model-switcher-header">
+          <div>
+            <p class="model-switcher-kicker">Active checkpoint</p>
+            <h2 id="activeModelTitle">Loading model...</h2>
+          </div>
+          <div class="model-switcher-actions">
+            <div class="language-toggle" role="group" aria-label="Language">
+              <button class="lang-btn" type="button" data-lang="en" onclick="setLanguage('en')" aria-pressed="true">EN</button>
+              <button class="lang-btn" type="button" data-lang="vi" onclick="setLanguage('vi')" aria-pressed="false">VI</button>
+            </div>
+            <button class="btn btn-ghost btn-sm" type="button" id="modelProfilesReloadTop" onclick="loadModelProfiles()">Reload profiles</button>
+          </div>
+        </div>
+        <div class="model-switcher-grid" id="modelQuickCards" aria-live="polite">
+          <div class="model-card-skeleton">Loading checkpoints...</div>
+        </div>
+        <div class="alert alert-warning mt-12 hidden" id="modelTopError"></div>
+      </section>
 
       <!-- Enrollment -->
       <div class="tab-panel active" id="tab-enroll">
@@ -269,6 +308,11 @@
                 <input type="checkbox" id="perClassChk" checked>
                 <label for="perClassChk">Use per-class threshold</label>
               </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="closeWordGuardChk" checked>
+                <label for="closeWordGuardChk">Close-word guard</label>
+              </div>
+              <p class="text-xs text-muted mt-4">Reject uncertain matches when top-1 and top-2 words are too close.</p>
               <button class="btn btn-primary btn-block mt-12" id="detectBtn" onclick="detectSingle()">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
                 Detect Keyword
@@ -324,9 +368,9 @@
               <div class="form-group">
                 <label class="form-label">Threshold</label>
                 <div class="range-row">
-                  <input type="range" min="0" max="2" step="0.01" value="0.7" id="longThr"
+                  <input type="range" min="0" max="2" step="0.01" value="0.3" id="longThr"
                          oninput="document.getElementById('longThrVal').textContent=parseFloat(this.value).toFixed(2)">
-                  <span class="range-value" id="longThrVal">0.70</span>
+                  <span class="range-value" id="longThrVal">0.30</span>
                 </div>
               </div>
               <div class="form-group">
@@ -339,15 +383,20 @@
               <div class="form-group">
                 <label class="form-label">Min duration (ms)</label>
                 <div class="range-row">
-                  <input type="range" min="80" max="5000" step="20" value="200" id="longMinDur"
+                  <input type="range" min="80" max="5000" step="20" value="120" id="longMinDur"
                          oninput="document.getElementById('minDurVal').textContent=this.value">
-                  <span class="range-value" id="minDurVal">200</span>
+                  <span class="range-value" id="minDurVal">120</span>
                 </div>
               </div>
               <div class="checkbox-row">
                 <input type="checkbox" id="longPerClass" checked>
                 <label for="longPerClass">Per-class threshold</label>
               </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="longCloseWordGuard" checked>
+                <label for="longCloseWordGuard">Close-word guard</label>
+              </div>
+              <p class="text-xs text-muted mt-4">Reject uncertain matches when top-1 and top-2 words are too close.</p>
               <div class="form-group mt-8">
                 <label class="form-label">Distance metric</label>
                 <div class="badge badge-neutral" style="padding:6px 12px;font-size:13px">L2 (Euclidean Distance)</div>
@@ -367,12 +416,21 @@
                 </div>
               </div>
               <p class="text-xs text-muted mb-8">Upload a TXT file to check accuracy after detection</p>
-              <div class="drop-zone" id="gtDrop" role="button" tabindex="0" aria-label="Choose ground truth file" onclick="document.getElementById('gtFile').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" style="padding:20px 16px">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:24px;height:24px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                <p>Drop .txt file here</p>
-                <p class="drop-sub">Format: expected_keyword (one per line, matching segment order)</p>
+              <div class="gt-upload-grid">
+                <div class="drop-zone" id="gtDrop" role="button" tabindex="0" aria-label="Choose ground truth file" onclick="document.getElementById('gtFile').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" style="padding:20px 16px">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:24px;height:24px"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <p>Drop .txt file here</p>
+                  <p class="drop-sub">Format: expected_keyword (one per line, matching segment order)</p>
+                </div>
+                <div class="drop-zone" id="timingDrop" role="button" tabindex="0" aria-label="Choose timing JSON file" onclick="document.getElementById('timingFile').click()" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" style="padding:20px 16px">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:24px;height:24px"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                  <p>Drop .timings.json here</p>
+                  <p class="drop-sub">Optional: upload .timings.json to compare detections by time overlap</p>
+                </div>
               </div>
               <input type="file" id="gtFile" accept=".txt,.csv" class="hidden">
+              <input type="file" id="timingFile" accept=".json,application/json" class="hidden">
+              <div class="gt-preview hidden" id="gtPreview" aria-live="polite"></div>
               <div class="hint-box mt-8">
                 <p class="text-xs text-muted mb-4"><strong>TXT format:</strong></p>
                 <pre class="text-xs font-mono text-secondary" style="white-space:pre-wrap;line-height:1.7">yes
@@ -468,8 +526,22 @@ yes,no,stop,go,up,down</pre>
           <div class="grid-2">
             <div>
               <div class="form-group">
+                <label class="form-label">Open-set preset</label>
+                <select class="form-input" id="osPreset" onchange="applyOpenSetPreset()">
+                  <option value="gsc_17_17">GSC Open-Set 17/17</option>
+                  <option value="manual">Manual split</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Known/enrolled GSC words</label>
+                <textarea class="form-input" id="osKnownWords" rows="2">yes,stop,happy,bird,dog,tree,marvin,four,learn,wow,sheila,zero,down,left,right,off,three</textarea>
+              </div>
+              <div class="form-group">
                 <label class="form-label">Unknown GSC words to test</label>
-                <input class="form-input" type="text" id="osWords" value="cat,bed,house,wow,sheila">
+                <textarea class="form-input" id="osWords" rows="2">no,go,up,on,one,two,five,six,seven,eight,nine,bed,cat,house,backward,forward,follow</textarea>
+              </div>
+              <div class="alert mb-12" id="osSplitPreview">
+                Known: 17 words. Unknown: 17 words. Holdout: visual.
               </div>
               <div class="form-group">
                 <label class="form-label">Samples per word</label>
@@ -482,12 +554,39 @@ yes,no,stop,go,up,down</pre>
               <div class="form-group">
                 <label class="form-label">Threshold</label>
                 <div class="range-row">
-                  <input type="range" min="0" max="2" step="0.01" value="0.85" id="osThr"
+                  <input type="range" min="0" max="2" step="0.01" value="0.30" id="osThr"
                          oninput="document.getElementById('osThrVal').textContent=parseFloat(this.value).toFixed(2)">
-                  <span class="range-value" id="osThrVal">0.85</span>
+                  <span class="range-value" id="osThrVal">0.30</span>
                 </div>
               </div>
-              <button class="btn btn-primary mt-8" onclick="toast('info','Coming soon - requires GSC data')">Run Test</button>
+              <div class="form-group">
+                <label class="form-label">Accept margin</label>
+                <div class="range-row">
+                  <input type="range" min="0" max="0.10" step="0.01" value="0.05" id="osAcceptMargin"
+                         oninput="document.getElementById('osAcceptMarginVal').textContent=parseFloat(this.value).toFixed(2)">
+                  <span class="range-value" id="osAcceptMarginVal">0.05</span>
+                </div>
+              </div>
+              <div class="form-group">
+                <label class="form-label">Random seed</label>
+                <input class="form-input" type="number" id="osSeed" value="1234" min="0" step="1">
+              </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="osPerClass" checked>
+                <label for="osPerClass">Per-class threshold</label>
+              </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="osCloseWordGuard" checked>
+                <label for="osCloseWordGuard">Close-word guard</label>
+              </div>
+              <p class="text-xs text-muted mt-4">Known words are the candidate labels. Unknown words are sampled from local GSC folders and must be rejected as "unknown".</p>
+              <button class="btn btn-primary btn-block mt-12" id="osRunBtn" onclick="runOpenSetTest()">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" width="16" height="16"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                Run Open-Set Test
+              </button>
+              <button class="btn btn-ghost btn-block mt-8" id="osCalibrateBtn" onclick="runOpenSetCalibration()">
+                Calibrate Open-Set
+              </button>
             </div>
             <div id="osResult">
               <div class="empty-state">
@@ -504,6 +603,28 @@ yes,no,stop,go,up,down</pre>
         <div class="page-header">
           <h2>Model Information</h2>
           <p>Architecture details and evaluation results</p>
+        </div>
+        <div class="card mb-16">
+          <div class="card-header"><div class="card-title">Model Checkpoint</div></div>
+          <div class="model-profile-grid" id="modelProfileCards" aria-live="polite">
+            <div class="model-card-skeleton">Loading checkpoints...</div>
+          </div>
+          <div class="model-profile-fallback mt-12">
+            <div class="form-group mb-0">
+              <label class="form-label" for="modelProfileSelect">Fallback selector</label>
+              <select class="form-input" id="modelProfileSelect">
+                <option value="">Loading checkpoints...</option>
+              </select>
+            </div>
+            <button class="btn btn-primary" id="modelSwitchBtn" onclick="requestModelSwitch(document.getElementById('modelProfileSelect').value)">
+              Use selected model
+            </button>
+          </div>
+          <div class="alert alert-warning mt-12 hidden" id="modelProfileWarning">
+            Switching checkpoint needs a fresh enrollment profile. Choose rebuild if audio samples are still in this session.
+          </div>
+          <div class="alert alert-warning mt-12 hidden" id="modelProfileError"></div>
+          <p class="text-xs text-muted mt-8" id="modelProfileStatus">Loading model profiles...</p>
         </div>
         <div class="card mb-16">
           <div class="card-header"><div class="card-title">Architecture</div></div>
@@ -523,6 +644,6 @@ yes,no,stop,go,up,down</pre>
     </main>
   </div>
 
-  <script src="/static/app.js"></script>
+  <script src="/static/app.js?v=open-set-calibration-v1"></script>
 </body>
 </html>

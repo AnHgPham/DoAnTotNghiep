@@ -16,6 +16,8 @@ few-shot regimes — it has a single hyperparameter (temperature ``T``) and
 uses every prototype's distance, not only the support tail.
 """
 
+from __future__ import annotations
+
 import numpy as np
 import torch
 

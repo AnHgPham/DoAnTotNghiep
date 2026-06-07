@@ -4,7 +4,7 @@ This module keeps the implementation practical for the current codebase while
 matching the architectural ingredients needed for paper-grade experiments:
 40x101 mel input, trainable PCEN, fused early temporal blocks, BC-ResNet-style
 blocks, temporal positional depthwise Conv1D, single-head SDPA, and a 64-D
-embedding head.
+embedding head. MFCC input is supported as an ablation path when PCEN is off.
 """
 
 from __future__ import annotations
@@ -107,14 +107,20 @@ class EdgeSpotFull(nn.Module):
         return nn.Sequential(*blocks)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        """Forward pass for ``(B, 1, 40, 101)`` mel features."""
+        """Forward pass for ``(B, 1, F, T)`` features.
+
+        The original EdgeSpot-style path uses ``(F, T) = (40, 101)`` mel
+        features. MFCC ablations use a shorter time axis and can leave more
+        than one frequency row after ``freq_collapse``, so we average over the
+        remaining frequency dimension instead of assuming it is exactly 1.
+        """
         x = self.pcen(x)
         x = self.stem(x)
         x = self.stage1(x)
         x = self.stage2(x)
         x = self.stage3(x)
         x = self.stage4(x)
-        x = self.freq_collapse(x).squeeze(2)  # (B, C, T)
+        x = self.freq_collapse(x).mean(dim=2)  # (B, C, T)
         x = x + self.positional(x)
         x = x.transpose(1, 2)
         x = self.to_attention_dim(x)

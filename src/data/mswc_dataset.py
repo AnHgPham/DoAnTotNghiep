@@ -4,14 +4,16 @@ Loads WAV files from a directory of word folders, extracts features, and provide
 an episodic DataLoader compatible with Triplet/ArcFace/SCAF training.
 """
 
+from __future__ import annotations
+
 import logging
 import random
 from pathlib import Path
 
 import torch
-import torchaudio
 from torch.utils.data import Dataset, DataLoader
 
+from src.audio_io import load_waveform
 from src.features.mel import MelSpectrogramExtractor
 from src.features.mfcc import MFCCExtractor
 
@@ -19,6 +21,17 @@ logger = logging.getLogger(__name__)
 
 SAMPLE_RATE = 16000
 TARGET_LENGTH = 16000
+AUDIO_EXTENSIONS = (".opus", ".wav", ".ogg", ".flac")
+
+
+def _list_audio_files(word_dir: Path, limit: int = 0) -> list[Path]:
+    files: list[Path] = []
+    for ext in AUDIO_EXTENSIONS:
+        for path in word_dir.glob(f"*{ext}"):
+            files.append(path)
+            if limit > 0 and len(files) >= limit:
+                return sorted(files)
+    return sorted(set(files))
 
 
 class MSWCDataset(Dataset):
@@ -30,7 +43,7 @@ class MSWCDataset(Dataset):
         root_dir: Root directory containing word folders.
         words: List of word names to include.
         max_per_word: Maximum samples per word (cap for balance). ``<= 0`` uses
-            all ``*.wav`` files found for each word.
+            all supported audio files found for each word.
         noise_augmenter: Optional NoiseAugmenter for training.
         wave_augmenter: Optional WaveformAugmenter for training.
         spec_augmenter: Optional SpecAugment applied to MFCC features (training only).
@@ -68,6 +81,8 @@ class MSWCDataset(Dataset):
         self.samples: list[tuple[Path, int]] = []
         self.word_to_idx: dict[str, int] = {}
         self.idx_to_word: dict[int, str] = {}
+        self.indices_by_label: dict[int, list[int]] = {}
+        self.max_load_retries = 4
 
         selected_words = sorted(words)
         for i, word in enumerate(selected_words):
@@ -86,11 +101,11 @@ class MSWCDataset(Dataset):
 
             rng = random.Random(42)
             for word in selected_words:
-                wav_files = sorted(set(grouped.get(word, [])))
-                if max_per_word > 0 and len(wav_files) > max_per_word:
-                    wav_files = rng.sample(wav_files, max_per_word)
+                audio_files = sorted(set(grouped.get(word, [])))
+                if max_per_word > 0 and len(audio_files) > max_per_word:
+                    audio_files = rng.sample(audio_files, max_per_word)
                 label = self.word_to_idx[word]
-                for f in wav_files:
+                for f in audio_files:
                     self.samples.append((f, label))
 
             missing = [word for word in selected_words if not grouped.get(word)]
@@ -109,6 +124,7 @@ class MSWCDataset(Dataset):
                 "Dataset: %d samples, %d words from %s",
                 len(self.samples), len(self.word_to_idx), self.root_dir,
             )
+            self._rebuild_indices_by_label()
             return
 
         for i, word in enumerate(selected_words):
@@ -120,18 +136,64 @@ class MSWCDataset(Dataset):
                 logger.warning("Word directory not found: %s", word)
                 continue
 
-            wav_files = sorted(word_dir.glob("*.wav"))
-            if max_per_word > 0 and len(wav_files) > max_per_word:
+            audio_files = _list_audio_files(word_dir, limit=max_per_word)
+            if max_per_word > 0 and len(audio_files) > max_per_word:
                 rng = random.Random(42)
-                wav_files = rng.sample(wav_files, max_per_word)
+                audio_files = rng.sample(audio_files, max_per_word)
 
-            for f in wav_files:
+            for f in audio_files:
                 self.samples.append((f, i))
 
         logger.info(
             "Dataset: %d samples, %d words from %s",
             len(self.samples), len(self.word_to_idx), self.root_dir,
         )
+        self._rebuild_indices_by_label()
+
+    def _rebuild_indices_by_label(self) -> None:
+        self.indices_by_label = {}
+        for idx, (_, label) in enumerate(self.samples):
+            self.indices_by_label.setdefault(label, []).append(idx)
+
+    def _load_waveform_with_retry(self, idx: int, path: Path, label: int) -> torch.Tensor:
+        candidates = [idx]
+        same_label = self.indices_by_label.get(label, [])
+        if len(same_label) > 1:
+            start = idx % len(same_label)
+            for offset in range(1, min(self.max_load_retries, len(same_label))):
+                candidate_idx = same_label[(start + offset) % len(same_label)]
+                if candidate_idx != idx:
+                    candidates.append(candidate_idx)
+
+        last_error: Exception | None = None
+        seen: set[int] = set()
+        for candidate_idx in candidates:
+            if candidate_idx in seen:
+                continue
+            seen.add(candidate_idx)
+            candidate_path, _ = self.samples[candidate_idx]
+            try:
+                return load_waveform(
+                    candidate_path,
+                    sample_rate=SAMPLE_RATE,
+                    target_length=TARGET_LENGTH,
+                )
+            except Exception as exc:
+                last_error = exc
+                logger.warning(
+                    "Failed to load audio %s for label %d: %s",
+                    candidate_path,
+                    label,
+                    exc,
+                )
+
+        logger.warning(
+            "Falling back to silence after audio load failures for label %d, first path %s: %s",
+            label,
+            path,
+            last_error,
+        )
+        return torch.zeros(1, TARGET_LENGTH)
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -139,17 +201,7 @@ class MSWCDataset(Dataset):
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, int]:
         path, label = self.samples[idx]
 
-        waveform, sr = torchaudio.load(str(path))
-        if sr != SAMPLE_RATE:
-            waveform = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(waveform)
-        if waveform.shape[0] > 1:
-            waveform = waveform.mean(dim=0, keepdim=True)
-
-        # Pad/trim to 1 second
-        if waveform.shape[-1] < TARGET_LENGTH:
-            waveform = torch.nn.functional.pad(waveform, (0, TARGET_LENGTH - waveform.shape[-1]))
-        elif waveform.shape[-1] > TARGET_LENGTH:
-            waveform = waveform[..., :TARGET_LENGTH]
+        waveform = self._load_waveform_with_retry(idx, path, label)
 
         # Augmentation (training only)
         if self.wave_augmenter is not None:

@@ -5,6 +5,8 @@ Usage:
         results/gsc_random_results.json --output results/det_curves.png
 """
 
+from __future__ import annotations
+
 import argparse
 import json
 import sys

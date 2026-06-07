@@ -6,6 +6,8 @@ Three protocols:
 - MSWC Randomized: 5 positive + 50 negative from 263 MSWC eval words
 """
 
+from __future__ import annotations
+
 import logging
 import random
 from collections import Counter, defaultdict
@@ -419,8 +421,8 @@ class EvaluationProtocol:
                 run_metrics_by_far[f"frr_at_{int(far_point * 100)}far"] = frr_far
 
             keyword_acc = compute_keyword_accuracy(
-                [label for label, is_known in zip(y_true_labels, y_true, strict=True) if is_known == 1],
-                [label for label, is_known in zip(y_pred_labels, y_true, strict=True) if is_known == 1],
+                [label for label, is_known in zip(y_true_labels, y_true) if is_known == 1],
+                [label for label, is_known in zip(y_pred_labels, y_true) if is_known == 1],
             )
             far_curve, frr_curve = compute_det_curve(y_true, scores)
             operating_threshold = get_threshold_at_far(y_true, scores, target_far=target_far)
@@ -429,7 +431,7 @@ class EvaluationProtocol:
             confusion: dict[str, Counter] = defaultdict(Counter)
             per_word_counter: dict[str, Counter] = defaultdict(Counter)
             for is_known, true_label, pred_label, is_accepted in zip(
-                y_true, y_true_labels, y_pred_labels, accepted, strict=True,
+                y_true, y_true_labels, y_pred_labels, accepted,
             ):
                 final_pred = pred_label if is_accepted else "unknown"
                 confusion[true_label][final_pred] += 1

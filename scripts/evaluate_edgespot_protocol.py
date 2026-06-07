@@ -14,6 +14,9 @@ def main() -> None:
     parser.add_argument("--config", default="configs/default.yaml")
     parser.add_argument("--model-family", default="auto",
                         choices=["auto", "dscnn", "edgespot_lite", "edgespot_full", "bcresnet_fs"])
+    parser.add_argument("--feature-type", default="auto",
+                        choices=["auto", "mfcc", "mel", "mel_pcen"],
+                        help="Frontend override for ablations. Default uses checkpoint metadata.")
     parser.add_argument("--edge-tau", type=int, default=None)
     parser.add_argument("--k-shot", type=int, default=10)
     parser.add_argument("--n-runs", type=int, default=100)
@@ -27,6 +30,7 @@ def main() -> None:
         "--config", args.config,
         "--checkpoint", args.checkpoint,
         "--model-family", args.model_family,
+        "--feature-type", args.feature_type,
         "--protocol", "gsc_edgespot_exact",
         "--k-shot", str(args.k_shot),
         "--n-runs", str(args.n_runs),

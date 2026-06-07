@@ -7,6 +7,8 @@ Four tabs:
   4. Settings           – threshold, denoising toggle, speaker gate, model info
 """
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

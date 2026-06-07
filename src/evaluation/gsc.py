@@ -6,13 +6,15 @@ The EdgeSpot reproduction protocol also needs a true silence class, which is
 generated from deterministic 1-second crops of ``_background_noise_`` files.
 """
 
+from __future__ import annotations
+
 import logging
 import random
 from pathlib import Path
 
 import torch
-import torchaudio
 
+from src.audio_io import load_waveform, pad_or_trim
 from src.features.mel import MelSpectrogramExtractor
 from src.features.mfcc import MFCCExtractor
 
@@ -24,17 +26,7 @@ TARGET_LENGTH = 16000
 
 def _load_wav(path: Path) -> torch.Tensor:
     """Load and preprocess a single WAV file to (1, 16000)."""
-    waveform, sr = torchaudio.load(str(path))
-    if sr != SAMPLE_RATE:
-        waveform = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(waveform)
-    if waveform.shape[0] > 1:
-        waveform = waveform.mean(dim=0, keepdim=True)
-    length = waveform.shape[-1]
-    if length < TARGET_LENGTH:
-        waveform = torch.nn.functional.pad(waveform, (0, TARGET_LENGTH - length))
-    elif length > TARGET_LENGTH:
-        waveform = waveform[..., :TARGET_LENGTH]
-    return waveform
+    return load_waveform(path, sample_rate=SAMPLE_RATE, target_length=TARGET_LENGTH)
 
 
 class GSCFewShotProvider:
@@ -158,14 +150,9 @@ class GSCFewShotProvider:
         names: list[str] = []
         for i in range(n_samples):
             path = rng.choice(self._background_noise_files)
-            bg, sr = torchaudio.load(str(path))
-            if sr != SAMPLE_RATE:
-                bg = torchaudio.transforms.Resample(sr, SAMPLE_RATE)(bg)
-            if bg.shape[0] > 1:
-                bg = bg.mean(dim=0, keepdim=True)
+            bg = load_waveform(path, sample_rate=SAMPLE_RATE, mono=True)
             if bg.shape[-1] <= TARGET_LENGTH:
-                wav = torch.nn.functional.pad(bg, (0, max(0, TARGET_LENGTH - bg.shape[-1])))
-                wav = wav[..., :TARGET_LENGTH]
+                wav = pad_or_trim(bg, TARGET_LENGTH)
                 start = 0
             else:
                 start = rng.randint(0, bg.shape[-1] - TARGET_LENGTH)

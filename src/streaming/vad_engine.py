@@ -6,6 +6,8 @@ processed by the KWS encoder, reducing false activations and
 computation on silence/noise segments.
 """
 
+from __future__ import annotations
+
 import logging
 from collections import deque
 from typing import Any

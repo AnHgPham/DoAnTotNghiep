@@ -1,0 +1,17 @@
+# Server ict6 / Tesla K80 / CUDA 10.2.
+# Do not install torch or torchaudio from this file:
+# - torch must stay on the CUDA 10.2 build, e.g. torch==1.12.1+cu102
+# - torchaudio import crashes on the current server stack, so the training path
+#   uses soundfile + scipy + torch.stft instead.
+numpy>=1.21,<2.0
+pyyaml>=6.0
+scipy>=1.9
+soundfile>=0.12
+scikit-learn>=1.0
+matplotlib>=3.5
+tensorboard>=2.10
+tqdm>=4.65
+requests>=2.31
+fastapi>=0.110
+uvicorn[standard]>=0.27
+python-multipart>=0.0.9

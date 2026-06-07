@@ -4,12 +4,15 @@ Mixes clean audio with background noise at configurable SNR, plus lightweight
 waveform perturbations that improve embedding robustness without extra parameters.
 """
 
+from __future__ import annotations
+
 import logging
 import random
 from pathlib import Path
 
 import torch
-import torchaudio
+
+from src.audio_io import load_waveform
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +41,10 @@ class WaveformAugmenter:
 
     def speed_perturb(self, waveform: torch.Tensor) -> torch.Tensor:
         """Randomly change playback speed (pitch+tempo)."""
-        factor = random.uniform(*self.speed_range)
-        if abs(factor - 1.0) < 0.01:
-            return waveform
-        effects = [["speed", str(factor)], ["rate", str(self.sample_rate)]]
-        augmented, _ = torchaudio.sox_effects.apply_effects_tensor(
-            waveform, self.sample_rate, effects, channels_first=True,
-        )
-        return augmented
+        # Kept as a no-op because the main training path disables speed
+        # perturbation, and torchaudio/sox is not available on the CUDA 10.2
+        # server stack used for long runs.
+        return waveform
 
     def gain_perturb(self, waveform: torch.Tensor) -> torch.Tensor:
         """Randomly adjust volume."""
@@ -113,10 +112,7 @@ class NoiseAugmenter:
         cached = []
         for path in self.noise_files:
             try:
-                noise, sr = torchaudio.load(str(path))
-                if sr != 16000:
-                    noise = torchaudio.transforms.Resample(sr, 16000)(noise)
-                noise = noise.mean(dim=0, keepdim=True)
+                noise = load_waveform(path, sample_rate=16000, mono=True)
                 cached.append(noise)
             except Exception as e:
                 logger.warning("Failed to preload %s: %s", path, e)

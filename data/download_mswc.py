@@ -18,6 +18,8 @@ Usage:
     python data/download_mswc.py --max-per-word 400      # cap clips per word
 """
 
+from __future__ import annotations
+
 import argparse
 import gzip
 import json
@@ -341,7 +343,6 @@ def extract_target_words(
                 dest_file = dest_dir / Path(member.name).name
 
                 if dest_file.exists():
-                    clip_counts[word] = clip_counts.get(word, 0) + 1
                     continue
 
                 f = tar.extractfile(member)
@@ -352,7 +353,10 @@ def extract_target_words(
                     extracted_total += 1
 
     except Exception as e:
-        logger.error("Extraction error: %s", e)
+        logger.exception("Extraction error: %s", e)
+        raise RuntimeError(
+            f"MSWC extraction failed before archive iteration completed: {e}"
+        ) from e
 
     logger.info("Extracted %d clips for %d words (skipped %d non-target files)",
                 extracted_total,
@@ -395,6 +399,10 @@ def main() -> None:
                         help="Preferred download mirror (default: cloudflare)")
     parser.add_argument("--keep-archive", action="store_true",
                         help="Keep the tar.gz after extraction (default: delete)")
+    parser.add_argument("--exact-final-count", action="store_true",
+                        help="Run an exact recursive OPUS/WAV count at the end. "
+                        "This is expensive on NFS for full MSWC; by default the "
+                        "summary uses extraction stats and skips the recursive scan.")
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -486,9 +494,19 @@ def main() -> None:
         logger.info("  %s: %d words (%d with data, %d clips)",
                     name, len(words), with_data, total)
 
-    opus_count = sum(1 for f in CLIPS_DIR.rglob("*.opus"))
-    wav_count = sum(1 for f in CLIPS_DIR.rglob("*.wav"))
-    logger.info("\nFiles: %d OPUS, %d WAV", opus_count, wav_count)
+    if args.exact_final_count:
+        opus_count = sum(1 for f in CLIPS_DIR.rglob("*.opus"))
+        wav_count = sum(1 for f in CLIPS_DIR.rglob("*.wav"))
+        logger.info("\nFiles: %d OPUS, %d WAV", opus_count, wav_count)
+    else:
+        opus_count = sum(stats.values())
+        wav_count = 0
+        logger.info(
+            "\nFiles: %d audio clips tracked from extraction stats "
+            "(exact recursive OPUS/WAV count skipped; pass --exact-final-count "
+            "to force it).",
+            opus_count,
+        )
     logger.info("Clips directory: %s", CLIPS_DIR)
 
     if opus_count > 0:

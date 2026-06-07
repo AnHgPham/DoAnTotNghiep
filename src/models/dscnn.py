@@ -15,6 +15,8 @@ import math
 import torch
 import torch.nn as nn
 
+from src.features.pcen import PCEN
+
 # fmt: off
 MODEL_SIZE_INFO = {
     "L": [
@@ -89,6 +91,7 @@ class DSCNN(nn.Module):
         model_size: str = "L",
         feature_mode: str = "NORM",
         input_shape: tuple[int, int] = (47, 10),
+        use_pcen: bool = False,
     ):
         super().__init__()
 
@@ -97,6 +100,9 @@ class DSCNN(nn.Module):
 
         self.model_size = model_size
         self.feature_mode = feature_mode
+        self.input_shape = tuple(input_shape)
+        self.use_pcen = bool(use_pcen)
+        self.pcen = PCEN(n_channels=int(input_shape[0]), per_channel=False) if use_pcen else nn.Identity()
 
         info = MODEL_SIZE_INFO[model_size]
         num_layers = info[0]
@@ -168,11 +174,13 @@ class DSCNN(nn.Module):
         """Forward pass.
 
         Args:
-            x: (B, 1, H, W) MFCC features. Default (B, 1, 47, 10).
+            x: (B, 1, H, W) feature map. Default MFCC shape is
+                (B, 1, 47, 10); mel/PCEN experiments use (B, 1, 40, 101).
 
         Returns:
             (B, embedding_dim) raw embedding. L2-norm NOT applied.
         """
+        x = self.pcen(x)
         x = self.features(x)
         x = self.avg_pool(x)  # (B, C, 1, 1)
         x = x.flatten(1)  # (B, C)

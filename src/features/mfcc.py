@@ -3,8 +3,13 @@
 Flow: waveform -> pad/trim -> MFCC(40) -> narrow(10) -> transpose -> (1, 47, 10)
 """
 
+from __future__ import annotations
+
+import math
+
 import torch
-import torchaudio
+
+from src.features.mel import make_mel_filterbank
 
 
 class MFCCExtractor:
@@ -33,26 +38,22 @@ class MFCCExtractor:
         self.num_features = num_features
         self.sample_rate = sample_rate
         self.target_length = sample_rate  # 1 second
+        self.n_fft = 1024
+        self.win_length = int(sample_rate * win_length_ms / 1000)
+        self.hop_length = int(sample_rate * hop_length_ms / 1000)
 
-        win_length = int(sample_rate * win_length_ms / 1000)
-        hop_length = int(sample_rate * hop_length_ms / 1000)
+        self.mel_filterbank = make_mel_filterbank(sample_rate, self.n_fft, n_mfcc)
+        self.dct_mat = self._make_dct(n_mfcc, n_mfcc)
 
-        self.mfcc_transform = torchaudio.transforms.MFCC(
-            sample_rate=sample_rate,
-            n_mfcc=n_mfcc,
-            log_mels=False,
-            melkwargs={
-                "n_fft": 1024,  # next_power_of_2(win_length=640) per Rusci
-                "win_length": win_length,
-                "hop_length": hop_length,
-                "n_mels": 40,
-                "power": 2,
-                "center": False,
-                "pad_mode": "constant",
-                "mel_scale": "slaney",
-                "norm": "slaney",
-            },
-        )
+    @staticmethod
+    def _make_dct(n_mfcc: int, n_mels: int) -> torch.Tensor:
+        n = torch.arange(n_mels, dtype=torch.float32)
+        k = torch.arange(n_mfcc, dtype=torch.float32).unsqueeze(1)
+        basis = torch.cos(math.pi / n_mels * (n + 0.5) * k)
+        basis[0] *= math.sqrt(1.0 / n_mels)
+        if n_mfcc > 1:
+            basis[1:] *= math.sqrt(2.0 / n_mels)
+        return basis
 
     def _pad_or_trim(self, waveform: torch.Tensor) -> torch.Tensor:
         """Pad with zeros (right) or truncate (right) to target_length.
@@ -86,7 +87,25 @@ class MFCCExtractor:
             For 1-sec audio: (1, 47, 10).
         """
         waveform = self._pad_or_trim(waveform)
-        mfcc = self.mfcc_transform(waveform)  # (1, n_mfcc, T_frames)
+        window = torch.hann_window(self.win_length, device=waveform.device, dtype=waveform.dtype)
+        spec = torch.stft(
+            waveform,
+            n_fft=self.n_fft,
+            hop_length=self.hop_length,
+            win_length=self.win_length,
+            window=window,
+            center=False,
+            pad_mode="constant",
+            normalized=False,
+            onesided=True,
+            return_complex=True,
+        )
+        power = spec.abs().pow(2.0)
+        fb = self.mel_filterbank.to(device=waveform.device, dtype=waveform.dtype)
+        mel = torch.matmul(fb, power).clamp_min(1e-10)
+        log_mel = 10.0 * torch.log10(mel)
+        dct = self.dct_mat.to(device=waveform.device, dtype=waveform.dtype)
+        mfcc = torch.matmul(dct, log_mel)  # (1, n_mfcc, T_frames)
         mfcc = mfcc.narrow(dim=-2, start=0, length=self.num_features)  # (1, 10, T_frames)
         mfcc = mfcc.mT  # (1, T_frames, 10)
         return mfcc

@@ -4,6 +4,8 @@ Uses raw L2 distances (NOT softmax probability) for classification.
 Threshold acts as an acceptance radius around each prototype.
 """
 
+from __future__ import annotations
+
 import torch
 import numpy as np
 
