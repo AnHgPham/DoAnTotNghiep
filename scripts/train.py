@@ -94,13 +94,16 @@ def save_checkpoint(
     logger.info("Checkpoint saved: %s (epoch=%d, loss=%.6f)", path, epoch, loss)
 
 
-def load_checkpoint(path: Path, encoder, optimizer, scheduler, loss_head=None) -> int:
+def load_checkpoint(path: Path, encoder, optimizer, scheduler, loss_head=None, encoder_only: bool = False) -> int:
     try:
         checkpoint = torch.load(path, weights_only=False)
     except TypeError:
         # PyTorch 1.12 on ict6 does not expose weights_only yet.
         checkpoint = torch.load(path)
     encoder.load_state_dict(checkpoint["model_state_dict"])
+    if encoder_only:
+        logger.info("Loaded encoder weights only from %s (source epoch=%d)", path, checkpoint["epoch"])
+        return 0
     optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
     scheduler.load_state_dict(checkpoint["scheduler_state_dict"])
     if loss_head is not None and "loss_head_state_dict" in checkpoint:
@@ -361,6 +364,17 @@ def _load_file_split(data_dir: Path, split: str, manifest: str | None = None) ->
     return files
 
 
+def _load_words_override(data_dir: Path, path_or_name: str) -> list[str]:
+    path = Path(path_or_name)
+    if not path.is_absolute():
+        if path.parent == Path("."):
+            path = data_dir / "splits" / path
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError(f"Expected list in {path}")
+    return [str(item) for item in payload]
+
+
 def discover_words(data_dir: Path) -> list[str]:
     """Find all word directories with WAV files."""
     words = []
@@ -388,6 +402,8 @@ def main() -> None:
                         ],
                         help="Loss function")
     parser.add_argument("--resume", type=str, default=None)
+    parser.add_argument("--resume-encoder-only", action="store_true",
+                        help="Load only encoder weights from --resume and start a fresh optimizer/scheduler.")
     parser.add_argument("--epochs", type=int, default=None)
     parser.add_argument("--episodes", type=int, default=None)
     parser.add_argument("--n-classes", type=int, default=None,
@@ -407,6 +423,10 @@ def main() -> None:
                         help="Optional train file manifest. Basenames resolve under data-dir/splits.")
     parser.add_argument("--val-files", type=str, default=None,
                         help="Optional validation file manifest. Basenames resolve under data-dir/splits.")
+    parser.add_argument("--train-words-file", type=str, default=None,
+                        help="Optional train word-list JSON. Basenames resolve under data-dir/splits.")
+    parser.add_argument("--val-words-file", type=str, default=None,
+                        help="Optional validation word-list JSON. Basenames resolve under data-dir/splits.")
     parser.add_argument("--num-workers", type=int, default=4,
                         help="DataLoader workers (lower for low-RAM systems)")
     parser.add_argument("--val-every", type=int, default=1,
@@ -435,6 +455,12 @@ def main() -> None:
     parser.add_argument("--kd-weight", type=float, default=None)
     parser.add_argument("--scaf-weight", type=float, default=None)
     parser.add_argument("--ge2e-weight", type=float, default=None)
+    parser.add_argument("--arcface-scale", type=float, default=None,
+                        help="Override ArcFace/SCAF scale for arcface/scaf/scaf_ge2e/kd_scaf* losses")
+    parser.add_argument("--arcface-margin", type=float, default=None,
+                        help="Override ArcFace/SCAF angular margin for arcface/scaf/scaf_ge2e/kd_scaf* losses")
+    parser.add_argument("--arcface-sub-centers", type=int, default=None,
+                        help="Override number of SCAF sub-centers")
     parser.add_argument("--run-tag", type=str, default=None,
                         help="Run directory under checkpoint.dir. Overrides loss-name subdir.")
     parser.add_argument("--hard-pairs-path", type=str, default=None,
@@ -447,6 +473,13 @@ def main() -> None:
                         help="Minimum val_auc gain for early stopping")
     parser.add_argument("--select-by-gsc-dev", action="store_true",
                         help="Select best checkpoint by GSC-dev ACC@1%% FAR instead of MSWC val_auc")
+    parser.add_argument("--gsc-dev-select-metric", type=str, default="acc1far",
+                        choices=["acc1far", "composite"],
+                        help=(
+                            "Metric for --select-by-gsc-dev. acc1far preserves the "
+                            "legacy behavior. composite selects by mean of "
+                            "ACC@1%%FAR, AUC, and F1 on GSC-dev."
+                        ))
     parser.add_argument("--initial-best-metric", type=float, default=None,
                         help=(
                             "Seed the best metric when resuming a matrix run. "
@@ -553,6 +586,12 @@ def main() -> None:
     train_words, val_word_list = _load_word_splits(data_dir, cfg)
     train_file_paths: list[str] | None = _load_file_split(data_dir, "train", args.train_files)
     val_file_paths: list[str] | None = _load_file_split(data_dir, "val", args.val_files)
+    if args.train_words_file:
+        train_words = _load_words_override(data_dir, args.train_words_file)
+        logger.info("Overriding train words: %d from %s", len(train_words), args.train_words_file)
+    if args.val_words_file:
+        val_word_list = _load_words_override(data_dir, args.val_words_file)
+        logger.info("Overriding val words: %d from %s", len(val_word_list), args.val_words_file)
     if train_words is None:
         all_words = discover_words(data_dir)
         logger.info("Discovered %d words in %s", len(all_words), data_dir)
@@ -645,6 +684,12 @@ def main() -> None:
     grad_clip = float(train_cfg.get("grad_clip", 0.0))
     mining = args.mining or train_cfg.get("mining", "semi_hard")
     margin = args.margin if args.margin is not None else train_cfg.get("triplet_margin", 1.0)
+    arc_cfg = train_cfg.get("arcface", {}) or {}
+    arcface_scale = float(args.arcface_scale if args.arcface_scale is not None else arc_cfg.get("scale", 30.0))
+    arcface_margin = float(args.arcface_margin if args.arcface_margin is not None else arc_cfg.get("margin", 0.5))
+    arcface_sub_centers = int(
+        args.arcface_sub_centers if args.arcface_sub_centers is not None else arc_cfg.get("sub_centers", 3)
+    )
 
     loss_fn = None
     loss_head = None
@@ -659,27 +704,32 @@ def main() -> None:
         loss_head = ArcFaceLoss(
             embedding_dim=encoder.embedding_dim,
             num_classes=len(dataset.word_to_idx),
-            scale=30.0, margin=0.5,
+            scale=arcface_scale, margin=arcface_margin,
         ).to(device)
         all_params = list(encoder.parameters()) + list(loss_head.parameters())
         optimizer = torch.optim.Adam(all_params, lr=lr, weight_decay=weight_decay)
+        logger.info("ArcFaceLoss: scale=%.2f, margin=%.3f", arcface_scale, arcface_margin)
     elif args.loss == "scaf":
         loss_head = SubCenterArcFaceLoss(
             embedding_dim=encoder.embedding_dim,
             num_classes=len(dataset.word_to_idx),
-            K=3, scale=30.0, margin=0.5,
+            K=arcface_sub_centers, scale=arcface_scale, margin=arcface_margin,
         ).to(device)
         all_params = list(encoder.parameters()) + list(loss_head.parameters())
         optimizer = torch.optim.Adam(all_params, lr=lr, weight_decay=weight_decay)
+        logger.info(
+            "SubCenterArcFaceLoss: K=%d, scale=%.2f, margin=%.3f",
+            arcface_sub_centers, arcface_scale, arcface_margin,
+        )
     elif args.loss in {"ge2e", "scaf_ge2e", "kd_scaf", "kd_ge2e", "kd_scaf_ge2e"}:
         loss_head = nn.ModuleDict()
         if "scaf" in args.loss:
             loss_head["scaf"] = SubCenterArcFaceLoss(
                 embedding_dim=encoder.embedding_dim,
                 num_classes=len(dataset.word_to_idx),
-                K=int(train_cfg.get("arcface", {}).get("sub_centers", 3)),
-                scale=float(train_cfg.get("arcface", {}).get("scale", 30.0)),
-                margin=float(train_cfg.get("arcface", {}).get("margin", 0.5)),
+                K=arcface_sub_centers,
+                scale=arcface_scale,
+                margin=arcface_margin,
             )
         if "ge2e" in args.loss:
             loss_head["ge2e"] = GE2ELoss()
@@ -696,6 +746,11 @@ def main() -> None:
         all_params = list(encoder.parameters()) + list(loss_head.parameters())
         optimizer = torch.optim.Adam(all_params, lr=lr, weight_decay=weight_decay)
         logger.info("Hybrid loss modules=%s weights=%s", list(loss_head.keys()), hybrid_weights)
+        if "scaf" in loss_head:
+            logger.info(
+                "Hybrid SCAF config: K=%d, scale=%.2f, margin=%.3f",
+                arcface_sub_centers, arcface_scale, arcface_margin,
+            )
 
     sched_cfg = train_cfg.get("scheduler", {})
     sched_type = sched_cfg.get("type", "StepLR")
@@ -736,7 +791,14 @@ def main() -> None:
 
     start_epoch = 0
     if args.resume:
-        start_epoch = load_checkpoint(Path(args.resume), encoder, optimizer, scheduler, loss_head)
+        start_epoch = load_checkpoint(
+            Path(args.resume),
+            encoder,
+            optimizer,
+            scheduler,
+            loss_head,
+            encoder_only=args.resume_encoder_only,
+        )
 
     # Validation set. For full MSWC this is usually held-out words; for
     # Microset this can be a sample-level dev manifest over the same words.
@@ -783,8 +845,8 @@ def main() -> None:
             query_split="dev",
         )
         logger.info(
-            "Checkpoint selection: GSC-dev gsc_edgespot_exact, runs=%d, k=%d",
-            args.gsc_dev_runs, args.gsc_dev_k_shot,
+            "Checkpoint selection: GSC-dev gsc_edgespot_exact, runs=%d, k=%d, metric=%s",
+            args.gsc_dev_runs, args.gsc_dev_k_shot, args.gsc_dev_select_metric,
         )
 
     # TensorBoard / checkpoint dir
@@ -916,13 +978,31 @@ def main() -> None:
                 device=device,
                 target_far=0.01,
             )
-            gsc_dev_metric = float(gsc_results["open_set_acc_at_1far"])
-            writer.add_scalar("gsc_dev/acc_at_1far", gsc_dev_metric, epoch + 1)
+            if args.gsc_dev_select_metric == "composite":
+                gsc_dev_metric = float(
+                    (
+                        gsc_results["open_set_acc_at_1far"]
+                        + gsc_results["auc"]
+                        + gsc_results["f1"]
+                    )
+                    / 3.0
+                )
+            else:
+                gsc_dev_metric = float(gsc_results["open_set_acc_at_1far"])
+            writer.add_scalar("gsc_dev/acc_at_1far", gsc_results["open_set_acc_at_1far"], epoch + 1)
+            writer.add_scalar("gsc_dev/auc", gsc_results["auc"], epoch + 1)
+            writer.add_scalar("gsc_dev/f1", gsc_results["f1"], epoch + 1)
+            writer.add_scalar("gsc_dev/selection_metric", gsc_dev_metric, epoch + 1)
             writer.add_scalar("gsc_dev/frr_at_5far", gsc_results["frr_at_5far"], epoch + 1)
             logger.info(
-                "  GSC-dev: ACC@1%%FAR=%.4f, ACC@5%%FAR=%.4f, FRR@5%%=%.4f",
+                "  GSC-dev: select=%s %.4f, ACC@1%%FAR=%.4f, ACC@5%%FAR=%.4f, "
+                "AUC=%.4f, F1=%.4f, FRR@5%%=%.4f",
+                args.gsc_dev_select_metric,
                 gsc_dev_metric,
+                gsc_results["open_set_acc_at_1far"],
                 gsc_results["open_set_acc_at_5far"],
+                gsc_results["auc"],
+                gsc_results["f1"],
                 gsc_results["frr_at_5far"],
             )
 
@@ -966,7 +1046,11 @@ def main() -> None:
                 ckpt_dir / "best.pt", loss_head,
             )
             if gsc_dev_metric is not None:
-                logger.info("  * New best GSC-dev ACC@1%%FAR: %.4f", gsc_dev_metric)
+                logger.info(
+                    "  * New best GSC-dev %s: %.4f",
+                    args.gsc_dev_select_metric,
+                    gsc_dev_metric,
+                )
             elif val_auc > 0:
                 logger.info("  * New best val AUC: %.4f", val_auc)
             else:

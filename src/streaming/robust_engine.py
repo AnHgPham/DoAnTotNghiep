@@ -8,7 +8,7 @@ keyword and then speak into a continuous microphone stream.
 from __future__ import annotations
 
 import time
-from collections import Counter, deque
+from collections import Counter
 from dataclasses import dataclass
 from typing import Iterable
 
@@ -182,9 +182,8 @@ class RobustStreamingKWS:
         self.profile = profile
         self.config = config or StreamingDecisionConfig(sample_rate=backend.sample_rate)
         self.vad = vad
-        self._buffer: deque[float] = deque(
-            maxlen=int(self.config.sample_rate * self.config.stream_buffer_ms / 1000),
-        )
+        self._max_buffer = int(self.config.sample_rate * self.config.stream_buffer_ms / 1000)
+        self._buffer: torch.Tensor = torch.zeros(0, dtype=torch.float32)
         self._abs_samples_seen = 0
         self._samples_since_process = 0
         self._last_event_end_abs = -10**12
@@ -210,14 +209,20 @@ class RobustStreamingKWS:
         candidates = _candidate_windows(segment, total, self.config)
         scored: list[tuple[tuple[int, int], MatchResult]] = []
 
-        for start, end in candidates:
-            emb = self.backend.embed(wav[..., start:end])
-            result = self.profile.score(
-                emb,
-                min_margin=self.config.min_margin,
-                threshold_scale=self.config.threshold_scale,
-            )
-            scored.append(((start, end), result))
+        if candidates:
+            # Single batched forward over all candidate windows. This is
+            # numerically identical to scoring each window with backend.embed
+            # (encoder runs in eval mode -> batch-invariant outputs) but
+            # amortizes feature-extraction and forward-pass overhead.
+            windows = [wav[..., start:end] for start, end in candidates]
+            embeddings = self.backend.embed_batch(windows)
+            for (start, end), emb in zip(candidates, embeddings, strict=True):
+                result = self.profile.score(
+                    emb,
+                    min_margin=self.config.min_margin,
+                    threshold_scale=self.config.threshold_scale,
+                )
+                scored.append(((start, end), result))
 
         if not scored:
             return None, []
@@ -272,19 +277,39 @@ class RobustStreamingKWS:
 
         return [event.to_dict() for event in events]
 
-    def process_chunk(self, chunk: torch.Tensor) -> list[dict]:
-        """Append a chunk of PCM audio and return newly accepted events."""
-        chunk_1d = _mono(chunk).squeeze(0)
-        self._buffer.extend(float(x) for x in chunk_1d.tolist())
+    def append_samples(self, chunk: torch.Tensor) -> None:
+        """Append PCM audio to the rolling buffer (cheap; runs no inference).
+
+        Separating ingestion from inference lets the streaming server keep the
+        network receive path non-blocking and run detection on its own cadence
+        (see :meth:`process_buffer`), so latency stays bounded under load.
+        """
+        chunk_1d = _mono(chunk).squeeze(0).to(torch.float32)
+        self._buffer = torch.cat([self._buffer, chunk_1d])
+        if self._buffer.shape[0] > self._max_buffer:
+            self._buffer = self._buffer[-self._max_buffer:].contiguous()
         self._abs_samples_seen += chunk_1d.numel()
         self._samples_since_process += chunk_1d.numel()
 
+    def ready_to_process(self) -> bool:
+        """True once enough fresh audio has accumulated for a process cycle."""
         stride = int(self.config.sample_rate * self.config.chunk_process_stride_ms / 1000)
-        if len(self._buffer) < self.config.sample_rate or self._samples_since_process < stride:
+        return (
+            self._buffer.shape[0] >= self.config.sample_rate
+            and self._samples_since_process >= stride
+        )
+
+    def process_buffer(self) -> list[dict]:
+        """Run detection on the current rolling buffer (CPU-heavy step).
+
+        Gated by :meth:`ready_to_process`, so calling it on a fixed cadence is
+        safe: sparse/early calls are cheap no-ops. Returns newly accepted events.
+        """
+        if not self.ready_to_process():
             return []
         self._samples_since_process = 0
 
-        buffer_tensor = torch.tensor(list(self._buffer), dtype=torch.float32).unsqueeze(0)
+        buffer_tensor = self._buffer.unsqueeze(0)
         buffer_start_abs = self._abs_samples_seen - buffer_tensor.shape[-1]
         cooldown = int(self.config.sample_rate * self.config.cooldown_ms / 1000)
 
@@ -308,8 +333,17 @@ class RobustStreamingKWS:
             self._last_event_end_abs = end_abs
         return new_events
 
+    def process_chunk(self, chunk: torch.Tensor) -> list[dict]:
+        """Append a chunk of PCM audio and return newly accepted events.
+
+        Convenience composition of :meth:`append_samples` + :meth:`process_buffer`;
+        behavior is unchanged for file/offline callers.
+        """
+        self.append_samples(chunk)
+        return self.process_buffer()
+
     def reset(self) -> None:
-        self._buffer.clear()
+        self._buffer = torch.zeros(0, dtype=torch.float32)
         self._abs_samples_seen = 0
         self._samples_since_process = 0
         self._last_event_end_abs = -10**12

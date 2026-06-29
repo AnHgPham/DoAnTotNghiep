@@ -7,6 +7,8 @@ import io
 import tarfile
 from pathlib import Path
 
+import torch
+
 from data.download_mswc_microset import extract_language, write_word_splits
 from src.data.mswc_dataset import MSWCDataset
 
@@ -112,3 +114,30 @@ def test_dataset_uses_explicit_csv_manifest_instead_of_scanning_folder(tmp_path)
     assert len(dataset.samples) == 2
     assert sorted(path.name for path, _ in dataset.samples) == ["no_0.wav", "yes_0.wav"]
     assert set(dataset.word_to_idx) == {"no", "up", "yes"}
+
+
+def test_dataset_retries_same_label_when_manifest_audio_fails(tmp_path, monkeypatch):
+    root = tmp_path / "mswc_microset_en"
+    for rel in ["clips/yes/bad.wav", "clips/yes/good.wav"]:
+        path = root / rel
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"")
+
+    def fake_load_waveform(path, sample_rate=16000, mono=True, target_length=None):
+        if Path(path).name == "bad.wav":
+            raise OSError("simulated unreadable audio")
+        return torch.ones(1, target_length or 16000)
+
+    monkeypatch.setattr("src.data.mswc_dataset.load_waveform", fake_load_waveform)
+
+    dataset = MSWCDataset(
+        root_dir=root,
+        words=["yes"],
+        file_paths=["clips/yes/bad.wav", "clips/yes/good.wav"],
+    )
+    dataset.extractor.extract = lambda waveform: waveform
+
+    features, label = dataset[0]
+
+    assert label == 0
+    assert float(features.sum()) > 0

@@ -10,6 +10,7 @@ import base64
 import io
 import json
 import os
+import re
 import random
 import sys
 import time
@@ -141,6 +142,71 @@ MODEL_PROFILES = {
         "notes_vi": "Baseline demo cũ trên máy local, dùng khi checkpoint còn tồn tại.",
     },
 }
+
+def _infer_profile_meta(name: str) -> tuple[str, str]:
+    """Infer (model_family, short_label) from a checkpoint filename."""
+    lname = name.lower()
+    if "edgespot" in lname:
+        family = "edgespot_full"
+        family_label = "EdgeSpotFull T4"
+    elif "dscnn" in lname:
+        family = "dscnn"
+        family_label = "DSCNN-L"
+    else:
+        family = "auto"
+        family_label = "Auto"
+    feat = "PCEN" if "pcen" in lname else ("MFCC" if "mfcc" in lname else "")
+    if "scaf" in lname and "ge2e" in lname:
+        loss = "SCAF+GE2E"
+    elif "ge2e" in lname:
+        loss = "GE2E"
+    elif "scaf" in lname:
+        loss = "SCAF"
+    elif "triplet" in lname:
+        loss = "Triplet"
+    else:
+        loss = ""
+    short = " ".join(part for part in [family_label, feat, loss] if part)
+    return family, (short or Path(name).stem)
+
+
+def discover_checkpoint_profiles() -> dict:
+    """Scan checkpoints/ recursively and build a profile for every .pt found."""
+    found: dict[str, dict] = {}
+    ckpt_root = PROJECT_ROOT / "checkpoints"
+    if not ckpt_root.exists():
+        return found
+    for path in sorted(ckpt_root.rglob("*.pt")):
+        rel = path.relative_to(ckpt_root).as_posix()
+        pid = "ckpt_" + re.sub(r"[^a-zA-Z0-9]+", "_", rel).strip("_").lower()
+        family, short = _infer_profile_meta(path.name)
+        found[pid] = {
+            "label": path.stem,
+            "short_label": short,
+            "description": f"Auto-discovered checkpoint: checkpoints/{rel}",
+            "description_en": f"Auto-discovered checkpoint: checkpoints/{rel}",
+            "description_vi": f"Checkpoint tự phát hiện: checkpoints/{rel}",
+            "checkpoint": path,
+            "model_family": family,
+            "edge_tau": 4,
+            "feature_type": "auto",
+            "threshold_hint": None,
+            "metrics": [],
+            "notes": "Auto-discovered from the checkpoints/ folder.",
+            "notes_en": "Auto-discovered from the checkpoints/ folder.",
+            "notes_vi": "Tự phát hiện trong thư mục checkpoints/.",
+            "auto_discovered": True,
+        }
+    return found
+
+
+def merge_discovered_profiles() -> None:
+    """Add auto-discovered checkpoints without overriding curated profiles."""
+    for pid, profile in discover_checkpoint_profiles().items():
+        MODEL_PROFILES.setdefault(pid, profile)
+
+
+merge_discovered_profiles()
 
 ENV_CKPT = os.environ.get("KWS_CHECKPOINT")
 if ENV_CKPT:
@@ -291,6 +357,32 @@ WORD_PRESETS = {
 
 
 # -- Init -----------------------------------------------------
+def _resolve_demo_frontend(
+    ckpt: dict | None,
+    model_family: str,
+) -> tuple[str, str]:
+    """Match scripts/evaluate.py frontend metadata for checkpoint loading."""
+    requested = os.environ.get("KWS_FEATURE_TYPE", "auto").strip().lower()
+    if requested != "auto":
+        frontend_type = requested
+    elif ckpt is not None:
+        frontend_type = ckpt.get("frontend_type")
+        if not frontend_type:
+            ckpt_feature = ckpt.get("feature_type")
+            if ckpt_feature == "mfcc":
+                frontend_type = "mfcc"
+            elif ckpt_feature == "mel":
+                frontend_type = "mel" if model_family == "dscnn" else "mel_pcen"
+    if not frontend_type:
+        frontend_type = "mfcc" if model_family == "dscnn" else "mel_pcen"
+    if frontend_type == "pcen":
+        frontend_type = "mel_pcen"
+    if frontend_type not in {"mfcc", "mel", "mel_pcen"}:
+        raise ValueError(f"Unsupported frontend_type: {frontend_type!r}")
+    feature_type = "mfcc" if frontend_type == "mfcc" else "mel"
+    return frontend_type, feature_type
+
+
 def init_model():
     global encoder, mfcc_ext, embedding_backend, MODEL_FAMILY, FEATURE_TYPE, INPUT_SHAPE
     ckpt = None
@@ -301,16 +393,29 @@ def init_model():
     elif MODEL_FAMILY == "auto":
         MODEL_FAMILY = "dscnn"
 
+    frontend_type, feature_type = _resolve_demo_frontend(ckpt, MODEL_FAMILY)
+    use_pcen = frontend_type == "mel_pcen"
+
     if MODEL_FAMILY == "edgespot_full":
         mfcc_ext = MelSpectrogramExtractor()
-        encoder = EdgeSpotFull(tau=EDGE_TAU, embedding_dim=64, use_pcen=True)
-        FEATURE_TYPE = "mel"
+        encoder = EdgeSpotFull(tau=EDGE_TAU, embedding_dim=64, use_pcen=use_pcen)
+        FEATURE_TYPE = feature_type
         INPUT_SHAPE = "(1, 40, 101)"
     elif MODEL_FAMILY == "dscnn":
-        mfcc_ext = MFCCExtractor(n_mfcc=40, num_features=10, sample_rate=SR)
-        encoder = DSCNN(model_size="L", feature_mode="NORM", input_shape=(47, 10))
-        FEATURE_TYPE = "mfcc"
-        INPUT_SHAPE = "(1, 47, 10)"
+        if frontend_type == "mfcc":
+            mfcc_ext = MFCCExtractor(n_mfcc=40, num_features=10, sample_rate=SR)
+            input_shape = (47, 10)
+        else:
+            mfcc_ext = MelSpectrogramExtractor()
+            input_shape = (40, 101)
+        encoder = DSCNN(
+            model_size="L",
+            feature_mode="NORM",
+            input_shape=input_shape,
+            use_pcen=use_pcen,
+        )
+        FEATURE_TYPE = feature_type
+        INPUT_SHAPE = f"(1, {input_shape[0]}, {input_shape[1]})"
     else:
         raise ValueError(f"Unsupported KWS_MODEL_FAMILY={MODEL_FAMILY!r}")
 
@@ -1637,12 +1742,112 @@ async def model_profiles():
     }
 
 
-@app.post("/api/model/select")
-async def select_model_profile(
-    profile_id: str = Form(...),
+@app.post("/api/model/discover")
+async def rediscover_models():
+    """Re-scan checkpoints/ so newly added .pt files appear without a restart."""
+    merge_discovered_profiles()
+    return await model_profiles()
+
+
+@app.post("/api/model/upload")
+async def upload_model_checkpoint(
+    checkpoint: UploadFile = File(...),
+    model_family: str = Form("auto"),
     enrollment_policy: str = Form("clear"),
 ):
+    """Upload a .pt checkpoint from the user's computer, save it, then load it."""
     global CKPT, MODEL_FAMILY, EDGE_TAU, ACTIVE_MODEL_PROFILE_ID
+
+    name = Path(checkpoint.filename or "uploaded.pt").name
+    if not name.lower().endswith(".pt"):
+        return JSONResponse({"error": "File must be a .pt checkpoint"}, 400)
+    if enrollment_policy not in {"clear", "rebuild"}:
+        return JSONResponse({"error": f"Unsupported enrollment_policy: {enrollment_policy}"}, 400)
+
+    dest_dir = PROJECT_ROOT / "checkpoints" / "uploaded"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / name
+    data = await checkpoint.read()
+    dest.write_bytes(data)
+
+    family, short = _infer_profile_meta(dest.name)
+    chosen_family = model_family.strip().lower() or "auto"
+    if chosen_family == "auto":
+        chosen_family = family
+
+    MODEL_PROFILES["custom_runtime"] = {
+        "label": dest.stem,
+        "short_label": short,
+        "description": f"Uploaded checkpoint: checkpoints/uploaded/{name}",
+        "description_en": f"Uploaded checkpoint: checkpoints/uploaded/{name}",
+        "description_vi": f"Checkpoint đã tải lên: checkpoints/uploaded/{name}",
+        "checkpoint": dest,
+        "model_family": chosen_family,
+        "edge_tau": 4,
+        "feature_type": "auto",
+        "threshold_hint": None,
+        "metrics": [],
+        "notes": "Uploaded from the user's computer.",
+        "notes_en": "Uploaded from the user's computer.",
+        "notes_vi": "Tải lên từ máy người dùng.",
+        "auto_discovered": True,
+    }
+    merge_discovered_profiles()
+
+    CKPT = dest
+    MODEL_FAMILY = chosen_family
+    EDGE_TAU = 4
+    ACTIVE_MODEL_PROFILE_ID = "custom_runtime"
+    init_model()
+    if enrollment_policy == "rebuild":
+        enrollment_status = rebuild_enrollment_for_current_model()
+    else:
+        clear_enrollment_state()
+        enrollment_status = {"policy": "clear", "rebuilt": False}
+    return {
+        "status": "ok",
+        "active": ACTIVE_MODEL_PROFILE_ID,
+        "enrollment": enrollment_status,
+        "model": current_model_info_payload(),
+    }
+
+
+@app.post("/api/model/select")
+async def select_model_profile(
+    profile_id: str = Form(""),
+    enrollment_policy: str = Form("clear"),
+    checkpoint_path: str = Form(""),
+    model_family: str = Form("auto"),
+):
+    global CKPT, MODEL_FAMILY, EDGE_TAU, ACTIVE_MODEL_PROFILE_ID
+
+    # Load an arbitrary checkpoint path supplied by the user.
+    if checkpoint_path.strip():
+        custom = resolve_project_path(checkpoint_path.strip())
+        if not custom.exists() or custom.suffix != ".pt":
+            return JSONResponse({"error": f"Checkpoint not found or not a .pt file: {custom}"}, 404)
+        family, short = _infer_profile_meta(custom.name)
+        chosen_family = model_family.strip().lower() or "auto"
+        if chosen_family == "auto":
+            chosen_family = family
+        MODEL_PROFILES["custom_runtime"] = {
+            "label": custom.stem,
+            "short_label": short,
+            "description": f"Custom checkpoint: {custom}",
+            "description_en": f"Custom checkpoint: {custom}",
+            "description_vi": f"Checkpoint tùy chọn: {custom}",
+            "checkpoint": custom,
+            "model_family": chosen_family,
+            "edge_tau": 4,
+            "feature_type": "auto",
+            "threshold_hint": None,
+            "metrics": [],
+            "notes": "Loaded from a user-provided path.",
+            "notes_en": "Loaded from a user-provided path.",
+            "notes_vi": "Nạp từ đường dẫn người dùng cung cấp.",
+            "auto_discovered": True,
+        }
+        profile_id = "custom_runtime"
 
     if profile_id not in MODEL_PROFILES:
         return JSONResponse({"error": f"Unknown model profile: {profile_id}"}, 404)
@@ -1725,9 +1930,120 @@ async def export_session_report(title: str = Form("Few-Shot KWS Demo Session")):
 # -- Streaming WebSocket --------------------------------------
 @app.websocket("/ws/stream")
 async def ws_stream(ws: WebSocket):
+    import asyncio
+    chunk_count = 0
     await ws.accept()
+    print(f"[WS] Connection accepted.", flush=True)
+    print(f"[WS] profile_ready={profile_ready()}, "
+          f"embedding_backend={'OK' if embedding_backend else 'None'}, "
+          f"prototypes={list(prototypes.keys())[:5]}", flush=True)
     stream_engine = make_stream_engine()
+    print(f"[WS] stream_engine={'OK' if stream_engine else 'None'}", flush=True)
     stream_profile_version = profile_version
+
+    def _event_payload(event: dict) -> dict:
+        start = max(0, int(event["start_sec"] * SR))
+        end = max(start + 1, int(event["end_sec"] * SR))
+        top_3 = [{"word": event["keyword"], "dist": round(event["distance"], 4)}]
+        if event["second_label"]:
+            top_3.append({
+                "word": event["second_label"],
+                "dist": round(event["distance"] + event["margin"], 4),
+            })
+        return {
+            "detected": True,
+            "keyword": event["keyword"],
+            "state": event.get("state", "detected"),
+            "distance": round(event["distance"], 4),
+            "threshold": round(event["threshold"], 3),
+            "margin": round(event["margin"], 4),
+            "confidence": round(event["confidence"], 3),
+            "second_label": event["second_label"],
+            "start_sec": round(start / SR, 2),
+            "end_sec": round(end / SR, 2),
+            "start_ms": event.get("start_ms", round(start / SR * 1000)),
+            "end_ms": event.get("end_ms", round(end / SR * 1000)),
+            "timestamp": event.get("timestamp", time.time()),
+            "top_3": top_3,
+            "engine": "robust_state_machine",
+        }
+
+    # Robust engine path: decouple audio ingestion from CPU-heavy inference so
+    # the receive loop never blocks and detection always runs on the freshest
+    # audio. A single inference is in flight at a time, so end-to-end latency is
+    # bounded to ~one process cycle even when the model cannot keep up with the
+    # realtime chunk rate (instead of an ever-growing backlog). The detection
+    # math is unchanged, so accuracy is identical to the serialized loop.
+    if stream_engine is not None:
+        stop = asyncio.Event()
+        pending: list[torch.Tensor] = []
+
+        def _drain_and_process(engine, chunks: list[torch.Tensor]) -> list[dict]:
+            for c in chunks:
+                engine.append_samples(c.unsqueeze(0))
+            return engine.process_buffer()
+
+        async def receiver() -> None:
+            nonlocal chunk_count
+            try:
+                while not stop.is_set():
+                    data = await ws.receive_bytes()
+                    chunk_count += 1
+                    if chunk_count <= 3:
+                        print(f"[WS] Received chunk #{chunk_count}, size={len(data)} bytes", flush=True)
+                    n_samples = len(data) // 4
+                    if n_samples == 0:
+                        continue
+                    pending.append(torch.tensor(
+                        struct.unpack(f"{n_samples}f", data), dtype=torch.float32
+                    ))
+            except WebSocketDisconnect as wd:
+                print(f"[WS] Client disconnected (code={wd.code}, chunks_received={chunk_count})", flush=True)
+            except Exception as e:
+                print(f"[WS] receiver ERROR: {type(e).__name__}: {e}", flush=True)
+            finally:
+                stop.set()
+
+        async def processor() -> None:
+            nonlocal stream_engine, stream_profile_version
+            cadence = max(0.05, stream_engine.config.chunk_process_stride_ms / 1000.0)
+            try:
+                while not stop.is_set():
+                    await asyncio.sleep(cadence)
+                    if stream_profile_version != profile_version:
+                        new_engine = make_stream_engine()
+                        if new_engine is not None:
+                            stream_engine = new_engine
+                            stream_profile_version = profile_version
+                            pending.clear()
+                    if not pending:
+                        continue
+                    # Drain everything received so far; the engine ring buffer
+                    # keeps only the last few seconds, so stale audio is dropped
+                    # rather than queued -> latency stays bounded.
+                    batch = pending[:]
+                    del pending[:len(batch)]
+                    events = await asyncio.to_thread(_drain_and_process, stream_engine, batch)
+                    for event in events:
+                        await ws.send_json(_event_payload(event))
+            except Exception as e:
+                print(f"[WS] processor ERROR: {type(e).__name__}: {e}", flush=True)
+            finally:
+                stop.set()
+
+        recv_task = asyncio.create_task(receiver())
+        proc_task = asyncio.create_task(processor())
+        await asyncio.wait({recv_task, proc_task}, return_when=asyncio.FIRST_COMPLETED)
+        stop.set()
+        for task in (recv_task, proc_task):
+            task.cancel()
+        for task in (recv_task, proc_task):
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
+        print("[WS] Stream closed.", flush=True)
+        return
 
     # Legacy fallback: 1-second windows with 0.5-second stride.
     buffer = torch.zeros(0)
@@ -1738,48 +2054,13 @@ async def ws_stream(ws: WebSocket):
     try:
         while True:
             data = await ws.receive_bytes()
-            # Browser sends Float32 PCM
+            chunk_count += 1
             n_samples = len(data) // 4
+            if n_samples == 0:
+                continue
             chunk = torch.tensor(
                 struct.unpack(f"{n_samples}f", data), dtype=torch.float32
             )
-
-            if stream_profile_version != profile_version:
-                stream_engine = make_stream_engine()
-                stream_profile_version = profile_version
-
-            if stream_engine is not None:
-                events = stream_engine.process_chunk(chunk.unsqueeze(0))
-                for event in events:
-                    start = max(0, int(event["start_sec"] * SR))
-                    end = max(start + 1, int(event["end_sec"] * SR))
-                    top_3 = [{
-                        "word": event["keyword"],
-                        "dist": round(event["distance"], 4),
-                    }]
-                    if event["second_label"]:
-                        top_3.append({
-                            "word": event["second_label"],
-                            "dist": round(event["distance"] + event["margin"], 4),
-                        })
-                    await ws.send_json({
-                        "detected": True,
-                        "keyword": event["keyword"],
-                        "state": event.get("state", "detected"),
-                        "distance": round(event["distance"], 4),
-                        "threshold": round(event["threshold"], 3),
-                        "margin": round(event["margin"], 4),
-                        "confidence": round(event["confidence"], 3),
-                        "second_label": event["second_label"],
-                        "start_sec": round(start / SR, 2),
-                        "end_sec": round(end / SR, 2),
-                        "start_ms": event.get("start_ms", round(start / SR * 1000)),
-                        "end_ms": event.get("end_ms", round(end / SR * 1000)),
-                        "timestamp": event.get("timestamp", time.time()),
-                        "top_3": top_3,
-                        "engine": "robust_state_machine",
-                    })
-                continue
 
             buffer = torch.cat([buffer, chunk])
 
@@ -1810,10 +2091,12 @@ async def ws_stream(ws: WebSocket):
                 if score["detected"]:
                     cooldown = 2  # Skip 2 windows (~1s) after detection
 
-    except WebSocketDisconnect:
-        pass
+    except WebSocketDisconnect as wd:
+        print(f"[WS] Client disconnected (code={wd.code}, chunks_received={chunk_count})", flush=True)
     except Exception as e:
-        print(f"WS error: {e}")
+        import traceback
+        print(f"[WS] ERROR: {type(e).__name__}: {e}", flush=True)
+        traceback.print_exc()
 
 
 # -- Main -----------------------------------------------------

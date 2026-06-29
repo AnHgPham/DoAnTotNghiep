@@ -1,0 +1,5 @@
+run_tag	model_family	frontend	loss	edge_tau	epochs	episodes	status	started_at	finished_at
+edgespot_full_t4_mfcc_triplet_full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20_e5_ep150	edgespot_full	mfcc	triplet	4	5	150	ok	2026-05-30 17:17:59	2026-05-30 17:49:19
+edgespot_full_t4_mfcc_scaf_full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20_e5_ep150	edgespot_full	mfcc	scaf	4	5	150	ok	2026-05-30 17:49:19	2026-05-30 18:21:20
+edgespot_full_t4_mfcc_ge2e_full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20_e5_ep150	edgespot_full	mfcc	ge2e	4	5	150	ok	2026-05-30 18:21:20	2026-05-30 18:51:04
+edgespot_full_t4_mfcc_scaf_ge2e_full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20_e5_ep150	edgespot_full	mfcc	scaf_ge2e	4	5	150	ok	2026-05-30 18:51:04	2026-05-30 19:23:04

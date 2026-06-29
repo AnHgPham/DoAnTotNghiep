@@ -1,0 +1,5 @@
+pipeline,split,best_epoch,best_dev_acc1far_percent,auc_percent,auc_std_percent,eer_percent,eer_std_percent,frr5_percent,frr5_std_percent,acc5far_percent,acc5far_std_percent,keyword_acc_percent,keyword_acc_std_percent,f1_percent,f1_std_percent
+DSCNN-L + PCEN + GE2E,dev30,9,85.08,93.85,0.48,12.88,0.83,23.71,1.76,88.05,0.56,88.79,0.88,80.52,1.16
+DSCNN-L + PCEN + GE2E,test100,9,85.08,93.87,0.47,12.78,0.80,23.66,2.23,88.23,0.68,89.82,1.16,80.67,1.12
+EdgeSpotFull T4 + PCEN + GE2E,dev30,9,82.87,92.30,0.54,15.51,0.79,31.14,2.35,85.56,0.72,87.07,0.97,76.90,1.07
+EdgeSpotFull T4 + PCEN + GE2E,test100,9,82.87,91.31,0.62,16.47,0.78,30.75,2.44,86.03,0.70,88.29,1.06,75.61,1.06

@@ -1,0 +1,13 @@
+run_tag	model_family	frontend	loss	edge_tau	epochs	episodes	status	started_at	finished_at
+dscnn_mfcc_triplet_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	dscnn	mfcc	triplet		5	150	ok	2026-05-30 03:05:26	2026-05-30 04:06:27
+dscnn_mfcc_scaf_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	dscnn	mfcc	scaf		5	150	ok	2026-05-30 04:06:27	2026-05-30 05:30:45
+dscnn_mfcc_ge2e_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	dscnn	mfcc	ge2e		5	150	ok	2026-05-30 05:30:45	2026-05-30 06:46:32
+dscnn_mfcc_scaf_ge2e_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	dscnn	mfcc	scaf_ge2e		5	150	ok	2026-05-30 06:46:32	2026-05-30 08:08:49
+dscnn_pcen_triplet_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	dscnn	mel_pcen	triplet		5	150	ok	2026-05-30 08:08:49	2026-05-30 09:28:47
+dscnn_pcen_scaf_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	dscnn	mel_pcen	scaf		5	150	ok	2026-05-30 09:28:47	2026-05-30 10:40:06
+dscnn_pcen_ge2e_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	dscnn	mel_pcen	ge2e		5	150	ok	2026-05-30 11:36:51	2026-05-30 12:09:50
+dscnn_pcen_scaf_ge2e_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	dscnn	mel_pcen	scaf_ge2e		5	150	ok	2026-05-30 12:09:50	2026-05-30 13:32:17
+edgespot_full_t4_pcen_triplet_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	edgespot_full	mel_pcen	triplet	4	5	150	ok	2026-05-30 13:32:17	2026-05-30 14:33:41
+edgespot_full_t4_pcen_scaf_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	edgespot_full	mel_pcen	scaf	4	5	150	ok	2026-05-30 14:33:41	2026-05-30 15:43:53
+edgespot_full_t4_pcen_ge2e_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	edgespot_full	mel_pcen	ge2e	4	5	150	ok	2026-05-30 15:43:53	2026-05-30 16:32:44
+edgespot_full_t4_pcen_scaf_ge2e_full_mswc_12_combo_phase1_e5_ep150_manifest20_e5_ep150	edgespot_full	mel_pcen	scaf_ge2e	4	5	150	ok	2026-05-30 16:32:44	2026-05-30 17:17:59

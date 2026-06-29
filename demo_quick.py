@@ -18,7 +18,9 @@ import torch
 import torch.nn.functional as F
 import torchaudio
 
+from src.features.mel import MelSpectrogramExtractor
 from src.models.dscnn import DSCNN
+from src.models.edgespot_full import EdgeSpotFull
 from src.features.mfcc import MFCCExtractor
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -28,12 +30,30 @@ DEFAULT_CKPT = Path("checkpoints/triplet/best_v2_margin1.0_colab.pt")
 
 # ==================== Core functions ====================
 
-def load_encoder(checkpoint_path: Path):
-    enc = DSCNN(model_size="L", feature_mode="NORM", input_shape=(47, 10))
+def load_encoder(checkpoint_path: Path, model_family: str = "auto", edge_tau: int = 4):
+    ckpt = None
     if checkpoint_path.exists():
         ckpt = torch.load(str(checkpoint_path), map_location=DEVICE, weights_only=False)
+        if model_family == "auto":
+            model_family = ckpt.get("model_family", "dscnn")
+    elif model_family == "auto":
+        model_family = "dscnn"
+
+    if model_family == "edgespot_full":
+        enc = EdgeSpotFull(tau=edge_tau, embedding_dim=64, use_pcen=True)
+        feature_ext = MelSpectrogramExtractor()
+        default_threshold = 0.30
+    elif model_family == "dscnn":
+        enc = DSCNN(model_size="L", feature_mode="NORM", input_shape=(47, 10))
+        feature_ext = MFCCExtractor(n_mfcc=40, num_features=10, sample_rate=SR)
+        default_threshold = 0.80
+    else:
+        raise ValueError(f"Unsupported model family for demo: {model_family}")
+
+    if ckpt is not None:
         enc.load_state_dict(ckpt["model_state_dict"])
         print(f"  Model   : {checkpoint_path}")
+        print(f"  Family  : {model_family}")
         print(f"  Epoch   : {ckpt.get('epoch', '?')}")
         print(f"  Loss    : {ckpt.get('loss', 0):.6f}")
     else:
@@ -41,7 +61,7 @@ def load_encoder(checkpoint_path: Path):
     enc = enc.to(DEVICE).eval()
     print(f"  Device  : {DEVICE}")
     print(f"  Params  : {sum(p.numel() for p in enc.parameters()):,}")
-    return enc
+    return enc, feature_ext, default_threshold
 
 
 def load_wav(path: Path) -> torch.Tensor:
@@ -303,7 +323,12 @@ def main():
                         help="Path to audio file to detect (WAV). If not given, uses GSC test samples.")
     parser.add_argument("--checkpoint", type=str, default=str(DEFAULT_CKPT),
                         help="Checkpoint path, e.g. checkpoints/triplet/best_v2_margin1.0_colab.pt")
-    parser.add_argument("--threshold", type=float, default=0.8, help="L2 distance threshold (default: 0.8)")
+    parser.add_argument("--model-family", choices=["auto", "dscnn", "edgespot_full"], default="auto",
+                        help="Encoder family. auto reads checkpoint metadata when available.")
+    parser.add_argument("--edge-tau", type=int, default=4,
+                        help="Width multiplier for EdgeSpotFull checkpoints")
+    parser.add_argument("--threshold", type=float, default=None,
+                        help="L2 distance threshold. Default: 0.8 for DSCNN, 0.30 for EdgeSpotFull.")
     parser.add_argument("--words", type=str, default="yes,no,stop,go,up,down,left,right,on,off",
                         help="Comma-separated keywords to enroll from GSC")
     parser.add_argument("--k", type=int, default=5, help="Samples per keyword for enrollment")
@@ -324,8 +349,13 @@ def main():
 
     # --- Step 1: Load model ---
     print("\n[Step 1] Loading model...")
-    enc = load_encoder(Path(args.checkpoint))
-    mfcc_ext = MFCCExtractor(n_mfcc=40, num_features=10, sample_rate=SR)
+    enc, mfcc_ext, default_threshold = load_encoder(
+        Path(args.checkpoint),
+        model_family=args.model_family,
+        edge_tau=args.edge_tau,
+    )
+    if args.threshold is None:
+        args.threshold = default_threshold
 
     # --- Step 2: Enroll ---
     words = [w.strip() for w in args.words.split(",") if w.strip()]

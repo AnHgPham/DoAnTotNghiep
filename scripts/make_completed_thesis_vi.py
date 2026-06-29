@@ -48,6 +48,29 @@ SHORTLIST50_ROWS = [
     ["EdgeSpotFull T4 + PCEN + GE2E", "130,594", "100", "77.14 +/- 0.89", "82.24 +/- 0.74", "87.74 +/- 0.66", "20.19 +/- 0.90", "70.73 +/- 1.16"],
 ]
 
+# So sánh trực tiếp các lần chạy EdgeSpotFull T4 + SCAF+GE2E (GSC test100)
+TOP500_RUNS_ROWS = [
+    ["Top500 epoch13 (run gốc)", "Top500 (500 từ)", "25 epoch x 300 episode, max-per-word 0 (best@13)", "85.62%", "88.79%", "95.34%", "11.51%", "82.45%"],
+    ["Top500 recheck EdgeSpot (e20_ep200)", "Top500 (500 từ)", "20 epoch x 200 episode", "83.50%", "86.18%", "92.73%", "15.11%", "77.45%"],
+    ["Top500 DSCNN SCAF+GE2E (e20_ep200)", "Top500 (500 từ)", "20 epoch x 200 episode (best@19)", "84.32%", "87.59%", "92.79%", "14.12%", "78.82%"],
+]
+
+# Mở rộng quy mô dữ liệu Full MSWC (loss GE2E), GSC test100
+SCALE_ROWS = [
+    ["cap20", "~0.53M", "86.05%", "91.57%", "16.25%", "75.90%", "83.06%", "87.22%", "20.40%", "70.46%"],
+    ["cap50", "~0.94M", "84.68%", "90.45%", "17.42%", "74.34%", "82.24%", "87.74%", "20.19%", "70.73%"],
+    ["cap220", "~2.05M", "88.23%", "93.87%", "12.78%", "80.67%", "86.03%", "91.31%", "16.47%", "75.61%"],
+    ["cap620", "~2.99M", "88.56%", "94.04%", "12.53%", "81.02%", "86.01%", "91.34%", "16.64%", "75.38%"],
+]
+
+# Knowledge Distillation so với GE2E (cùng EdgeSpotFull T4, GSC test100)
+KD_ROWS = [
+    ["cap50", "GE2E", "77.14%", "82.24%", "87.74%", "20.19%", "70.73%", "83.49%"],
+    ["cap50", "KD (kd_scaf)", "80.74%", "85.82%", "91.19%", "15.41%", "77.04%", "87.95%"],
+    ["cap220", "GE2E", "-", "86.03%", "91.31%", "16.47%", "75.61%", "88.29%"],
+    ["cap220", "KD (kd_scaf)", "80.82%", "85.90%", "91.17%", "15.36%", "77.10%", "87.44%"],
+]
+
 FIGURES = [
     ("reports/full_mswc_matrix_analysis/acc1far_ranked_bar.png", "Hình 1. Xếp hạng ACC@1%FAR của 16 pipeline trong Full MSWC phase-1."),
     ("reports/full_mswc_matrix_analysis/det_summary_heatmap.png", "Hình 2. Tổng hợp DET/EER/FRR theo pipeline."),
@@ -66,7 +89,8 @@ SECTIONS: list[tuple[int, str, list[str]]] = [
         "Đồ án này nghiên cứu bài toán few-shot open-set keyword spotting, trong đó hệ thống cần nhận diện các từ khóa mới chỉ từ một số lượng nhỏ mẫu enrollment, đồng thời phải từ chối các âm thanh không thuộc tập từ khóa đã đăng ký. Khác với keyword spotting closed-set truyền thống, bài toán này không chỉ yêu cầu phân loại đúng keyword mà còn phải kiểm soát false accept rate để hạn chế trường hợp unknown speech bị nhận nhầm thành keyword.",
         "Hệ thống được xây dựng theo hướng embedding-based keyword spotting. Audio đầu vào được chuẩn hóa, trích xuất đặc trưng MFCC hoặc mel-PCEN, sau đó đưa qua encoder để tạo embedding. Trong giai đoạn inference, mỗi keyword được biểu diễn bằng prototype tính từ trung bình embedding của các mẫu support. Query audio được so khớp với các prototype bằng khoảng cách L2 và được chấp nhận hoặc từ chối dựa trên ngưỡng open-set.",
         "Đồ án đánh giá nhiều thành phần trong pipeline, bao gồm hai backbone DSCNN-L và EdgeSpotFull T4, hai audio frontend MFCC và PCEN, cùng bốn hướng huấn luyện Triplet, SCAF, GE2E và SCAF+GE2E. Kết quả Microset cho thấy EdgeSpotFull T4 kết hợp PCEN và SCAF+GE2E đạt ACC@5%FAR = 86.12%, AUC = 95.61%, EER = 11.54% và F1 = 82.41% trên GSC test100. Trong phần mở rộng Full MSWC, thí nghiệm 16 pipeline cho thấy PCEN và GE2E là hai thành phần có ảnh hưởng tích cực rõ nhất, đặc biệt với DSCNN-L + PCEN + GE2E.",
-        "Đóng góp chính của đồ án là xây dựng và đánh giá một pipeline few-shot open-set KWS có khả năng enroll từ khóa mới, so sánh có hệ thống các kết hợp model-feature-loss, và phát triển demo web hỗ trợ enrollment, single detection, long-audio analysis, open-set testing và calibration.",
+        "Khi mở rộng quy mô dữ liệu Full MSWC, độ chính xác tăng mạnh từ cap50 lên cap220 rồi bão hòa quanh khoảng 2 triệu clip (DSCNN-L đạt ACC@5%FAR khoảng 88.5% ở cap620). Đồ án còn thử nghiệm Knowledge Distillation từ teacher Wav2Vec2: KD giúp EdgeSpotFull T4 ở cap50 đạt ACC@5%FAR = 85.82%, tương đương baseline GE2E ở cap220, tức đạt cùng độ chính xác với lượng dữ liệu ít hơn khoảng hai lần.",
+        "Đóng góp chính của đồ án là xây dựng và đánh giá một pipeline few-shot open-set KWS có khả năng enroll từ khóa mới, so sánh có hệ thống các kết hợp model-feature-loss, phân tích hiệu ứng bão hòa khi mở rộng dữ liệu, áp dụng Knowledge Distillation để tăng hiệu quả dữ liệu cho mô hình nhỏ, và phát triển demo web hỗ trợ enrollment, single detection, long-audio analysis, open-set testing và calibration.",
     ]),
     (2, "1.2. Context and Motivation", [
         "Keyword Spotting (KWS) là bài toán phát hiện một hoặc nhiều từ khóa mục tiêu trong tín hiệu âm thanh. KWS là thành phần quan trọng trong các hệ thống giao tiếp bằng giọng nói như trợ lý ảo, smart home, điều khiển thiết bị rảnh tay và wake-word detection. Trong các ứng dụng này, hệ thống thường phải hoạt động với độ trễ thấp, tài nguyên hạn chế và cần tránh kích hoạt sai khi người dùng không nói từ khóa.",
@@ -183,8 +207,21 @@ SECTIONS: list[tuple[int, str, list[str]]] = [
     (2, "5.4. Top500 Recheck", [
         "Top500 là bước mở rộng từ Microset sang vocabulary lớn hơn. Kết quả đáng tin cậy hiện tại là checkpoint epoch13 của EdgeSpotFull T4 + PCEN + SCAF+GE2E, đã được re-evaluate từ artifact local. Trên GSC-test100, checkpoint này đạt ACC@1%FAR = 85.62%, ACC@5%FAR = 88.79%, AUC = 95.34%, EER = 11.51% và F1 = 82.45%.",
         "Kết quả Top500 epoch13 cho thấy hướng EdgeSpotFull T4 + PCEN + SCAF+GE2E có tín hiệu tốt khi mở rộng dữ liệu. Tuy nhiên, các kết quả epoch25 trước đó chỉ nên được mô tả là historical/logged run nếu chưa có checkpoint/result JSON tương ứng. Trong thesis, cần phân biệt rõ artifact reproducible và kết quả log lịch sử để tránh overclaim.",
+        "Ngoài EdgeSpot, đồ án còn chạy DSCNN-L + PCEN + SCAF+GE2E trên Top500 với cùng recipe ngắn 20 epoch x 200 episode (server ict6, hoàn thành 07-06-2026). Trên GSC-test100, run này đạt ACC@1%FAR = 84.32%, ACC@5%FAR = 87.59%, AUC = 92.79%, EER = 14.12% và F1 = 78.82%. Với cùng recipe ngắn, DSCNN SCAF+GE2E cao hơn EdgeSpot recheck 1.41 điểm ACC@5%FAR (87.59% so với 86.18%), cho thấy SCAF+GE2E ổn định trên backbone lớn hơn khi vocabulary ~450–500 lớp.",
+        "Cần lưu ý khi so sánh con số 88.79% của epoch13 với các con số khoảng 86–87% ở các thí nghiệm khác, vì đây là các điều kiện huấn luyện khác nhau chứ không phải dấu hiệu phương pháp kém đi. Thứ nhất, epoch13 được huấn luyện trên Top500 (500 từ phổ biến), trong khi nhiều thí nghiệm 86% được huấn luyện trên Full MSWC với 38,150 từ, là nhiệm vụ khó hơn nhiều. Thứ hai, ngay trên cùng Top500, recipe huấn luyện khác nhau: epoch13 dùng 300 episode mỗi epoch và lấy toàn bộ clip (max-per-word 0), trong khi các bản recheck chỉ dùng 200 episode mỗi epoch. Số episode mỗi epoch ít hơn không chỉ giảm số bước cập nhật mà còn làm thay đổi nhịp của learning-rate scheduler (scheduler điều chỉnh theo epoch), khiến quỹ đạo tối ưu khác đi và đạt đỉnh thấp hơn. Bảng dưới đây trình bày đầy đủ các lần chạy để so sánh trực tiếp.",
     ]),
-    (2, "5.5. Discussion", [
+    (2, "5.5. Data Scale-up va Bao hoa", [
+        "Trong thí nghiệm mở rộng dữ liệu này, frontend và loss được cố định, không biến thiên: frontend là PCEN và loss là GE2E. Lý do là phase-1 với 16 pipeline (mục 5.2) đã kết luận PCEN và GE2E là tổ hợp tốt nhất ở cả hai backbone, nên bước này chỉ giữ đúng hai pipeline đã shortlist (DSCNN-L + PCEN + GE2E và EdgeSpotFull T4 + PCEN + GE2E) và biến thiên hai trục còn lại là lượng dữ liệu (cap) và backbone. Việc biến thiên loss ở quy mô lớn được trình bày riêng ở mục 5.6 (Knowledge Distillation so với GE2E), còn việc biến thiên frontend và loss đầy đủ đã được thực hiện ở ablation 16 pipeline.",
+        "Cụ thể, đồ án tăng dần số clip mỗi từ (cap) trên Full MSWC (38,150 từ) với cả hai pipeline cố định nói trên, huấn luyện 20 đến 25 epoch. Bảng dưới đây trình bày đầy đủ kết quả cho cả hai backbone trên GSC test100; mọi giá trị đều ứng với cấu hình PCEN + GE2E, chỉ khác backbone và cap.",
+        "Có thể thấy bước nhảy lớn về chất lượng xảy ra khi tăng từ cap50 lên cap220 (DSCNN tăng 3.55 điểm phần trăm ACC@5%FAR, EdgeSpot tăng 3.79 điểm). Sau đó, từ cap220 lên cap620 các chỉ số gần như không đổi (DSCNN chỉ tăng 0.33 điểm, EdgeSpot giảm 0.02 điểm) dù cap620 dùng nhiều clip hơn khoảng 1 triệu và huấn luyện nhiều episode hơn. Điều này cho thấy độ chính xác bão hòa quanh khoảng 2 triệu clip.",
+        "Nguyên nhân chính của bão hòa gồm: ngân sách episodic cố định (số mẫu mỗi epoch không tăng theo kích thước bể dữ liệu), việc tăng cap chỉ bổ sung clip của cùng các từ chứ không thêm từ hay người nói mới, trần chuyển giao MSWC sang GSC khi đánh giá trên tập từ cố định, và trần dung lượng mô hình. Hệ quả là muốn vượt mức khoảng 88% cần thay đổi phương pháp huấn luyện chứ không phải tiếp tục thêm dữ liệu.",
+    ]),
+    (2, "5.6. Knowledge Distillation", [
+        "Đồ án thử nghiệm hướng Knowledge Distillation (KD) để cải thiện mô hình nhỏ EdgeSpotFull T4. Teacher là encoder Wav2Vec2 đóng băng kèm một projection head 64 chiều được huấn luyện bằng Sub-center ArcFace trên nhãn từ; student là EdgeSpotFull T4 huấn luyện với loss kd_scaf. Bảng dưới đây trình bày đầy đủ KD so với baseline GE2E ở cùng backbone, cùng cap, trên GSC test100; mọi chỉ số dùng để nhận xét đều có trong bảng.",
+        "Ở chế độ ít dữ liệu (cap50), KD vượt GE2E trên mọi chỉ số: ACC@1%FAR tăng từ 77.14% lên 80.74%, ACC@5%FAR tăng từ 82.24% lên 85.82%, AUC tăng từ 87.74% lên 91.19%, EER giảm từ 20.19% xuống 15.41% và F1 tăng từ 70.73% lên 77.04%. Đáng chú ý, KD ở cap50 (ACC@5%FAR = 85.82%) đạt mức tương đương GE2E ở cap220 (86.03%), nghĩa là KD đạt cùng độ chính xác với lượng dữ liệu ít hơn khoảng hai lần.",
+        "Ở cap220, KD và GE2E gần bằng nhau về ACC@5%FAR (85.90% so với 86.03%) do cả hai đã bão hòa, nhưng KD vẫn tốt hơn về EER (15.36% so với 16.47%) và F1 (77.10% so với 75.61%). Như vậy, KD là một đóng góp có ý nghĩa, đặc biệt cho hiệu quả dữ liệu ở chế độ ít mẫu và cho calibration ở quy mô lớn.",
+    ]),
+    (2, "5.7. Discussion", [
         "Từ các thí nghiệm, có thể thấy không có một pipeline tốt nhất cho mọi mục tiêu. Nếu mục tiêu là accuracy trên GSC-test100 trong Full MSWC shortlist, DSCNN-L + PCEN + GE2E là lựa chọn mạnh nhất hiện tại. Nếu mục tiêu là model nhỏ gọn cho edge/device, EdgeSpotFull T4 + PCEN + GE2E hoặc EdgeSpotFull T4 + PCEN + SCAF+GE2E vẫn có giá trị, đặc biệt vì số tham số thấp hơn nhiều.",
         "Sự khác biệt giữa Microset và Full MSWC cũng rất quan trọng. Trên Microset, SCAF+GE2E hoạt động tốt, nhưng trên Full MSWC phase-1, GE2E đơn lẻ lại ổn định hơn. Điều này cho thấy kết quả của loss hybrid phụ thuộc vào dataset, số class, số clip mỗi word và training schedule. Vì vậy, thesis nên trình bày SCAF+GE2E như một hướng có triển vọng, không phải kết luận tuyệt đối.",
         "DET curve và các operating point theo FAR là cần thiết vì open-set KWS không chỉ là bài toán phân loại đúng keyword. Trong thực tế, false accept có thể nguy hiểm hơn một số false reject, đặc biệt với wake-word hoặc command system. Do đó, ACC@1%FAR và ACC@5%FAR giúp đánh giá hệ thống ở các mức kiểm soát false accept cụ thể.",
@@ -213,7 +250,7 @@ SECTIONS: list[tuple[int, str, list[str]]] = [
     ]),
     (2, "7.3. Future Work", [
         "Hướng tiếp theo là train dài hơn cho hai shortlist chính: DSCNN-L + PCEN + GE2E và EdgeSpotFull T4 + PCEN + GE2E, đặc biệt trên manifest lớn hơn hoặc Top500 full clips. Việc này giúp kiểm tra liệu EdgeSpotFull T4 có thể thu hẹp khoảng cách accuracy với DSCNN-L khi được training tốt hơn hay không.",
-        "Một hướng khác là tune trọng số của SCAF+GE2E, learning rate và scheduler để kiểm tra vì sao hybrid loss tốt trên Microset nhưng chưa tốt trên Full MSWC phase-1. Ngoài ra, có thể thử knowledge distillation từ teacher speech model nếu muốn tiến gần hơn các hướng paper-grade.",
+        "Một hướng khác là tune trọng số của SCAF+GE2E, learning rate và scheduler để kiểm tra vì sao hybrid loss tốt trên Microset nhưng chưa tốt trên Full MSWC phase-1; cần lưu ý SCAF với số lớp lớn (vài chục nghìn) dễ gây bùng nổ gradient nếu trọng số quá cao, nên cần đặt trọng số nhỏ. Knowledge distillation từ teacher Wav2Vec2 đã được thử nghiệm và cho kết quả tích cực ở chế độ ít dữ liệu; hướng tiếp theo là mở rộng KD lên Full MSWC quy mô lớn và Top500 full clips để xác nhận lợi ích ở mọi mức dữ liệu.",
         "Về demo, cần bổ sung benchmark streaming chính thức, tối ưu calibration theo từng model profile và xuất báo cáo tự động gồm DET curve, bảng metric và per-word error analysis.",
     ]),
 ]
@@ -243,7 +280,13 @@ def build_markdown() -> str:
             parts.append(md_table(["Pipeline", "Params", "Split", "Runs", "ACC@1%FAR", "ACC@5%FAR", "AUC", "EER", "F1"], SHORTLIST20_ROWS) + "\n")
             parts.append("Manifest50 robustness follow-up:\n\n")
             parts.append(md_table(["Pipeline", "Params", "Runs", "ACC@1%FAR", "ACC@5%FAR", "AUC", "EER", "F1"], SHORTLIST50_ROWS) + "\n")
-        if title == "5.5. Discussion":
+        if title == "5.4. Top500 Recheck":
+            parts.append(md_table(["Lần chạy", "Dữ liệu", "Lịch train", "ACC@1%FAR", "ACC@5%FAR", "AUC", "EER", "F1"], TOP500_RUNS_ROWS) + "\n")
+        if title == "5.5. Data Scale-up va Bao hoa":
+            parts.append(md_table(["Cap (clip/từ)", "~Số clip", "DSCNN-L+PCEN+GE2E ACC@5%FAR", "AUC", "EER", "F1", "EdgeSpot T4+PCEN+GE2E ACC@5%FAR", "AUC", "EER", "F1"], SCALE_ROWS) + "\n")
+        if title == "5.6. Knowledge Distillation":
+            parts.append(md_table(["Cap", "Loss", "ACC@1%FAR", "ACC@5%FAR", "AUC", "EER", "F1", "KW-ACC"], KD_ROWS) + "\n")
+        if title == "5.7. Discussion":
             for fig_path, caption in FIGURES:
                 if (ROOT / fig_path).exists():
                     parts.append(f"![{caption}](../../{fig_path})\n")
@@ -304,7 +347,16 @@ def build_docx() -> None:
             add_table(document, ["Pipeline", "Params", "Split", "Runs", "ACC@1%FAR", "ACC@5%FAR", "AUC", "EER", "F1"], SHORTLIST20_ROWS)
             add_caption(document, "Bảng 4. Shortlist manifest50 robustness follow-up.")
             add_table(document, ["Pipeline", "Params", "Runs", "ACC@1%FAR", "ACC@5%FAR", "AUC", "EER", "F1"], SHORTLIST50_ROWS)
-        if title_text == "5.5. Discussion":
+        if title_text == "5.4. Top500 Recheck":
+            add_caption(document, "Bảng 5. So sánh các lần chạy EdgeSpotFull T4 + SCAF+GE2E trên Top500.")
+            add_table(document, ["Lần chạy", "Dữ liệu", "Lịch train", "ACC@1%FAR", "ACC@5%FAR", "AUC", "EER", "F1"], TOP500_RUNS_ROWS)
+        if title_text == "5.5. Data Scale-up va Bao hoa":
+            add_caption(document, "Bảng 6. Mở rộng quy mô dữ liệu Full MSWC, cố định PCEN + GE2E, trên GSC test100.")
+            add_table(document, ["Cap (clip/từ)", "~Số clip", "DSCNN-L+PCEN+GE2E ACC@5%FAR", "AUC", "EER", "F1", "EdgeSpot T4+PCEN+GE2E ACC@5%FAR", "AUC", "EER", "F1"], SCALE_ROWS)
+        if title_text == "5.6. Knowledge Distillation":
+            add_caption(document, "Bảng 7. Knowledge Distillation so với GE2E (cùng EdgeSpotFull T4).")
+            add_table(document, ["Cap", "Loss", "ACC@1%FAR", "ACC@5%FAR", "AUC", "EER", "F1", "KW-ACC"], KD_ROWS)
+        if title_text == "5.7. Discussion":
             for fig_path, caption in FIGURES:
                 path = ROOT / fig_path
                 if path.exists():

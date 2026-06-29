@@ -1,0 +1,8 @@
+\babel@toc {english}{}\relax 
+\contentsline {table}{\numberline {1}{\ignorespaces Feature front-end configurations.}}{19}{table.caption.26}%
+\contentsline {table}{\numberline {2}{\ignorespaces Encoder comparison. $\ell _2$-normalisation is applied outside the encoder so all losses and the deployment classifier operate on the hypersphere.}}{20}{table.caption.27}%
+\contentsline {table}{\numberline {3}{\ignorespaces Full 16-configuration screen on full-vocabulary MSWC (cap-620), GSC test100 @ 1\% FAR. ``coll.'' marks degenerate collapse (AUC$=$50, F1$=$0, FRR$=$100\%). Best in bold.}}{24}{table.caption.31}%
+\contentsline {table}{\numberline {4}{\ignorespaces Paired effect deltas (percentage points), full-vocabulary MSWC, GSC test100 @ 1\% FAR. Positive favours the first option.}}{24}{table.caption.34}%
+\contentsline {table}{\numberline {5}{\ignorespaces Data-scale sweep (PCEN$+$GE2E), GSC test100. ACC at 5\% FAR.}}{26}{table.caption.38}%
+\contentsline {table}{\numberline {6}{\ignorespaces Knowledge distillation vs.\ GE2E (EdgeSpot student), GSC test100.}}{27}{table.caption.40}%
+\contentsline {table}{\numberline {7}{\ignorespaces Consolidated best systems across data regimes (GSC test100, 10-shot, 100 runs). ``coll.''$=$ degenerate collapse.}}{28}{table.caption.41}%

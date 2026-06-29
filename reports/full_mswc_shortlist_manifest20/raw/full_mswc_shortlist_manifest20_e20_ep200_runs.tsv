@@ -1,0 +1,3 @@
+run_tag	model_family	frontend	loss	edge_tau	epochs	episodes	max_per_word	train_status	dev30_status	test100_status	started_at	finished_at
+dscnn_pcen_ge2e_full_mswc_shortlist_manifest20_e20_ep200	dscnn	mel_pcen	ge2e		20	200	20	ok	ok	ok	2026-05-31 10:34:11	2026-05-31 14:54:04
+edgespot_full_t4_pcen_ge2e_full_mswc_shortlist_manifest20_e20_ep200	edgespot_full	mel_pcen	ge2e	4	20	200	20	ok	ok	ok	2026-05-31 14:54:04	2026-05-31 22:14:45

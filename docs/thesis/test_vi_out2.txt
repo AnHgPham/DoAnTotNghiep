@@ -1,0 +1,25 @@
+This is pdfTeX, Version 3.141592653-2.6-1.40.25 (MiKTeX 24.1) (preloaded format=pdflatex.fmt)
+ restricted \write18 enabled.
+entering extended mode
+(test_vi.tex
+LaTeX2e <2023-11-01> patch level 1
+L3 programming layer <2024-01-04>
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/base\article.cls
+Document Class: article 2023/05/17 v1.4n Standard LaTeX document class
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/base\size12.clo))
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/base\inputenc.sty)
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/base\fontenc.sty
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/vntex\t5enc.def
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/vntex\t5enc.dfu))
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/vntex\t5cmr.fd))
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/lm\lmodern.sty)
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/lm\t5lmr.fd)
+(C:\Users\GIGABYTE\AppData\Local\Programs\MiKTeX\tex/latex/l3backend\l3backend-
+pdftex.def)
+No file test_vi.aux.
+[1{C:/Users/GIGABYTE/AppData/Local/MiKTeX/fonts/map/pdftex/pdftex.map}{C:/Users
+/GIGABYTE/AppData/Local/Programs/MiKTeX/fonts/enc/dvips/lm/lm-t5.enc}]
+(test_vi.aux) )<C:/Users/GIGABYTE/AppData/Local/Programs/MiKTeX/fonts/type1/pub
+lic/lm/lmr12.pfb>
+Output written on test_vi.pdf (1 page, 27551 bytes).
+Transcript written on test_vi.log.

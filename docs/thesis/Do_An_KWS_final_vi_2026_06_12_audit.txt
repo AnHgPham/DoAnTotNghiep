@@ -1,0 +1,5 @@
+csv_rows=48
+unique_pipelines=16
+evals=dev30_far1,test100_far1,test100_far5
+all_status_ok=True
+best_test100_far1=DSCNN-L + PCEN + GE2E ACC=82.34 AUC=92.42 EER=14.89 F1=77.75

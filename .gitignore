@@ -78,6 +78,42 @@ docs/*.toc
 
 # Local dataset/cache folders
 mswc_microset/
+data/enroll_profiles/
+data/test/generated/
+
+# Local artifact packages and downloaded server bundles
+server/
+archive/raw_downloads/
 
 # Local UI validation screenshots
 reports/ui_validation/
+
+# React demo local build/dependencies
+src/demo/ui/node_modules/
+src/demo/ui/dist/
+
+# Generated status/report tables
+reports/project_status/
+
+# ──────────────── Temp / external / scratch ────────────────
+.codex_tmp/
+CodexPlusPlus/
+
+# LaTeX scratch & build artifacts in thesis dir
+docs/thesis/*.aux
+docs/thesis/*.log
+docs/thesis/*.out
+docs/thesis/*.toc
+docs/thesis/*.bbl
+docs/thesis/*.blg
+docs/thesis/*.synctex.gz
+docs/thesis/test_*.tex
+docs/thesis/test_*.pdf
+docs/thesis/test_*.aux
+docs/thesis/*_out.txt
+docs/thesis/*_err*.txt
+docs/thesis/*_stdout.txt
+docs/thesis/*_stderr.txt
+docs/thesis/lua_*.txt
+docs/thesis/vi_*.txt
+docs/thesis/xelatex_*.txt

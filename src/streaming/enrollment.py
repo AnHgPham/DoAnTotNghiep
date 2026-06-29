@@ -211,6 +211,26 @@ class EmbeddingBackend:
     def embed_many(self, waveforms: Sequence[torch.Tensor]) -> torch.Tensor:
         return torch.stack([self.embed(w) for w in waveforms])
 
+    @torch.no_grad()
+    def embed_batch(self, waveforms: Sequence[torch.Tensor]) -> torch.Tensor:
+        """Embed several waveforms in a single batched encoder forward.
+
+        Numerically identical to calling :meth:`embed` on each waveform
+        (encoder is in eval mode, so per-sample outputs are batch-invariant),
+        but amortizes feature-extraction and forward-pass overhead.
+        Returns a ``(N, d)`` tensor of L2-normalized embeddings on CPU.
+        """
+        if not waveforms:
+            return torch.empty(0)
+        feats = [
+            self.feature_extractor.extract(pad_or_trim(w, self.sample_rate)).unsqueeze(0)
+            for w in waveforms
+        ]
+        batch = torch.cat(feats, dim=0).to(self.device)
+        emb = self.encoder(batch)
+        emb = F.normalize(emb, p=2, dim=-1)
+        return emb.cpu()
+
 
 @dataclass
 class KeywordProfile:

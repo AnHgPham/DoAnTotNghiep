@@ -272,6 +272,36 @@ Recall         = 88.45%
 F1             = 82.41%
 ```
 
+### 6.4. Kết Quả Mở Rộng Top500 Từ Notebook
+
+Ngoài Microset, em cũng đã chạy tiếp nhánh `top500_full_v1` trong notebook `server/week_8_500_words.ipynb`. Phần này không thay thế kết quả Microset official ở trên, nhưng là bằng chứng cho thấy hướng `EdgeSpotFull T4 + SCAF+GE2E` vẫn giữ kết quả tốt khi mở rộng dữ liệu.
+
+Với Top500, có hai mốc cần tách rõ:
+
+- `epoch13`: có checkpoint và result dev30 trong package local, dùng được cho demo/phân tích sơ bộ;
+- `epoch25`: có log đầy đủ trong notebook cho dev30 và test100, nhưng package local hiện tại chưa kèm checkpoint/result JSON, nên nên ghi là kết quả từ Colab notebook log.
+
+| Model | Eval | Runs | ACC@1% FAR | ACC@5% FAR / Open-set ACC | FRR@5% FAR | AUC | EER | Keyword ACC | F1 | Nguồn |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| EdgeSpotFull T4 SCAF+GE2E Top500 epoch13 | dev | 30 | 86.68% | 88.87% | 20.36% | 95.12% | 12.03% | 88.86% | 81.71% | local artifact |
+| EdgeSpotFull T4 SCAF+GE2E Top500 epoch25 | dev | 30 | - | 89.33% | 19.57% | 95.01% | 11.37% | 89.68% | 82.66% | notebook log |
+| EdgeSpotFull T4 SCAF+GE2E Top500 epoch25 | test | 100 | - | 88.57% | 23.13% | 94.63% | 12.13% | 91.06% | 81.57% | notebook log |
+
+Trong quá trình train epoch25, checkpoint selection theo GSC-dev 3 runs đạt:
+
+```text
+Epoch 25/25
+loss        = 11.086228
+episodes    = 300
+SCAF loss   = 10.4846
+GE2E loss   = 0.6017
+GE2E ACC    = 0.842
+GSC-dev     = ACC@1%FAR 87.61%, ACC@5%FAR 89.20%, FRR@5% 20.00%
+checkpoint  = edgespot_full_t4_scaf_ge2e_top500_full_v1/epoch_25.pt
+```
+
+Điểm quan trọng là Top500 epoch25 cho `Keyword ACC` rất cao trên GSC-test 100 runs (`91.06%`), nhưng `FRR@5% FAR` tăng lên `23.13%` so với dev30. Vì vậy em nên trình bày phần này như kết quả mở rộng có triển vọng, còn kết quả chính thức/locked của báo cáo vẫn là Microset.
+
 ## 7. Phân Tích Kết Quả
 
 ### 7.1. So Với Baseline DSCNN-L
@@ -366,7 +396,9 @@ Commit liên quan:
 
 Các giới hạn cần ghi rõ:
 
-- đây là MSWC Microset English, không phải Top500 full và không phải full MSWC;
+- kết quả chính để claim trong báo cáo này vẫn là MSWC Microset English;
+- Top500 đã có log epoch25 dev30/test100 trong notebook, nhưng package local hiện tại chưa kèm checkpoint/result JSON tương ứng nên cần đóng gói lại trước khi xem là artifact locked;
+- Top500 chưa phải full reproduction của EdgeSpot paper vì vẫn khác dữ liệu, teacher-student setup và training profile;
 - chưa claim reproduce EdgeSpot paper;
 - DSCNN-L test100 đã bổ sung, nhưng còn thiếu `ACC@1% FAR` vì run này dùng `target_far=5%`;
 - chưa chạy KD với Wav2Vec2 teacher như EdgeSpot paper;
@@ -394,6 +426,8 @@ FRR@5% FAR  = 21.39%
 
 So với DSCNN-L Triplet test100, model final tăng `ACC@5% FAR` thêm 5.58 điểm %, tăng `Keyword ACC` thêm 9.27 điểm %, tăng `F1` thêm 9.11 điểm %, đồng thời giảm `EER` 6.68 điểm % và giảm `FRR@5% FAR` 19.19 điểm %. Như vậy, việc cải tiến thêm EdgeSpot và GE2E vào dự án đã cho kết quả thực nghiệm tốt, đủ để dùng làm mốc hiện tại của đồ án và làm nền cho các phase tiếp theo.
 
+Ở nhánh mở rộng Top500, epoch25 trong notebook đạt `Keyword ACC = 91.06%` và `F1 = 81.57%` trên GSC-test 100 runs. Kết quả này cho thấy hướng mở rộng lên nhiều keyword có triển vọng, nhưng do checkpoint/result JSON epoch25 chưa nằm trong package local nên em nên ghi là kết quả từ notebook log, chưa phải artifact locked.
+
 ## 11. Hướng Tiếp Theo
 
 Ưu tiên tiếp theo:
@@ -405,7 +439,7 @@ So với DSCNN-L Triplet test100, model final tăng `ACC@5% FAR` thêm 5.58 đi�
    - impostor bank;
    - multi-prototype;
    - support uncertainty scaling.
-4. Khi có máy/disk đủ, chuyển sang `top500_full_v1`.
+4. Đóng gói lại checkpoint/result JSON Top500 epoch25 từ Google Drive để biến log notebook thành artifact locked.
 5. Nếu muốn bám EdgeSpot paper hơn, chạy KD với Wav2Vec2 teacher và so với SCAF/SCAF+GE2E hiện tại.
 6. Sau khi static/open-set ổn, làm streaming benchmark:
    - false alarms/hour;

@@ -1,0 +1,50 @@
+# Mục tiêu
+Đồ án KWS (nhận dạng từ khóa ít mẫu, tập mở) đã hoàn chỉnh về kỹ thuật và các con số đầu đã được đối chiếu khớp với nhật ký bằng chứng của dự án (`docs/current_agent_state.md`). Vấn đề còn lại nằm ở **văn phong và cấu trúc trình bày**: nhiều chỗ còn văn nói, một số tiểu mục quá ngắn, các chương thiếu đoạn dẫn nhập, phần Tóm Tắt bị đặt nhầm thành mục đánh số, mô tả dữ liệu chưa có bảng, một hình bị đặt sau chỗ được nhắc tới lần đầu, đánh số trang phần đầu chưa chuẩn, và trang bìa liệt kê thừa người hướng dẫn hạ tầng. Kế hoạch này áp dụng các tiêu chuẩn viết học thuật thu được từ buổi đánh giá để đưa đồ án về trạng thái sẵn sàng nộp hội đồng.
+## Phạm vi và giả định
+File chỉnh sửa chính: `docs/thesis/thesis_vi_2026.tex` (pdfLaTeX). Hai câu hỏi làm rõ đã được bỏ qua, nên áp dụng phán đoán: chỉ sửa bản tiếng Việt, chưa đồng bộ sang `thesis_en_2026.tex`; nếu sau này biên dịch bằng XeLaTeX thì các sửa đổi tương tự cần chép sang `thesis_vi_2026_xelatex.tex` (hiện nội dung hai bản VI trùng nhau). Đây là chỉnh sửa văn phong/cấu trúc, **không thay đổi số liệu hay kết luận khoa học**.
+## Hiện trạng (tóm tắt)
+Đồ án gồm 5 chương (Giới thiệu, Kiến thức nền tảng, Phương pháp, Kết quả, Kết luận) cộng thư mục tham khảo, trong `thesis_vi_2026.tex`. Có ~17 hình: 15 ảnh raster trong `docs/thesis/assets/` (sinh bằng `make_thesis_figures.py`, `make_inference_figures.py`, `make_training_curves.py`) đều tồn tại, 2 sơ đồ vẽ bằng TikZ, và 2 chỗ giữ chỗ `\colabfig` (ảnh demo, đường sụp đổ SCAF) chưa xuất. Các số đầu (DSCNN-L+PCEN+GE2E `86,36±1,29` ACC@1%FAR, AUC `95,21`; EdgeSpot `82,87`; delta PCEN cạnh `+9,22`) khớp bằng chứng.
+## Vì sao không dùng nhiều tác nhân song song
+Đây là một tài liệu duy nhất, các phần phụ thuộc chặt vào nhau (giọng văn, cấu trúc, tham chiếu chéo `\Cref`). Chia cho nhiều tác nhân song song trên cùng một file `.tex` sẽ gây xung đột hợp nhất và giọng văn không nhất quán, nên sẽ thực hiện tuần tự bởi một tác nhân.
+# Các thay đổi đề xuất
+Nhóm theo chủ đề phản hồi, kèm vị trí cụ thể trong `thesis_vi_2026.tex`.
+## A. Cấu trúc tài liệu và phần đầu
+A1. Đưa **Tóm Tắt** ra khỏi mục 1.1: hiện đang là `\section{Tóm Tắt}` (thesis_vi_2026.tex:116) nằm trong chương Giới thiệu. Chuyển thành một trang Tóm Tắt độc lập, không đánh số (giống Lời Cảm Ơn), đặt trước mục lục. Khắc phục lỗi "để định nghĩa/mục ở chỗ không liên quan" và đưa về đúng chuẩn đồ án.
+A2. Chuẩn hóa **đánh số trang**: dùng `\pagenumbering{roman}` cho trang bìa/cảm ơn/tóm tắt/mục lục, rồi `\pagenumbering{arabic}` đặt lại từ Chương 1. Khắc phục "cần có page number" đúng quy cách. Xác nhận lớp `report` đã canh đều hai biên (justify) nên yêu cầu "align 2 bên" được đáp ứng mặc định; chỉ cần kiểm tra không có `\raggedright`.
+A3. **Trang bìa**: bỏ dòng `Cơ sở hạ tầng: TS. Trần Giang Sơn` (thesis_vi_2026.tex:90), chỉ giữ Sinh viên và Giảng viên hướng dẫn — đúng ý "report chỉ cần supervisor". Vẫn giữ lời cảm ơn hạ tầng trong phần Lời Cảm Ơn.
+A4. **Lời Cảm Ơn**: bỏ câu kết mang tính văn nói "chúc các bạn có một trải nghiệm đọc thú vị" (thesis_vi_2026.tex:108).
+## B. Đoạn dẫn nhập cho chương và tiểu mục
+B1. Thêm 1–2 đoạn mở đầu cho **mỗi chương** (Ch1–Ch5): nêu chương này trình bày gì và liệt kê trình tự các mục. Hiện Ch1 vào thẳng mục, Ch2 vào thẳng `\reviewnote`+mục, Ch5 vào thẳng 5.1. Khắc phục "mỗi chapter 1-2 paragraph introduction".
+B2. Thêm đoạn dẫn ngắn (5–7 dòng) tại **mọi chỗ nhảy từ mục lớn sang tiểu mục**, ví dụ giữa `\section{Kiến Trúc Hệ Thống}` (thesis_vi_2026.tex:577) và `\subsection{Bộ Trích Xuất Đặc Trưng}` (:579). Khắc phục "không đi 1 phát từ mục to đến mục nhỏ".
+## C. Chương 1 (Giới thiệu) — độ dài, giọng văn, hình flow
+C1. Sau khi tách Tóm Tắt, sắp xếp Ch1 còn ~3–4 trang: Bối cảnh & động lực, Mục tiêu, Kết quả kỳ vọng, mục giải thích phổ thông (viết lại), và thêm mục **Cấu Trúc Đồ Án**. Khắc phục "intro 3-4 trang là oke".
+C2. Viết lại mục **Giải Thích Bài Toán Theo Ngôn Ngữ Thông Thường** (thesis_vi_2026.tex:221–290) sang giọng học thuật: loại bỏ "Hãy tưởng tượng bạn...", "bài thi trắc nghiệm", "nướng cứng vào mạng nơ-ron", "giống người trợ lý"; vẫn dễ hiểu cho người không chuyên nhưng dùng ngôi khách quan, thuật ngữ chính xác; rút gọn từ ~2 trang xuống ~1 trang. Khắc phục "văn nói" nhưng giữ "ai cũng hiểu".
+C3. Thêm **một hình flow tổng quan** sớm trong Giới thiệu (sơ đồ huấn-luyện-một-lần → đăng ký → khớp prototype → từ chối tập mở), để người đọc thấy toàn cảnh hệ thống ngay. Khắc phục "flow hình ảnh ở introduction" và "cho thầy nhiều hình".
+## D. Chương 2 (Kiến thức nền tảng) — thứ tự hình, viết lại, mở rộng
+D1. Đẩy **Hình 2.1** (`fig:audiofeat`, hiện đặt tại thesis_vi_2026.tex:349–360, sau mục 2.2) lên ngay sau lần nhắc đầu tiên trong mục 2.1 (:306). Khắc phục "figure 2.1 đẩy lên trước".
+D2. Viết lại và mở rộng **mục 2.1 Từ Âm Thanh Đến Dữ Liệu Số** (:298–309) lên ~1 trang: lấy mẫu/lượng tử hóa, vì sao 16 kHz và giới hạn Nyquist, chuẩn hóa 1 giây, kèm ví dụ dạng sóng; rõ ràng, dễ hiểu. Khắc phục "2.1 viết lại" + "tiểu mục ~1 trang".
+D3. Viết lại và mở rộng **mục 2.4 Học Ít Mẫu và Học Độ Đo** (:405–415) lên ~1 trang: định nghĩa học ít mẫu/episodic, tập hỗ trợ–truy vấn, prototype, trực giác học độ đo, vì sao phù hợp từ điển do người dùng định nghĩa. Khắc phục "2.4 fewshot viết lại".
+D4. Mở rộng các mục nền tảng còn ngắn: 2.3 tập đóng vs tập mở (:394–403) và 2.5 biên góc & từ chối tập mở (:417–429) lên ~1 trang mỗi mục, thêm trực giác và liên hệ bài toán. Khắc phục "subsection không được viết ngắn".
+## E. Chương 3 (Phương pháp) — bảng dữ liệu, flow tiền xử lý, ý nghĩa công thức, ví dụ
+E1. Thêm **bảng tổng hợp bộ dữ liệu** (MSWC tiếng Anh so với GSC v2) trong mục 3.2 (:520–575): vai trò (huấn luyện/đánh giá), nguồn và trích dẫn (Mazumder 2021; Warden 2018), số từ, số clip, tần số mẫu, độ dài clip, hình dạng tensor đầu vào, đâu là input/đâu là output, và các chế độ giới hạn {20,50,220,620}. Nêu chính xác kho ngữ liệu/phiên bản. Khắc phục "miêu tả dataset phải có bảng", "nói chính xác dataset nào", và yêu cầu đủ input/output/kích thước cho người đọc.
+E2. Thêm **sơ đồ flow tiền xử lý** (TikZ) trong mục 3.3.1: dạng sóng (16k, 1s) → đóng khung/STFT → bộ lọc mel (40) → {log→MFCC(10) | PCEN} → tensor (1,47,10)/(1,40,101). Khắc phục "phần preprocessing vẽ thành 1 flow".
+E3. Với mỗi công thức (mel `eq:mel` :320; PCEN `eq:pcen` :618; prototype `eq:proto` :485; điểm số `eq:score` :491; KD `eq:kd` :746; Triplet/SCAF/GE2E :728–741), thêm 1–2 câu giải thích ý nghĩa trong bối cảnh bài toán: ký hiệu là gì, công thức đạt được điều gì, vì sao quan trọng. Khắc phục "miêu tả công thức và giải thích ý nghĩa".
+E4. Thêm **ví dụ chi tiết** quy trình đăng ký→khớp→từ chối: đăng ký "stop" bằng 10 clip → prototype; một truy vấn "stop" được chấp nhận; một âm lạ/nhạc bị từ chối, kèm con số khoảng cách minh họa. Khắc phục "phải có ví dụ chi tiết".
+## F. Chương 4 (Kết quả) — số liệu thuần, độ lệch chuẩn, diễn giải đời sống
+F1. Thêm đoạn dẫn nhập chương và đoạn 5–7 dòng mở đầu cho phần Kết quả: liệt kê trình tự Q1–Q4 và quy ước báo cáo (mở rộng đoạn hiện có :860–862). Khắc phục "phần evaluation phải có short introduction 5-7 dòng".
+F2. Bổ sung **±độ lệch chuẩn** vào các bảng sàng lọc `tab:matrix` (:893–926) và quét quy mô `tab:scale` (:987–1009), `tab:final` (:1076–1100) ở những dòng có sẵn std trong nhật ký bằng chứng (ví dụ các dòng cap620 16-pipeline có ±std); chỗ nào không có std thì ghi chú rõ. Khắc phục "report avg±std để đánh giá độ tin cậy" và "thống kê chuẩn chưa".
+F3. Tăng **diễn giải gắn với đời sống**: sau mỗi Q thêm 1–2 câu dịch chỉ số sang nghĩa người dùng (ví dụ "86% ACC@1%FAR nghĩa là cứ 100 lần nói đúng từ thì ~86 lần được nhận đúng trong khi chỉ 1% âm thanh lạ bị nhận nhầm, tức rất ít kích hoạt nhầm"). Giữ in đậm số tốt nhất (đã có sẵn `\best{}`). Khắc phục "phân tích gắn với đời sống, người thường cũng hiểu".
+F4. Rà soát để **mỗi hình có một câu chuyện rõ ràng**; cân nhắc gộp/bỏ hình trùng ý (ví dụ `fig:interaction` :1145–1151 so với `fig:heatmap`) để không loãng câu chuyện. Khắc phục "ít hình nhiều câu chuyện, chọn hình kèm câu chuyện".
+## G. Vị trí định nghĩa chỉ số
+G1. Giữ định nghĩa chỉ số (AUC/EER/FAR/FRR/ACC@FAR/F1) tại mục 3.5 Phương Pháp Đánh Giá (:779–796) — đúng chuẩn là định nghĩa trước khi dùng — và bảo đảm Chương 4 chỉ "thuần phân tích con số", không định nghĩa lại chỉ số nào. Thêm câu trực giác "cao là tốt / thấp là tốt" ngay tại chỗ định nghĩa (đã có một phần ở :861–862). Khắc phục "metric nằm trước, kết quả thuần phân tích" và "định nghĩa đặt đúng chỗ".
+## H. Nguồn hình và tính nhất quán
+H1. Bảo đảm **mọi chú thích hình ghi rõ nguồn** (tự sinh từ dự án so với lấy ngoài). Tất cả hình hiện tại đều tự sinh; xác nhận chú thích nêu rõ; không có ảnh lấy trên mạng nên không phát sinh trích dẫn ngoài. Khắc phục "lấy trên mạng thì trích dẫn nguồn".
+H2. Hai chỗ `\colabfig` (ảnh demo web :850–853; đường sụp đổ SCAF :1024–1030) hiện là giữ chỗ. Ghi rõ đây là việc tồn đọng cần xuất từ demo/Colab; nếu không kịp thì giữ nguyên hộp đỏ trung thực thay vì bịa hình.
+## I. Rà soát xác minh nội dung
+I1. Đối chiếu lại từng con số/khẳng định với `docs/current_agent_state.md`; sửa chỗ chưa nhất quán (ví dụ ô `tab:kd` dòng "220 GE2E ACC@1% = --" tại :1053). Khắc phục "đọc lại verify lại nội dung".
+## J. Dọn nhãn đánh dấu trước khi gửi thầy
+J1. Đồ án đang dùng `\NEW{}` (chữ xanh + [+]), `\reviewnote{}` (banner vàng), `\colabfig{}` (hộp đỏ) để phân biệt nội dung thêm. Trước khi gửi hội đồng, thêm công tắc để ẩn banner `\reviewnote` và bỏ tô màu `\NEW` (hiển thị như văn bản thường), chỉ giữ `\colabfig` như nhắc việc còn lại. Giúp bản gửi thầy sạch sẽ.
+# Thứ tự thực hiện đề xuất
+Làm theo nhóm A → B → C → D → E → F → G → H → I → J. Sau mỗi nhóm, biên dịch thử (hoặc kiểm tra cú pháp `\Cref`/`\label`) để bảo đảm tham chiếu chéo không gãy. Việc xác minh nội dung (I) chạy xuyên suốt và chốt lại ở cuối.
+# Sản phẩm bàn giao
+`thesis_vi_2026.tex` đã chỉnh sửa (sẵn sàng biên dịch trên Overleaf bằng pdfLaTeX), giữ nguyên thư mục `assets/`. Kèm danh sách ngắn các việc còn tồn đọng cần dữ liệu ngoài (xuất 2 hình `\colabfig`) và lưu ý nếu muốn đồng bộ sang bản XeLaTeX/tiếng Anh.

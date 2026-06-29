@@ -41,18 +41,35 @@ def load_words(data_dir: Path, split: str) -> list[str] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
-def discover_from_manifest(data_dir: Path, train_files: str) -> list[Path]:
+def discover_from_manifest(
+    data_dir: Path,
+    train_files: str,
+    max_per_word: int,
+    seed: int,
+    allowed_words: set[str] | None = None,
+) -> list[Path]:
     """Resolve manifest items the same way the student MSWCDataset does."""
+    import random
+
     manifest_path = Path(train_files)
     if not manifest_path.is_absolute():
         manifest_path = data_dir / "splits" / train_files
     items = json.loads(manifest_path.read_text(encoding="utf-8"))
-    paths: list[Path] = []
+    grouped: dict[str, list[Path]] = {}
     for item in items:
         p = Path(item)
         if not p.is_absolute():
             p = data_dir / p
-        paths.append(p)
+        if allowed_words is not None and p.parent.name not in allowed_words:
+            continue
+        grouped.setdefault(p.parent.name, []).append(p)
+    rng = random.Random(seed)
+    paths: list[Path] = []
+    for word in sorted(grouped):
+        word_paths = sorted(set(grouped[word]))
+        if max_per_word > 0 and len(word_paths) > max_per_word:
+            word_paths = rng.sample(word_paths, max_per_word)
+        paths.extend(word_paths)
     return paths
 
 
@@ -80,6 +97,18 @@ def discover_by_scan(data_dir: Path, words: list[str] | None, max_per_word: int)
     return paths
 
 
+def load_word_list_override(data_dir: Path, path_or_name: str | None) -> list[str] | None:
+    if not path_or_name:
+        return None
+    path = Path(path_or_name)
+    if not path.is_absolute() and path.parent == Path("."):
+        path = data_dir / "splits" / path
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError(f"Expected list in {path}")
+    return [str(item) for item in payload]
+
+
 def load_wave(path: Path) -> torch.Tensor:
     """Return mono waveform shaped ``(1, TARGET_LENGTH)``."""
     return load_waveform(path, sample_rate=SAMPLE_RATE, target_length=TARGET_LENGTH)
@@ -92,6 +121,8 @@ def main() -> None:
     parser.add_argument("--train-files", type=str, default=None,
                         help="Manifest json (e.g. train_files_cap220_flac.json). "
                              "Preferred so path keys match the student manifest.")
+    parser.add_argument("--train-words-file", type=str, default=None,
+                        help="Optional word-list JSON. Basenames resolve under <data-dir>/splits.")
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--model-name", type=str, default="facebook/wav2vec2-base")
     parser.add_argument("--layer", type=int, default=16)
@@ -102,15 +133,24 @@ def main() -> None:
     parser.add_argument("--batch-size", type=int, default=16)
     parser.add_argument("--shard-size", type=int, default=4096)
     parser.add_argument("--max-per-word", type=int, default=0)
+    parser.add_argument("--seed", type=int, default=42)
     args = parser.parse_args()
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     args.output_dir.mkdir(parents=True, exist_ok=True)
 
+    word_override = load_word_list_override(args.data_dir, args.train_words_file)
+    allowed_words = set(word_override) if word_override is not None else None
     if args.train_files:
-        audio_paths = discover_from_manifest(args.data_dir, args.train_files)
+        audio_paths = discover_from_manifest(
+            args.data_dir,
+            args.train_files,
+            args.max_per_word,
+            args.seed,
+            allowed_words=allowed_words,
+        )
     else:
-        words = None if args.split == "all" else load_words(args.data_dir, args.split)
+        words = word_override if word_override is not None else (None if args.split == "all" else load_words(args.data_dir, args.split))
         audio_paths = discover_by_scan(args.data_dir, words, args.max_per_word)
     if not audio_paths:
         raise FileNotFoundError(f"No audio files found under {args.data_dir}")

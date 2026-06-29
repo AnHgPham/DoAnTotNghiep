@@ -1,0 +1,1253 @@
+%==============================================================================
+%  ĐỒ ÁN TỐT NGHIỆP — Nhận Dạng Từ Khóa Ít Mẫu Tập Mở ở Quy Mô Từ Vựng Lớn
+%  Bản dịch tiếng Việt của thesis_en_2026.tex
+%  Overleaf-ready (compiler: pdfLaTeX).
+%
+%  Thư mục hình ảnh: ./assets/ — tải cả thư mục này lên Overleaf cùng file .tex.
+%
+%  ---------------------------------------------------------------------------
+%  QUY ƯỚC ĐÁNH DẤU (để phân biệt nội dung gốc và nội dung thêm mới):
+%    \NEW{...}       -> văn bản thêm vào trong mục ĐÃ CÓ — màu xanh + ký hiệu [+]
+%    \reviewnote{...}-> banner vàng — MỤC/PHẦN HOÀN TOÀN MỚI
+%    \colabfig{...}  -> hộp đỏ — hình cần xuất từ Colab
+%==============================================================================
+\documentclass[12pt,a4paper]{report}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T5]{fontenc}
+\usepackage[vietnamese]{babel}
+\usepackage{lmodern}
+\usepackage{microtype}
+\usepackage[a4paper,margin=2.5cm]{geometry}
+
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{graphicx}
+\graphicspath{{assets/}}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{array}
+\usepackage[table,dvipsnames]{xcolor}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.18}
+\usetikzlibrary{arrows.meta,positioning,fit,backgrounds,calc}
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+\usepackage{setspace}
+\onehalfspacing
+\usepackage[hidelinks,colorlinks=true,linkcolor=blue!55!black,
+            citecolor=blue!55!black,urlcolor=blue!55!black]{hyperref}
+\usepackage{cleveref}
+
+\captionsetup{font=small,labelfont=bf}
+
+%------------------------------ ký hiệu đánh dấu ----------------------------
+\definecolor{addcolor}{rgb}{0.05,0.25,0.6}
+\newcommand{\NEW}[1]{{\color{addcolor}#1\,\textsuperscript{\tiny[+]}}}
+\newcommand{\reviewnote}[1]{%
+  \par\smallskip\noindent
+  \colorbox{yellow!35}{\parbox{0.97\linewidth}{\small\textbf{[XEM XÉT — MỤC MỚI DO TRỢ LÝ VIẾT]}\; #1}}%
+  \par\smallskip}
+\newcommand{\colabfig}[1]{%
+  \par\smallskip\begin{center}
+  \fcolorbox{red!60!black}{red!6}{\parbox{0.9\linewidth}{\centering\small
+  \textbf{[HÌNH CẦN XUẤT TỪ COLAB]}\\[2pt] #1}}\end{center}\par\smallskip}
+
+\newcommand{\code}[1]{\texttt{\small #1}}
+\newcommand{\acc}{\text{ACC}}
+\newcommand{\far}{\text{FAR}}
+\newcommand{\frr}{\text{FRR}}
+\newcommand{\eer}{\text{EER}}
+\newcommand{\auc}{\text{AUC}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\norm}[1]{\lVert #1\rVert}
+\newcommand{\best}[1]{\textbf{#1}}
+
+%==============================================================================
+\begin{document}
+
+%------------------------------ trang bìa ------------------------------------
+\begin{titlepage}
+\centering
+\vspace*{1.5cm}
+{\scshape\large Tên Trường \par}
+{\scshape Khoa \dots \par}
+\vfill
+{\Huge\bfseries Nhận Dạng Từ Khóa Ít Mẫu Tập Mở\\[4pt]
+ở Quy Mô Từ Vựng Lớn\par}
+\vspace{6pt}
+{\large Nghiên Cứu Học Độ Đo về Bộ Trích Xuất Đặc Trưng,\\
+Bộ Mã Hóa và Phương Pháp Từ Chối Tập Mở\par}
+\vfill
+{\large Đồ Án Tốt Nghiệp Kỹ Sư\par}
+\vspace{1cm}
+\begin{tabular}{rl}
+Sinh viên: & \textit{Tên Sinh Viên} \\
+Giảng viên hướng dẫn: & \textit{TS. Trần Hoàng Tùng} \\
+Cơ sở hạ tầng: & \textit{TS. Trần Giang Sơn (Máy chủ ICTLab)} \\
+\end{tabular}
+\vfill
+{\large \today\par}
+\end{titlepage}
+
+%------------------------------ lời cảm ơn -----------------------------------
+\chapter*{Lời Cảm Ơn}
+\addcontentsline{toc}{chapter}{Lời Cảm Ơn}
+
+Trước hết, em xin bày tỏ lòng biết ơn sâu sắc tới giảng viên hướng dẫn,
+TS.\ Trần Hoàng Tùng, vì những phản hồi sâu sắc và sự hướng dẫn tận tình trong
+suốt 3 tháng thực tập. Em cũng xin chân thành cảm ơn TS.\ Trần Giang Sơn đã tạo
+điều kiện cho em toàn quyền sử dụng máy chủ ICTLab, giúp phần tính toán của đồ
+án thành công tốt đẹp.
+
+Xin cảm ơn gia đình đã luôn động viên và ủng hộ về mặt tinh thần, giúp em duy
+trì động lực và hoàn thành đồ án này. Cuối cùng, xin cảm ơn những ai đã dành
+thời gian đọc toàn bộ đồ án; chúc các bạn có một trải nghiệm đọc thú vị.
+
+%------------------------------ mục lục --------------------------------------
+\tableofcontents
+
+%==============================================================================
+\chapter{Giới Thiệu}\label{ch:intro}
+
+\section{Tóm Tắt}\label{sec:abstract}
+
+Chúng tôi nghiên cứu bài toán \emph{nhận dạng từ khóa ít mẫu tập mở} (Few-Shot
+Open-Set Keyword Spotting --- KWS): một bộ mã hóa embedding duy nhất được huấn
+luyện một lần trên kho từ vựng lớn, sau đó được triển khai để nhận dạng tập từ
+khóa tùy chọn của người dùng từ chỉ một số ít mẫu đăng ký, đồng thời từ chối
+lời nói ngoài từ điển và tiếng im lặng. Chúng tôi xây dựng một pipeline hoàn
+toàn tái tạo được xoay quanh hai bộ mã hóa nhỏ gọn --- mạng tích chập phân tách
+theo chiều sâu DSCNN-L ($\approx$0{,}41\,M tham số) và mô hình cạnh chú ý thời gian
+EdgeSpot-Full $\tau{=}4$ ($\approx$0{,}13\,M tham số) --- kết hợp với ba bộ trích
+xuất đặc trưng (MFCC, log-mel và PCEN theo kênh có thể học được) và bốn hàm mục
+tiêu học độ đo (Triplet, Sub-center ArcFace (SCAF), Generalized End-to-End (GE2E)
+và Knowledge Distillation cosine (KD) từ mô hình giáo viên Wav2Vec\,2.0 đã đóng
+băng). Toàn bộ hệ thống được huấn luyện trên Multilingual Spoken Words Corpus
+(MSWC) tiếng Anh và đánh giá chéo kho ngữ liệu trên Google Speech Commands v2
+(GSC) theo giao thức EdgeSpot-exact 10 mẫu tập mở với 100 lần chạy ngẫu nhiên.
+Qua bộ sàng lọc 16 cấu hình chúng tôi chỉ ra rằng:
+(i) bộ trích xuất PCEN có thể học được là cải tiến đáng tin cậy nhất (lên tới
+$+9{,}2$ điểm độ chính xác tại tỷ lệ chấp nhận sai 1\% cho bộ mã hóa cạnh);
+(ii) hàm mục tiêu GE2E dựa trên centroid vượt trội so với các hàm mục tiêu phân
+loại trong tổng quát hóa tập mở;
+(iii) quan trọng nhất, hàm mục tiêu phân loại SCAF sụp đổ khi từ vựng huấn luyện
+tăng lên $37{.}387$ lớp nếu trọng số loss không được giảm bốn bậc độ lớn.
+Chúng tôi thêm vào đó đặc trưng hóa việc độ chính xác bão hòa gần hai triệu
+clip huấn luyện và chứng minh rằng hàm mục tiêu KD cosine đạt độ chính xác ngang
+GE2E với khoảng một nửa dữ liệu. Cấu hình tốt nhất tổng thể (DSCNN-L + PCEN +
+GE2E) đạt $86{,}36\%$ độ chính xác tập mở tại 1\% FAR và AUC $95{,}21$ trên GSC
+test, trong khi mô hình nhỏ gọn nhất (EdgeSpot-Full + PCEN + GE2E) đạt $82{,}87\%$
+với một phần ba số tham số. Chúng tôi công bố mã nguồn đầy đủ, các giao thức
+huấn luyện/đánh giá và bản demo web chạy offline.
+
+\section{Bối Cảnh và Động Lực}\label{sec:context}
+
+Nhận dạng từ khóa (Keyword Spotting --- KWS) --- bài toán phát hiện một tập lệnh
+thoại nhỏ trong luồng âm thanh liên tục --- là cổng vào luôn bật của hầu hết mọi
+giao diện thoại hiện đại. Các hệ thống KWS cổ điển được huấn luyện dưới dạng bộ
+phân loại tập đóng trên một từ điển cố định (ví dụ mười từ lệnh của Google Speech
+Commands). Thiết kế này có hai hạn chế cấu trúc. Thứ nhất, tập từ khóa bị đóng
+băng tại thời điểm huấn luyện: hỗ trợ một từ đánh thức hoặc lệnh mới đòi hỏi
+phải thu thập dữ liệu và huấn luyện lại mô hình. Thứ hai, bộ phân loại softmax
+về bản chất không phải là tập mở: mọi đầu vào đều bị ép vào một trong các lớp đã
+biết, nên từ chưa từng gặp và tiếng ồn nền bị phân loại nhầm thành lệnh mà không
+có cảnh báo, gây ra kích hoạt nhầm. Công trình này hướng đến bài toán ít mẫu tập
+mở thực tế hơn và khó hơn. Chúng tôi huấn luyện một bộ mã hóa embedding duy nhất
+trên kho từ vựng rất lớn và đa dạng; khi triển khai, người dùng cuối tự định
+nghĩa tập từ khóa tùy ý bằng cách cung cấp chỉ vài ($k$) mẫu đăng ký cho mỗi
+từ. Mỗi từ khóa được đại diện bởi một \emph{prototype} (trung bình embedding của
+các mẫu đăng ký); nhận dạng được thực hiện bằng cách khớp prototype gần nhất
+trong không gian embedding, và một quyết định tập mở tường minh từ chối bất kỳ
+âm thanh nào quá xa tất cả các prototype. Câu hỏi khoa học trung tâm chúng tôi
+theo đuổi là điều gì khiến bộ mã hóa như vậy tổng quát hóa được, và đặc biệt là
+các lựa chọn thiết kế tương tác với quy mô từ vựng huấn luyện như thế nào.
+
+\paragraph{Đóng góp.} Các đóng góp chính gồm:
+\begin{itemize}[leftmargin=1.4em,itemsep=2pt]
+\item Một framework KWS ít mẫu tập mở dễ tái tạo, ít phụ thuộc, với hai bộ mã
+hóa nhỏ gọn, ba bộ trích xuất đặc trưng, bốn hàm mục tiêu độ đo và bốn đầu từ
+chối tập mở, tất cả chia sẻ giao diện prototype chung (\Cref{ch:method}).
+\item Bộ sàng lọc 16 cấu hình trên MSWC toàn từ vựng, cô lập đóng góp từng trục
+bằng các delta cặp; PCEN và GE2E nổi lên là hai lợi thế ổn định
+(\Cref{ch:results}).
+\item Phân tích quy mô cho thấy (a) độ chính xác bão hòa gần $\sim$2\,M clip huấn
+luyện và (b) chế độ thất bại của Sub-center ArcFace tại $37$k lớp, kèm giải thích
+theo cơ chế gradient và cách khắc phục thực tế (\Cref{ch:results}).
+\item Nghiên cứu knowledge distillation cho thấy hàm mục tiêu cosine với mô hình
+giáo viên Wav2Vec\,2.0 đóng băng đạt độ chính xác ngang GE2E với khoảng một nửa
+dữ liệu huấn luyện (\Cref{ch:results}).
+\item Đánh giá chéo kho ngữ liệu hoàn chỉnh theo giao thức EdgeSpot-exact 10
+mẫu (100 lần chạy), kèm pipeline phát trực tuyến trên CPU (Silero VAD + máy
+trạng thái làm mượt) và bản demo web chạy offline (\Cref{ch:method}).
+\end{itemize}
+
+%------------------------------------------------------- MỤC MỚI 1.3 ---------
+\section{Mục Tiêu Đề Tài}\label{sec:objectives}
+\reviewnote{Mục mới, mô phỏng theo mục ``Mục Tiêu Đề Tài'' của đồ án mẫu.}
+
+Mục tiêu chính của đồ án là thiết kế, triển khai và đánh giá nghiêm ngặt một hệ
+thống nhận dạng từ khóa tập mở \emph{không cần huấn luyện lại}, học một embedding
+có thể chuyển giao duy nhất và hỗ trợ từ điển tùy chọn của người dùng từ một số
+ít mẫu đăng ký. Cụ thể, chúng tôi hướng đến:
+\begin{enumerate}[leftmargin=1.5em,itemsep=2pt]
+\item xây dựng bộ mã hóa nhỏ gọn, ít phụ thuộc, hoạt động offline trên phần cứng
+bình thường ($\sim$0{,}1--0{,}4\,M tham số);
+\item xác định, qua nghiên cứu nhân tố có kiểm soát, bộ trích xuất đặc trưng, cấu
+trúc bộ mã hóa và hàm mục tiêu độ đo nào tổng quát hóa tốt nhất giữa các kho ngữ
+liệu;
+\item đặc trưng hóa hành vi của các lựa chọn thiết kế khi từ vựng huấn luyện tăng
+từ vài chục đến vài chục nghìn từ; và
+\item cung cấp đánh giá tập mở trung thực (DET/AUC/EER/ACC@FAR) theo giao thức
+nghiêm ngặt, có thể tái tạo, kèm bản demo phát trực tuyến hoạt động được.
+\end{enumerate}
+
+\section{Kết Quả Kỳ Vọng}\label{sec:outcomes}
+\reviewnote{Mục mới, mô phỏng theo mục ``Kết Quả Kỳ Vọng'' của đồ án mẫu.}
+
+Hệ thống được kỳ vọng: (i) nhận dạng tập từ khóa do người dùng tự tạo được đăng
+ký từ $\le 10$ mẫu mỗi từ mà không cần huấn luyện lại; (ii) từ chối lời nói ngoài
+từ điển và tiếng im lặng với tỷ lệ chấp nhận sai có thể kiểm soát được; (iii) tổng
+quát hóa qua các điều kiện ghi âm, chứng minh bằng cách huấn luyện trên một kho
+ngữ liệu (MSWC) và kiểm tra trên một kho ngữ liệu hoàn toàn khác (GSC); và (iv) đủ
+nhỏ để triển khai offline trên thiết bị đầu cuối. Các sản phẩm đi kèm gồm các bộ
+mã hóa đã huấn luyện, các script huấn luyện/đánh giá và bản demo web offline có
+phân tích thời điểm từ khóa trên audio dài.
+
+%------------------------------------------------------------------ MỤC MỚI 1.4
+\section{Giải Thích Bài Toán Theo Ngôn Ngữ Thông Thường}\label{sec:plain}
+\reviewnote{Mục mới --- giải thích bài toán khoảng 2 trang, không cần kiến thức
+kỹ thuật, nhằm thuyết phục người đọc về tính hữu ích và thách thức của đề tài.}
+
+Hãy tưởng tượng bạn đang nói chuyện với một thiết bị --- loa thông minh, tai
+nghe, xe hơi, máy giặt --- và thiết bị đó phản ứng ngay khi bạn nói một lệnh
+ngắn như ``dừng lại'', ``tiếp theo'', hoặc một từ đánh thức do bạn tự đặt. Phần
+mềm luôn lắng nghe liên tục để bắt đúng những từ đó, và chỉ những từ đó thôi, được
+gọi là hệ thống \emph{nhận dạng từ khóa} (Keyword Spotting --- KWS). Nó được cố
+tình thiết kế nhỏ và luôn chạy, để bộ nhận dạng giọng nói lớn, ngốn điện chỉ bật
+lên \emph{sau khi} nghe thấy từ khóa. KWS vì vậy là cánh cổng của hầu hết mọi
+giao diện thoại trong cuộc sống hàng ngày.
+
+\paragraph{Tại sao cách tiếp cận thông thường bị hạn chế.}
+Hầu hết hệ thống KWS thương mại được huấn luyện như một bài thi trắc nghiệm: mô
+hình được cho xem hàng nghìn ví dụ của một danh sách từ \emph{cố định} (ví dụ
+mười từ \textit{yes, no, up, down, \dots}) và học cách chọn đúng một trong số đó
+cho bất kỳ âm thanh nào. Cách này hoạt động được, nhưng có hai vấn đề thực tế:
+\begin{enumerate}[leftmargin=1.5em,itemsep=2pt]
+\item \textbf{Không thể thêm lệnh mới mà không cần sửa máy.}
+Nếu khách hàng muốn từ đánh thức ``Hey Aurora'' thay vì ``Hey Google'', nhà sản
+xuất phải thu thập dữ liệu mới và huấn luyện lại mô hình. Từ vựng thực sự được
+nướng cứng vào mạng nơ-ron.
+\item \textbf{Nó không thể nói ``tôi không biết''.} Một mô hình trắc nghiệm buộc
+phải chọn một trong các từ đã biết cho \emph{mọi} âm thanh, kể cả tiếng ho, âm
+nhạc phát từ radio, hay một từ chưa từng nghe. Kết quả là thiết bị bị kích hoạt
+khi không ai gọi nó --- gọi là \emph{kích hoạt nhầm}.
+\end{enumerate}
+
+\paragraph{Những gì chúng tôi xây dựng thay thế.}
+Đồ án này xây dựng một hệ thống KWS hoạt động giống người trợ lý hơn nhiều.
+Thay vì ghi nhớ danh sách từ cố định, hệ thống học một kỹ năng tổng quát:
+\emph{phân biệt xem hai đoạn âm thanh ngắn có phải cùng một từ hay không}. Kỹ
+năng này được huấn luyện một lần, trên một bộ sưu tập rất lớn và đa dạng các từ
+nói. Sau đó, người dùng cuối có thể tự định nghĩa lệnh của mình chỉ bằng cách thu
+âm vài ví dụ cho mỗi từ --- hệ thống không cần huấn luyện lại. Bên trong, mỗi
+lệnh được tóm tắt thành một điểm trên ``bản đồ ngữ nghĩa'' (chúng tôi gọi là
+\emph{embedding}); để nhận dạng, hệ thống đặt âm thanh mới lên bản đồ đó và kiểm
+tra xem nó gần nhất với lệnh nào. Đặc biệt, nếu âm thanh mới nằm xa \emph{mọi}
+lệnh, hệ thống được phép trả lời ``không phải lệnh nào'' --- đây là khả năng tập
+mở cho phép bỏ qua lời nói không liên quan và tiếng ồn.
+
+\paragraph{Tại sao điều này thực sự hữu ích.}
+Lợi ích có ba chiều thực tế. (1) \emph{Cá nhân hóa không cần huấn luyện lại}: một
+mô hình duy nhất được xuất xưởng hỗ trợ vô số từ điển do người dùng tự chọn ---
+đây chính xác là những gì các trợ lý trên thiết bị bảo vệ quyền riêng tư, công cụ
+hỗ trợ tiếp cận và điều khiển công nghiệp tùy chỉnh cần. (2) \emph{Bền vững trước
+điều bất ngờ}: vì hệ thống có thể từ chối, nó tạo ra ít kích hoạt nhầm hơn nhiều
+trong thực tế. (3) \emph{Dung lượng nhỏ}: các mô hình của chúng tôi đủ nhỏ
+($\sim$0{,}1--0{,}4 triệu tham số) để chạy trên vi điều khiển hoặc điện thoại mà
+không cần mạng, bảo vệ quyền riêng tư và hoạt động offline.
+
+\paragraph{Tại sao bài toán này khó.}
+Ba khó khăn khiến đây không chỉ là bài toán đồ chơi. Thứ nhất, \emph{tổng quát
+hóa}: mô hình phải hoạt động trên các từ --- thậm chí trên thiết bị ghi âm và
+giọng địa phương --- mà nó chưa thấy khi huấn luyện, vì vậy chúng tôi cố tình
+huấn luyện trên một kho ngữ liệu và kiểm tra trên một kho hoàn toàn khác. Thứ
+hai, \emph{ranh giới tập mở}: dạy mô hình từ chối tự tin không gian vô hạn của
+``mọi thứ không phải lệnh'' khó hơn nhiều so với phân tách một vài từ đã biết, và
+một hệ thống từ chối quá mạnh sẽ trở nên điếc trong khi hệ thống từ chối quá yếu
+sẽ gây phiền; chúng tôi phải định lượng đánh đổi này một cách trung thực. Thứ ba
+và đáng ngạc nhiên nhất, \emph{quy mô}: khi chúng tôi tăng từ vựng huấn luyện từ
+vài chục từ lên gần bốn mươi nghìn từ, một số kỹ thuật trông xuất sắc ở từ vựng
+nhỏ lại hoàn toàn thất bại.
+
+Trong các chương tiếp theo, chúng tôi trước tiên xem xét kiến thức nền tảng về
+cách âm thanh trở thành dữ liệu (\Cref{ch:background}); sau đó mô tả chính xác
+những gì chúng tôi đã xây dựng và đo lường (\Cref{ch:method}); trình bày và phân
+tích kết quả (\Cref{ch:results}); và kết thúc với hiện trạng và hướng phát triển
+tương lai (\Cref{ch:conclusion}).
+
+%==============================================================================
+\chapter{Kiến Thức Nền Tảng và Các Công Trình Liên Quan}\label{ch:background}
+\reviewnote{Toàn bộ chương này là mới. Bao gồm kiến thức đại cương: âm thanh được
+dùng như thế nào, dữ liệu có dạng ra sao, cách chuyển sang mel-spectrum, và các
+công trình trước mà đồ án xây dựng trên đó.}
+
+\section{Từ Âm Thanh Đến Dữ Liệu Số}\label{sec:sound2data}
+
+Âm thanh là sóng áp suất liên tục. Để xử lý trên máy tính, chúng ta
+\emph{lấy mẫu} sóng với tần số cố định; trong toàn bộ công trình này chúng tôi
+dùng $16{.}000$ mẫu mỗi giây (16\,kHz), là tiêu chuẩn thực tế cho các bài toán
+giọng nói, nắm bắt mọi tần số liên quan đến từ nói (lên tới 8\,kHz theo giới hạn
+Nyquist). Mỗi clip lệnh thoại được chuẩn hóa thành đúng một giây, tức một vector
+$16{.}000$ số (\emph{dạng sóng thô}); clip ngắn hơn được đệm bằng số không và clip
+dài hơn bị cắt bớt. \Cref{fig:audiofeat}(a) minh họa dạng sóng đó với từ ``yes''.
+Bản thân dạng sóng là đầu vào kém cho bộ phân loại: nó có số chiều cao, và cùng
+một từ nói to hơn một chút hoặc lệch về thời gian lại trông rất khác nhau từng
+mẫu một.
+
+\section{Biểu Diễn Thời Gian--Tần Số: Mel-Spectrogram}\label{sec:mel}
+
+Lời nói dễ mô hình hóa hơn nhiều trong miền \emph{thời gian--tần số}. Chúng tôi
+trượt một cửa sổ phân tích ngắn (25--40\,ms) qua dạng sóng theo các bước nhảy nhỏ
+(10--20\,ms) và, cho mỗi cửa sổ, tính biến đổi Fourier ngắn (STFT) để thu năng
+lượng tại từng tần số. Hai thực tế tri giác về thính giác người hướng dẫn bước
+tiếp theo: chúng ta cảm nhận độ cao âm thanh trên thang lôgarít, và nhạy cảm hơn
+với sự khác biệt ở tần số thấp hơn ở tần số cao. \emph{Thang mel} mã hóa điều đó:
+nó biến đổi tần số tuyến tính (Hz) thành trục mel tri giác theo công thức
+\begin{equation}
+m \;=\; 2595\,\log_{10}\!\Big(1+\frac{f}{700}\Big),
+\label{eq:mel}
+\end{equation}
+và một bộ (ở đây 40) bộ lọc tam giác chồng lên nhau cách đều trên trục mel này
+tổng hợp năng lượng STFT vào 40 \emph{băng mel}. Lấy lôgarít của năng lượng băng
+(vì độ to cũng được cảm nhận theo lôgarít) cho ra \emph{log-mel spectrogram} ở
+\Cref{fig:audiofeat}(b): một ảnh nhỏ gọn trong đó trục ngang là thời gian, trục
+dọc là tần số mel, và độ sáng là năng lượng.
+
+\paragraph{MFCC.}
+Một bước cổ điển nữa khử tương quan các băng log-mel bằng biến đổi cosin rời rạc
+(DCT), tạo ra \emph{Hệ số Cepstral Tần Số Mel} (MFCC). Các hệ số bậc thấp nắm
+bắt đường bao phổ biến đổi chậm (mang hầu hết thông tin âm vị), vì vậy thông
+thường --- và chúng tôi làm theo --- chỉ giữ vài hệ số đầu tiên.
+\Cref{fig:audiofeat}(c) cho thấy bản đồ 10 hệ số MFCC chúng tôi đưa vào bộ mã
+hóa. Toàn bộ pipeline trích xuất đặc trưng vì vậy là một phép biến đổi cố định,
+nhỏ, biến một giây âm thanh thành một ``ảnh'' một kênh có dạng
+thời-gian$\times$đặc-trưng, mà mạng tích chập có thể xử lý.
+
+\paragraph{PCEN.}
+Lôgarít tĩnh dùng ở trên đơn giản nhưng không thích nghi với điều kiện ghi âm.
+\emph{Chuẩn hóa Năng Lượng Theo Kênh} (Per-Channel Energy Normalization ---
+PCEN)~\cite{wang2017trainable} thay thế bằng kiểm soát khuếch đại tự động theo
+từng băng \emph{có thể học được} kèm nén mềm; các tham số của nó được học cùng với
+mạng. PCEN được thiết kế cho phát hiện bền vững từ xa và, như \Cref{ch:results}
+cho thấy, là cải tiến đáng tin cậy nhất trong nghiên cứu này. Phương trình chính
+xác được trình bày tại \Cref{sec:frontends}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\linewidth]{fig_audio_features.png}
+\caption{Từ âm thanh đến đặc trưng, tính từ bản ghi Google Speech Commands thật
+của từ ``yes''.
+(a) dạng sóng thô 1\,s, 16\,kHz;
+(b) log-mel spectrogram 40 băng (ảnh thời gian--tần số tri giác);
+(c) 10 hệ số MFCC đầu tiên trên $T{=}47$ khung --- tensor thực sự đưa vào bộ mã
+hóa DSCNN. \emph{Tạo từ dữ liệu dự án bằng
+\code{make\_thesis\_figures.py}.}}
+\label{fig:audiofeat}
+\end{figure}
+
+\reviewnote{Hai hình minh họa dữ liệu mới bên dưới
+(\ref{fig:dataexamples}, \ref{fig:melfb}), tạo từ dữ liệu dự án thật, theo phong
+cách hình ảnh dữ liệu mẫu của đồ án ADAS tham khảo.}
+
+Để xây dựng trực giác về những gì mô hình thực sự thấy, \Cref{fig:dataexamples}
+cho thấy log-mel spectrogram của sáu từ lệnh khác nhau. Mỗi từ có chữ ký thời
+gian--tần số đặc trưng riêng --- đoạn hữu thanh đi lên của ``yes'', tiếng bật
+môi của ``stop'', khởi đầu mũi của ``no'' --- và chính cấu trúc này, chứ không
+phải dạng sóng thô, mà bộ mã hóa học cách so sánh.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{fig_data_examples.png}
+\caption{Log-mel spectrogram của sáu từ lệnh Google Speech Commands (dữ liệu thật).
+Các từ khác nhau chiếm các mẫu thời gian--tần số khác nhau rõ ràng --- đây là lý
+do khiến học độ đo trong không gian này hiệu quả.}
+\label{fig:dataexamples}
+\end{figure}
+
+\Cref{fig:melfb} minh họa cụ thể bộ trích xuất mel: (a) 40 bộ lọc tam giác chồng
+nhau tổng hợp năng lượng STFT --- dày đặc ở tần số thấp và thưa ở tần số cao ---
+và (b) đường cong biến đổi Hz$\to$mel theo \Cref{eq:mel}.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.95\linewidth]{fig_mel_filterbank.png}
+\caption{Bộ trích xuất mel. (a) bộ lọc mel tam giác 40 kênh dùng trong công trình
+này; (b) đường cong biến đổi tri giác Hz$\to$mel.
+\emph{Tạo từ code trích xuất đặc trưng của dự án.}}
+\label{fig:melfb}
+\end{figure}
+
+\section{Nhận Dạng Từ Khóa: Tập Đóng vs.\ Tập Mở}\label{sec:kws-bg}
+
+KWS dấu chân nhỏ được phổ biến hóa bởi mạng tích chập phân tách theo chiều sâu
+(DS-CNN)~\cite{zhang2017hello} và sau đó được cải tiến bởi mạng broadcasted
+residual (BC-ResNet)~\cite{kim2021bcresnet}, cả hai đánh đổi độ chính xác lấy số
+tham số để triển khai trên vi điều khiển. Đây là các bộ phân loại \emph{tập đóng}:
+chúng đầu ra xác suất trên tập nhãn cố định và vì vậy không thể, theo thiết kế,
+từ chối đầu vào không biết. Yêu cầu tập mở --- chấp nhận từ khóa đã biết trong
+khi từ chối mọi thứ khác --- là điều phân biệt một con số độ chính xác trong phòng
+thí nghiệm với một động cơ từ đánh thức có thể triển khai thực tế.
+
+\section{Học Ít Mẫu và Học Độ Đo}\label{sec:fewshot-bg}
+
+Để hỗ trợ từ điển \emph{tùy ý}, chúng tôi đặt KWS như bài toán học độ đo: mạng
+học một không gian embedding trong đó các phát âm của cùng một từ gần nhau còn các
+phát âm của các từ khác nhau ở xa nhau. Mạng prototypical~\cite{snell2017prototypical}
+biểu diễn mỗi lớp bằng trung bình (``prototype'') của vài embedding hỗ trợ và
+phân loại truy vấn bằng prototype gần nhất; triplet
+embedding~\cite{schroff2015facenet} tối ưu hóa trực tiếp khoảng cách tương đối.
+Hàm mất mát Generalized End-to-End (GE2E)~\cite{wan2018ge2e}, ban đầu đề xuất cho
+xác minh người nói, xây dựng centroid bên trong mỗi batch huấn luyện đúng như
+triển khai xây dựng prototype, khiến nó phù hợp tự nhiên cho KWS ít mẫu.
+
+\section{Phân Loại Biên Góc và Từ Chối Tập Mở}\label{sec:arc-bg}
+
+ArcFace~\cite{deng2019arcface} và biến thể sub-center của nó
+SCAF~\cite{deng2020subcenter} học embedding phân biệt cao cho nhận dạng khuôn
+mặt với hàng nghìn danh tính. Một câu hỏi tự nhiên --- mà đồ án này trả lời phủ
+định ở quy mô cực lớn --- là liệu cơ chế tương tự có chuyển sang hàng chục nghìn
+lớp từ hay không. OpenMax~\cite{bendale2016openmax} khớp đuôi Weibull vào các
+kích hoạt theo từng lớp; điểm năng lượng~\cite{liu2020energy} cung cấp một giải
+pháp thay thế không cần hiệu chỉnh; chúng tôi điều chỉnh cả hai để hoạt động trên
+khoảng cách prototype và so sánh với ngưỡng nearest-class-mean đơn giản. Cuối
+cùng, các mô hình giọng nói tự giám sát như Wav2Vec\,2.0~\cite{baevski2020wav2vec}
+cung cấp các biểu diễn mạnh; chúng tôi dùng Wav2Vec\,2.0 đóng băng chỉ như mô
+hình giáo viên để chưng cất, giữ cho mô hình sinh viên triển khai rất nhỏ.
+
+%==============================================================================
+\chapter{Phương Pháp Đề Xuất}\label{ch:method}
+\reviewnote{Chương~3 trình bày \emph{những gì đã làm và cách đo lường}, không có
+kết quả (kết quả ở Chương~4). Các khối từ bản gốc --- ``Dữ Liệu và Giao Thức'',
+``Kiến Trúc Hệ Thống'' và phần phương pháp ``Đánh Giá'' --- được giữ nguyên; văn
+bản \textcolor{addcolor}{màu xanh với ký hiệu [+]} là phần thêm mới.}
+
+\NEW{Ở mức cao (\Cref{fig:pipeline}) phương pháp có hai giai đoạn chia sẻ một bộ
+mã hóa đóng băng duy nhất. Trong \emph{giai đoạn huấn luyện}, bộ mã hóa được tối
+ưu hóa một lần trên MSWC với hàm mục tiêu độ đo. Trong \emph{giai đoạn triển
+khai}, người dùng đăng ký vài mẫu mỗi từ khóa để tạo prototype, và truy vấn được
+nhận dạng bằng khoảng cách prototype gần nhất với ngưỡng tập mở tường minh ---
+bộ mã hóa không bao giờ được huấn luyện lại.}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  node distance=5mm and 7mm,
+  box/.style={draw,rounded corners=2pt,align=center,minimum height=8mm,
+              minimum width=15mm,font=\footnotesize,fill=blue!4},
+  arr/.style={-{Latex[length=2mm]},thick},
+  small/.style={font=\scriptsize,align=center}]
+\node[box] (wav) {1\,s âm thanh\\16\,kHz};
+\node[box,right=of wav] (feat) {Trích xuất\\đặc trưng\\MFCC/mel$+$PCEN};
+\node[box,right=of feat] (enc) {Bộ mã hóa\\$f_\theta$};
+\node[box,right=of enc] (norm) {Chuẩn hóa\\$\ell_2$};
+\node[box,right=of norm] (proto) {Prototype\\$p_w$};
+\node[box,right=of proto] (dist) {Khoảng\\cách gần\\nhất};
+\node[box,right=of dist] (dec) {Quyết định\\tập mở};
+\draw[arr](wav)--(feat);\draw[arr](feat)--(enc);\draw[arr](enc)--(norm);
+\draw[arr](norm)--(proto);\draw[arr](proto)--(dist);\draw[arr](dist)--(dec);
+\node[small,below=4mm of proto]{đăng ký\\(ít mẫu)};
+\node[small,below=4mm of dist]{truy vấn};
+\node[small,below=4mm of dec]{từ khóa /\\\texttt{không biết}};
+\begin{scope}[on background layer]
+\node[draw,dashed,rounded corners,fit=(wav)(norm),inner sep=3mm,
+      label={[font=\scriptsize]above:huấn luyện một lần trên MSWC}]{};
+\node[draw,dashed,rounded corners,fit=(proto)(dec),inner sep=3mm,
+      label={[font=\scriptsize]above:triển khai (không huấn luyện lại)}]{};
+\end{scope}
+\end{tikzpicture}
+\caption{\NEW{Pipeline KWS ít mẫu tập mở đầu cuối. Bộ mã hóa được huấn luyện một
+lần; khi triển khai, từ khóa người dùng trở thành prototype và truy vấn được phân
+loại bằng khoảng cách prototype gần nhất với ngưỡng tập mở.}}
+\label{fig:pipeline}
+\end{figure}
+
+\section{Phát Biểu Bài Toán}\label{sec:formulation}
+\reviewnote{Hình thức hóa ngắn gọn để các phương trình được tham chiếu sau có định
+nghĩa rõ ràng.}
+
+Đặt $f_\theta:\R^{T\times F}\!\to\!\R^{d}$ là bộ mã hóa ánh xạ biểu diễn một
+giây sang embedding đơn vị chuẩn. Prototype của từ khóa $w$ là trung bình của $k$
+embedding hỗ trợ,
+\begin{equation}
+p_w \;=\; \frac{1}{k}\sum_{i=1}^{k} f_\theta\!\big(x^{(w)}_i\big).
+\label{eq:proto}
+\end{equation}
+Truy vấn $x$ được gán cho prototype gần nhất, với điểm tập mở bằng khoảng cách
+cực tiểu lấy âm,
+\begin{equation}
+\hat w(x)=\arg\min_{w} d\!\big(f_\theta(x),p_w\big),\qquad
+s(x)=-\!\min_{w} d\!\big(f_\theta(x),p_w\big),
+\label{eq:score}
+\end{equation}
+và được chấp nhận là $\hat w(x)$ nếu $s(x)\ge\tau$, ngược lại được gán nhãn
+\texttt{không biết}.
+
+\reviewnote{Hình mới (\ref{fig:embedding}): phép chiếu t-SNE thực của không gian
+embedding mô hình đã huấn luyện, tạo bằng cách chạy checkpoint local tốt nhất trên
+GSC. Đây là minh họa trực tiếp nhất về lý do tại sao phương pháp hoạt động.}
+
+\Cref{fig:embedding} trực quan hóa không gian học được. Chạy bộ mã hóa đã huấn
+luyện tốt nhất trên bản ghi GSC thật và chiếu embedding xuống hai chiều, mỗi lệnh
+đã biết tạo thành một cụm chặt, tách biệt quanh prototype của nó (ngôi sao), trong
+khi các từ ngoài từ điển (dấu thập xám) nằm ở các khoảng trống giữa các cụm ---
+đúng hình học khiến khớp prototype gần nhất với ngưỡng khoảng cách hiệu quả cho
+từ chối tập mở.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.86\linewidth]{fig_embedding_space.png}
+\caption{\NEW{Chiếu t-SNE embedding từ mô hình DSCNN-L\,+\,PCEN\,+\,GE2E đã
+huấn luyện trên audio GSC thật. Điểm màu là sáu lệnh đã biết, ngôi sao là
+prototype của chúng, dấu thập xám là từ ngoài từ điển. Tạo bằng
+\code{make\_inference\_figures.py} từ checkpoint local.}}
+\label{fig:embedding}
+\end{figure}
+
+\section{Bộ Dữ Liệu và Giao Thức Huấn Luyện}\label{sec:data}
+
+\textbf{Kho ngữ liệu huấn luyện (MSWC tiếng Anh):} Chúng tôi huấn luyện trên
+phân đoạn tiếng Anh của Multilingual Spoken Words Corpus, sau khi lọc theo số
+clip tối thiểu chứa 37.387 từ huấn luyện (và 763 từ kiểm định), lấy từ pool
+metadata $\sim$38.150 từ và $\sim$6{,}6\,M clip. Để nghiên cứu quy mô, chúng tôi
+tạo các giới hạn $\{20, 50, 220, 620\}$ clip mỗi từ --- khoảng $\{0{,}53; 0{,}94;
+2{,}05; 2{,}99\}$\,M clip huấn luyện --- và hai chế độ thu nhỏ: phân chia Top-500
+truyền thống (450 từ train / 50 từ val, đánh giá trên từ xếp hạng 501+ với
+$\ge 1000$ phát âm) và micro-set MLCommons (31 từ khóa) chỉ dùng để xác nhận
+pipeline và sàng lọc kiến trúc. \NEW{Ba chế độ từ vựng trải dài hơn ba bậc độ
+lớn (\Cref{fig:vocabscale}); phạm vi này là điều khiến các hiệu ứng quy mô ở
+\Cref{ch:results} có thể quan sát được.}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.72\linewidth]{fig_vocab_scale.png}
+\caption{\NEW{Kích thước từ vựng huấn luyện cho ba chế độ (thang lôgarít). Micro-set
+chỉ dùng để sàng lọc; MSWC tiếng Anh đầy đủ là chế độ chính.}}
+\label{fig:vocabscale}
+\end{figure}
+
+\textbf{Lấy mẫu theo phép học và tăng cường dữ liệu:} Mỗi phép học lấy 30 lớp
+$\times$ 20 phát âm (chỉ các lớp có $\ge 20$ clip mới được chọn). Tăng cường
+trực tuyến kết hợp tiếng ồn nền DEMAND (xác suất 0{,}5, SNR lấy mẫu trong
+$[0, 10]$\,dB) và áp dụng SpecAugment (một mặt nạ tần số rộng 6, một mặt nạ thời
+gian rộng 8); nhiễu khuếch đại ($\pm6$\,dB) và dịch thời gian ($\le 100$\,ms)
+được áp dụng với xác suất 0{,}5. \NEW{\Cref{fig:augment} minh họa các tăng cường
+này trên bản ghi thật: tiếng ồn nền cộng thêm ở 5\,dB SNR lấp đầy các vùng yên
+tĩnh, và các mặt nạ tần số/thời gian của SpecAugment (dải đen) buộc bộ mã hóa
+không dựa vào bất kỳ băng hay thời điểm nào.}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{fig_augmentation.png}
+\caption{\NEW{Tăng cường dữ liệu trong huấn luyện trên từ ``yes'' (dữ liệu thật):
+(a) log-mel sạch; (b) cộng tiếng ồn nền thật tại 5\,dB SNR; (c) cộng mặt nạ tần
+số và thời gian SpecAugment.}}
+\label{fig:augment}
+\end{figure}
+
+\textbf{Kho ngữ liệu đánh giá (GSC v2):} Chúng tôi đánh giá chéo kho ngữ liệu
+trên Google Speech Commands v2. Mẫu đăng ký (hỗ trợ) được lấy từ
+\code{validation\_list.txt} chính thức; mẫu truy vấn từ \code{testing\_list.txt}
+(``test'') hoặc các file còn lại (``dev''), tránh rò rỉ dữ liệu. Lớp tổng hợp
+\code{\_silence\_} được tạo từ các đoạn một giây ngẫu nhiên của
+\code{\_background\_noise\_}, với các đoạn không chồng lên nhau cho hỗ trợ và
+truy vấn.
+
+\textbf{Giao thức EdgeSpot-exact:} Giao thức chính phân chia 35 từ của GSC thành
+11 lớp dương --- mười từ lệnh \{yes, no, up, down, left, right, on, off, stop,
+go\} cộng \code{\_silence\_} --- và 25 từ nói âm (không biết). Mỗi lần chạy đăng
+ký $k{=}10$ mẫu mỗi từ dương, tính prototype và chấm điểm tối đa 50 mẫu truy
+vấn mỗi từ (tập con hạt giống cố định). Chúng tôi báo cáo trung bình$\pm$std qua
+100 lần chạy ngẫu nhiên; tính ngẫu nhiên đến từ việc chọn mẫu đăng ký (bản thân
+từ điển đã biết/không biết cố định qua các lần chạy).
+
+\section{Kiến Trúc Hệ Thống}\label{sec:arch}
+
+\subsection{Bộ Trích Xuất Đặc Trưng}\label{sec:frontends}
+
+Tất cả âm thanh là mono, 16\,kHz, được cắt/đệm bằng không thành đúng một giây
+(16.000 mẫu). Chúng tôi hỗ trợ hai tham số hóa phổ, tóm tắt ở \Cref{tab:features}.
+
+\begin{table}[t]
+\centering
+\caption{Các cấu hình bộ trích xuất đặc trưng.}
+\label{tab:features}
+\begin{tabular}{lcc}
+\toprule
+ & \textbf{MFCC} & \textbf{Log-mel} \\
+\midrule
+Tần số mẫu    & \multicolumn{2}{c}{16\,kHz, mono, 1\,s} \\
+Kích thước FFT & 1024  & 512  \\
+Cửa sổ / bước  & 40/20\,ms & 25/10\,ms \\
+\code{center}  & \code{False} & \code{True} \\
+Băng mel       & 40 & 40 \\
+Hệ số đầu ra   & 10 (DCT đầu tiên) & 40 (mel) \\
+Hình dạng tensor & $(1,47,10)$ & $(1,40,101)$ \\
+PCEN có thể học & tùy chọn & tùy chọn \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{MFCC (frontend cho DSCNN):} Chúng tôi tính 40 hệ số cepstral tần số mel
+với FFT 1024 điểm, cửa sổ Hann 640 mẫu (40\,ms), bước 320 mẫu (20\,ms) và
+\code{center=False}; bộ lọc mel dùng thang Slaney và chuẩn hóa diện tích Slaney,
+log được lấy là $10\log_{10}(\cdot)$ theo sau là DCT-II trực giao. Chỉ giữ 10 hệ
+số đầu và hoán vị thành tensor $(1,47,10)=(\text{kênh}, T_{\text{khung}},
+\text{đặc trưng})$, trong đó $T = 47 = \lfloor(16000-1024)/320\rfloor + 1$.
+
+\textbf{Log-mel (frontend cho EdgeSpot/BC-ResNet):} Dùng 40 băng mel với FFT 512
+điểm, cửa sổ 400 mẫu (25\,ms), bước 160 mẫu (10\,ms) và \code{center=True}, tạo
+ra $(1,40,101)$. Nén lôgarít được ủy quyền cho lớp PCEN.
+
+\textbf{PCEN có thể học:} Chuẩn hóa năng lượng theo kênh~\cite{wang2017trainable}
+áp dụng bộ làm mượt IIR bậc một nhân quả $M_t = (1-s)M_{t-1} + sE_t$ theo sau là
+khuếch đại thích nghi và nén dải động,
+\begin{equation}
+\text{PCEN}(E_t)=\Big(\frac{E_t}{(\epsilon+M_t)^{\alpha}}+\delta\Big)^{r}-\delta^{r},
+\label{eq:pcen}
+\end{equation}
+với các tham số học được $\alpha,\delta,r,s$ (khởi tạo $0{,}96; 2{,}0; 0{,}5;
+0{,}04$; $\epsilon{=}10^{-6}$).
+
+\subsection{Bộ Mã Hóa}\label{sec:encoders}
+
+\textbf{DSCNN-L:} Mạng tích chập phân tách theo chiều sâu xây dựng từ bảng kích
+thước: một khối tích chập ban đầu $\text{Conv}(1{\to}276, 10{\times}4, \text{stride
+}2{\times}1)$ với đệm ``same'' bất đối xứng kiểu TensorFlow, theo sau là năm khối
+phân tách theo chiều sâu (276 kênh, kernel $3{\times}3$; khối đầu strides
+$2{\times}2$). Tất cả khối trừ khối cuối dùng BatchNorm+ReLU; khối cuối dùng
+LayerNorm (không có affine). Global average pool trực tiếp cho ra embedding nên
+chiều embedding bằng chiều rộng kênh, $d = 276$. DSCNN-L có $\approx 0{,}413$\,M
+tham số.
+
+\textbf{EdgeSpot-Full ($\tau{=}4$):} Bộ mã hóa cạnh thu nhỏ chiều rộng hoạt động
+trên đầu vào mel/PCEN $(1,40,101)$. Một stem $5{\times}5$ stride-$(2,1)$ cấp cho
+bốn giai đoạn khối fused-temporal và broadcasted-residual ``lite'' với giãn thời
+gian tăng dần $(1,2,4,8)$; một khối sụp đổ tần số theo chiều sâu lấy trung bình
+tần số thành chuỗi $(C,T)$; một tích chập vị trí theo chiều sâu và một khối chú ý
+thời gian đơn đầu ($d = 64$) mô hình hóa cấu trúc thời gian tầm xa; cuối cùng
+một đầu thời gian theo chiều sâu và global pooling tạo ra embedding 64 chiều.
+EdgeSpot-Full $\tau{=}4$ có $\approx 0{,}131$\,M tham số, nhỏ hơn DSCNN-L
+$\sim$3{,}2 lần.
+
+\begin{table}[t]
+\centering
+\caption{So sánh bộ mã hóa. Chuẩn hóa $\ell_2$ áp dụng ngoài bộ mã hóa để các
+hàm mất mát và bộ phân loại triển khai đều hoạt động trên siêu cầu.}
+\label{tab:encoders}
+\begin{tabular}{lccc}
+\toprule
+\textbf{Bộ mã hóa} & \textbf{Frontend} & \textbf{$d$} & \textbf{Tham số} \\
+\midrule
+DSCNN-L              & MFCC / mel($+$PCEN) & 276 & 0{,}413\,M \\
+EdgeSpot-Full $\tau{=}4$ & mel($+$PCEN)    & 64  & 0{,}131\,M \\
+EdgeSpot-Lite       & mel($+$PCEN)        & 64  & $<0{,}131$\,M \\
+BC-ResNet-FS $\tau{=}4$  & mel($+$PCEN)    & 64  & $\sim$0{,}1\,M \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\reviewnote{Hai sơ đồ khối TikZ mới cho các bộ mã hóa (\ref{fig:dscnn},
+\ref{fig:edgespot}) --- tương tự hình kiến trúc của đồ án mẫu nhưng vẽ đúng cho
+mạng tùy chỉnh của đồ án này --- cùng hình accuracy-vs-kích thước (\ref{fig:tradeoff}).}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  font=\scriptsize, node distance=3.2mm,
+  b/.style={draw,rounded corners=1.5pt,minimum height=7mm,align=center,fill=blue!5},
+  a/.style={-{Latex[length=1.6mm]}}]
+\node[b] (in) {đầu vào\\$(1,47,10)$};
+\node[b,right=of in] (c0) {Conv\\$10{\times}4$\\s$2{\times}1$,\,276\\BN+ReLU};
+\node[b,right=of c0] (d1) {DS-Blk1\\$3{\times}3$\\s$2{\times}2$};
+\node[b,right=of d1] (d2) {DS-Blk\\2--4\\$3{\times}3$};
+\node[b,right=of d2] (d5) {DS-Blk5\\$3{\times}3$\\+LayerNorm};
+\node[b,right=of d5] (gap) {GAP};
+\node[b,right=of gap] (emb) {emb\\$d{=}276$};
+\draw[a](in)--(c0);\draw[a](c0)--(d1);\draw[a](d1)--(d2);\draw[a](d2)--(d5);
+\draw[a](d5)--(gap);\draw[a](gap)--(emb);
+\end{tikzpicture}
+\caption{\NEW{Sơ đồ khối DSCNN-L: CNN phân tách theo chiều sâu, $\approx$0{,}41\,M
+tham số. Embedding bằng chiều rộng kênh cuối (276); không có phép chiếu tuyến
+tính.}}
+\label{fig:dscnn}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\begin{tikzpicture}[
+  font=\scriptsize, node distance=2.6mm,
+  b/.style={draw,rounded corners=1.5pt,minimum height=7mm,align=center,fill=orange!8},
+  a/.style={-{Latex[length=1.6mm]}}]
+\node[b] (in) {đầu vào\\$(1,40,101)$};
+\node[b,right=of in] (pc) {PCEN};
+\node[b,right=of pc] (st) {Stem\\$5{\times}5$\\s$(2,1)$};
+\node[b,right=of st] (s12) {Giai đoạn 1--2\\Fused-Temporal\\giãn 1,2};
+\node[b,right=of s12] (s34) {Giai đoạn 3--4\\BCRes-Lite\\giãn 4,8};
+\node[b,below=5mm of s34] (fc) {Sụp đổ\\tần số};
+\node[b,left=of fc] (att) {Pos-Conv\\$+$chú ý\\1 đầu};
+\node[b,left=of att] (th) {Đầu thời\\gian + GAP};
+\node[b,left=of th] (emb) {emb\\$d{=}64$};
+\draw[a](in)--(pc);\draw[a](pc)--(st);\draw[a](st)--(s12);\draw[a](s12)--(s34);
+\draw[a](s34)--(fc);\draw[a](fc)--(att);\draw[a](att)--(th);\draw[a](th)--(emb);
+\end{tikzpicture}
+\caption{\NEW{Sơ đồ khối EdgeSpot-Full ($\tau{=}4$): frontend mel/PCEN, các khối
+fused-temporal và broadcasted-residual với giãn tăng dần, sụp đổ tần số, giai đoạn
+chú ý thời gian một đầu, $\approx$0{,}13\,M tham số.}}
+\label{fig:edgespot}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.78\linewidth]{fig_model_tradeoff.png}
+\caption{\NEW{Đánh đổi độ chính xác vs.\ kích thước mô hình. DSCNN-L dẫn đầu về
+độ chính xác; EdgeSpot-Full đạt điểm cạnh tranh với một phần ba tham số; KD nâng
+mô hình nhỏ gọn ở dữ liệu ít. (Số liệu chi tiết ở \Cref{ch:results}.)}}
+\label{fig:tradeoff}
+\end{figure}
+
+\subsection{Các Hàm Mục Tiêu Học Độ Đo}\label{sec:losses}
+
+Tất cả hàm mục tiêu được huấn luyện theo phép học: mỗi phép học lấy mẫu
+$n_{\text{cls}}{=}30$ lớp với $n_{\text{spp}}{=}20$ phát âm mỗi lớp (600
+embedding/phép học).
+
+\textbf{Triplet:} Hàm mất mát triplet bán-khó~\cite{schroff2015facenet} với
+khoảng cách Euclid, $\mathcal{L}=\frac{1}{N}\sum\max(0, d(a,p)-d(a,n)+m)$, với
+khai thác positive khó nhất và khai thác negative bán-khó kiểu FaceNet.
+
+\textbf{Sub-center ArcFace (SCAF):} Softmax biên góc cộng với $K{=}3$ sub-center
+mỗi lớp. Logit mỗi lớp là max cosine qua các sub-center,
+$\cos\theta_c = \max_{j\le K} w_{c,j}^{\top} z$; biên cộng $m{=}0{,}5$ áp dụng
+cho lớp đích và logit được nhân $s{=}30$ trước cross-entropy.
+
+\textbf{GE2E (centroid):} Hàm mất mát generalized end-to-end~\cite{wan2018ge2e}
+phản ánh triển khai: trong mỗi phép học mỗi lớp được chia thành hỗ trợ/truy vấn;
+centroid là trung bình hỗ trợ chuẩn hóa $\ell_2$ và truy vấn được phân loại bằng
+cosine similarity có thang và bias học được, tối ưu hóa bằng cross-entropy. GE2E
+trực tiếp tối ưu hóa mục tiêu đăng ký-rồi-khớp của \Cref{eq:proto,eq:score}.
+
+\textbf{Chưng cất cosine (KD):} Chúng tôi thêm chưng cất từ mô hình giáo viên
+Wav2Vec\,2.0-base đóng băng (lớp ẩn 16, mean-pooled, chiếu sang $d{=}64$ bởi đầu
+sub-center-ArcFace đã huấn luyện). Hàm mất mát chưng cất là thuần cosine embedding,
+\begin{equation}
+\mathcal{L}_{\text{KD}} = 1 - \frac{1}{N}\sum_i
+\cos\!\big(f_\theta(x_i),\, g_{\text{giáo viên}}(x_i)\big),
+\label{eq:kd}
+\end{equation}
+không có nhiệt độ/nhãn mềm. Embedding giáo viên được tính trước offline và tra
+cứu theo đường dẫn file khi huấn luyện.
+
+\textbf{Kết hợp lai:} Chúng tôi tạo tổng có trọng số, ví dụ \code{scaf\_ge2e},
+\code{kd\_ge2e}, \code{kd\_scaf}, \code{kd\_scaf\_ge2e}. Một chi tiết triển khai
+quan trọng (và là phát hiện thực nghiệm chính, \Cref{ch:results}) là trọng số
+SCAF: trong KD được đặt là $5\times10^{-5}$ trong khi trọng số GE2E/KD là 1{,}0.
+
+\NEW{\textbf{Tối ưu hóa.} Trừ khi ghi chú, huấn luyện dùng Adam (learning rate
+$10^{-3}$, weight decay $10^{-4}$), gradient clipping tại 5{,}0, lịch cosine
+annealing với warm restarts ($T_0{=}10$, $T_{\text{mult}}{=}2$,
+$\eta_{\min}{=}10^{-5}$) và hạt ngẫu nhiên cố định (42) với cuDNN determinism.}
+
+\section{Các Đầu Từ Chối Tập Mở}\label{sec:openset}
+\reviewnote{Mục mới mô tả bốn đầu từ chối đã triển khai.}
+
+Tất cả các đầu chia sẻ giao diện prototype và chỉ khác nhau ở điểm từ chối; từ
+khóa dự đoán luôn là lớp argmin khoảng cách (\Cref{eq:score}).
+(i) \textbf{Nearest-class-mean (NCM, ``L2 trực tiếp'')} --- mặc định của chúng
+tôi --- từ chối khi khoảng cách prototype tối thiểu vượt ngưỡng, dùng khoảng cách
+thô không chuẩn hóa xác suất.
+(ii) \textbf{OpenMax}~\cite{bendale2016openmax} khớp đuôi Weibull với khoảng cách
+hỗ trợ-tới-prototype và dùng $1-\text{CDF}$ làm điểm thành viên.
+(iii) \textbf{Energy}~\cite{liu2020energy} xem $-d_i$ như logit và dùng năng
+lượng tự do $E(x)=T\log\sum_i\exp(-d_i/T)$ làm điểm chấp nhận.
+(iv) \textbf{Ngưỡng hiệu chỉnh} ($\mu+2\sigma$ của khoảng cách hỗ trợ) điều
+khiển bảng phân tích nhầm lẫn theo từng từ.
+
+\section{Phương Pháp Đánh Giá}\label{sec:eval}
+
+Chúng tôi xem bài toán tập mở là phát hiện nhị phân từ khóa vs.\ không phải từ
+khóa kết hợp theo dõi danh tính đa lớp, và xây dựng tất cả chỉ số trên ROC.
+\begin{itemize}[leftmargin=1.3em,itemsep=1pt]
+\item \textbf{AUC:} diện tích dưới ROC của điểm tập mở (\Cref{eq:score});
+không phụ thuộc ngưỡng.
+\item \textbf{EER:} tỷ lệ lỗi bằng nhau, điểm hoạt động tối thiểu hóa
+$|\far-\frr|$, báo cáo là $(\far+\frr)/2$.
+\item \textbf{FRR@FAR:} tỷ lệ từ chối sai tại ngưỡng lớn nhất có tỷ lệ chấp
+nhận sai không vượt mục tiêu (1\% hoặc 5\%).
+\item \textbf{Open-set ACC@FAR:} độ chính xác chính. Truy vấn đã biết đúng khi
+được chấp nhận ($s\ge\tau_{\far}$) và nhãn argmin đúng; truy vấn không biết đúng
+khi bị từ chối. Báo cáo tại $\far\in\{1\%, 5\%\}$.
+\item \textbf{Keyword ACC:} độ chính xác prototype gần nhất tập đóng chỉ trên
+truy vấn đã biết (bỏ qua từ chối).
+\item \textbf{F1:} F1 nhị phân từ khóa vs.\ không biết tại ngưỡng EER.
+\end{itemize}
+
+\section{Thiết Kế Thực Nghiệm: Những Gì Chúng Tôi Đo}\label{sec:expdesign}
+\reviewnote{Mục mới. Phát biểu bốn câu hỏi thực nghiệm sẽ trả lời (không có kết
+quả --- kết quả ở Chương~4).}
+
+Các thực nghiệm được tổ chức quanh bốn câu hỏi:
+\begin{description}[leftmargin=1.6em,itemsep=2pt]
+\item[\textbf{Q1 --- Trục thiết kế nào quan trọng?}] Chúng tôi huấn luyện tất cả
+$2{\times}2{\times}4 = 16$ tổ hợp \{DSCNN-L, EdgeSpot-Full\} $\times$
+\{MFCC, PCEN\} $\times$ \{Triplet, SCAF, GE2E, SCAF$+$GE2E\} và cô lập từng trục.
+\item[\textbf{Q2 --- Hiệu suất quy mô như thế nào?}] Cố định frontend/loss tốt
+nhất, chúng tôi quét giới hạn $\{20,50,220,620\}$ và tăng từ vựng từ 31 đến
+37.387 từ.
+\item[\textbf{Q3 --- Chưng cất có thể thay thế dữ liệu không?}] Chúng tôi so sánh
+GE2E với hàm mục tiêu cosine-KD ở các giới hạn dữ liệu tương đương.
+\item[\textbf{Q4 --- Hệ thống triển khai tốt nhất là gì?}] Chúng tôi tổng hợp các
+cấu hình mạnh nhất theo từng chế độ dữ liệu.
+\end{description}
+
+\section{Triển Khai: Phát Trực Tuyến và Bản Demo}\label{sec:deploy}
+\reviewnote{Mục mới mô tả pipeline trên thiết bị/phát trực tuyến và web demo.}
+
+Ngoài bộ mã hóa lõi, hệ thống bao gồm pipeline phát trực tuyến trên CPU và bản
+demo web offline. Phát trực tuyến thực hiện phát hiện cửa sổ trượt (cửa sổ 1\,s,
+bước 0{,}5\,s) được kiểm soát bởi Silero VAD: chỉ các cửa sổ VAD đánh dấu là lời
+nói mới được nhúng và khớp. Một \emph{máy trạng thái} quyết định không phụ thuộc
+backend (\Cref{alg:sm}) ổn định các ứng viên thô thành sự kiện sạch bằng bầu chọn
+đa số ngắn, kiểm tra biên top-2 và thời gian hồi phục để ngăn kích hoạt trùng lặp.
+Các module tùy chọn --- bộ giảm nhiễu spectral-gating/SpeechBrain và cổng xác minh
+người nói ECAPA-TDNN --- tuân theo cùng mô hình fail-open, bật/tắt runtime.
+
+\begin{algorithm}[t]
+\caption{Máy trạng thái quyết định phát trực tuyến (làm mượt $+$ hồi phục).}
+\label{alg:sm}
+\footnotesize
+\begin{algorithmic}[1]
+\Require cửa sổ $W$, phiếu $V$, biên $m_{\min}$, hồi phục $C$
+\State bộ đệm $\gets$ deque(maxlen $=W$);\ $t_{\text{cuối}}\gets-\infty$
+\For{mỗi ứng viên $c$ với khoảng $[t_s,t_e]$}
+  \If{$t_s - t_{\text{cuối}} < C$} \State phát \textsc{hồi\_phục};\ \textbf{tiếp tục} \EndIf
+  \If{$\lnot c.\text{phát hiện}$ \textbf{hoặc} $c.\text{kw}{=}$\texttt{không biết}
+       \textbf{hoặc} $c.\text{biên}<m_{\min}$}
+     \State xóa bộ đệm; phát \textsc{từ\_chối};\ \textbf{tiếp tục}
+  \EndIf
+  \State đẩy $c$;\ $k^\star\gets$ từ khóa đa số trong bộ đệm
+  \If{phiếu$(k^\star)\ge V$}
+     \State $a\gets\arg\max_{\text{độ tin}}$\{$c\in$bộ đệm: $c.\text{kw}{=}k^\star$\}
+     \State $t_{\text{cuối}}\gets a.t_e$; xóa bộ đệm; phát \textsc{phát\_hiện}$(k^\star)$
+  \Else\ \State phát \textsc{đang\_chấm\_điểm} \EndIf
+\EndFor
+\end{algorithmic}
+\end{algorithm}
+
+\colabfig{Ảnh chụp màn hình bản demo web offline (bộ chuyển đổi mô hình + xem
+thời điểm audio dài). Xuất từ demo local tại 1280$\times$720 và lưu thành
+\code{assets/demo\_ui.png}; sau đó thay hộp này bằng
+\code{\textbackslash includegraphics}.}
+
+%==============================================================================
+\chapter{Kết Quả và Phân Tích}\label{ch:results}
+\reviewnote{Toàn bộ chương này là mới. Báo cáo và phân tích các số đo, tham chiếu
+đến hình kết quả trong \code{assets/}.}
+
+Tất cả số liệu là trung bình$\pm$std qua giao thức EdgeSpot-exact 10 mẫu (100 lần
+chạy trên GSC test, ký hiệu test100). Cao hơn tốt hơn cho ACC/AUC/F1/Keyword-ACC;
+thấp hơn tốt hơn cho EER/FRR.
+
+\section{Diễn Biến Huấn Luyện}\label{sec:res-train}
+\reviewnote{Mục mới. \Cref{fig:traincurves} được vẽ từ \emph{log TensorBoard local
+thật} (không cần huấn luyện lại), tương tự hình ``Loss Huấn Luyện và Kiểm Định''
+của đồ án mẫu.}
+
+\Cref{fig:traincurves} cho thấy quỹ đạo huấn luyện thực sự của mô hình neo
+Microset (EdgeSpot-Full + SCAF+GE2E), đọc trực tiếp từ log TensorBoard đã lưu.
+Hàm mất mát SCAF+GE2E giảm mượt từ $\sim$15{,}5 xuống $\sim$1{,}3, AUC kiểm định
+tăng lên và ổn định gần $98\%$, độ chính xác tập mở GSC-dev đạt ngưỡng $\sim$85\%
+--- một quỹ đạo lành mạnh, không bị overfit.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{fig_training_curves.png}
+\caption{\NEW{Diễn biến huấn luyện thực sự của mô hình neo Microset (EdgeSpot-Full
++ SCAF+GE2E), từ log TensorBoard local: (a) hàm mất mát huấn luyện; (b) AUC kiểm
+định và GSC-dev ACC@1\%FAR theo epoch. Tạo bằng \code{make\_training\_curves.py}.}}
+\label{fig:traincurves}
+\end{figure}
+
+\section{Q1: Trục Thiết Kế Nào Quan Trọng}\label{sec:res-q1}
+
+\Cref{tab:matrix} báo cáo bộ sàng lọc 16 cấu hình đầy đủ trên MSWC toàn từ vựng
+(cap-620), và \Cref{fig:ranked} xếp hạng các cấu hình trực quan. Hai phát hiện
+ngay lập tức: các pipeline dùng PCEN chiếm đỉnh xếp hạng, và hàm mất mát centroid
+GE2E là tốt nhất cho mọi backbone. Hàm mục tiêu phân loại SCAF (và kết hợp
+SCAF$+$GE2E ở trọng số đầy đủ) \emph{sụp đổ} ở quy mô này --- hiện tượng được
+phân tích ở \Cref{sec:res-q2}.
+
+\begin{table}[t]
+\centering
+\caption{Bộ sàng lọc 16 cấu hình đầy đủ trên MSWC toàn từ vựng (cap-620),
+GSC test100 @ 1\% FAR. ``sụp.'' đánh dấu sụp đổ suy biến
+($\auc{=}50$, $\text{F1}{=}0$, $\frr{=}100\%$). Tốt nhất in đậm.}
+\label{tab:matrix}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{lll r r r r}
+\toprule
+\textbf{Bộ mã hóa} & \textbf{Đặc trưng} & \textbf{Loss} &
+\acc$_{1\%}$ & \auc & \eer & F1\\
+\midrule
+DSCNN & MFCC & Triplet     & 71{,}52 & 75{,}55 & 31{,}41 & 57{,}17 \\
+DSCNN & MFCC & SCAF        & 70{,}08 & 55{,}04 & 46{,}41 & 41{,}38 \\
+DSCNN & MFCC & GE2E        & 77{,}08 & 86{,}46 & 21{,}95 & 68{,}50 \\
+DSCNN & MFCC & SCAF+GE2E   & 69{,}04 & 47{,}78 & 52{,}15 & 35{,}93 \\
+DSCNN & PCEN & Triplet     & 79{,}98 & 90{,}65 & 17{,}57 & 74{,}14 \\
+DSCNN & PCEN & SCAF        & 69{,}44 & 50{,}00 & 50{,}00 & sụp. \\
+\rowcolor{blue!7}
+DSCNN & PCEN & GE2E        & \best{82{,}34} & \best{92{,}42} & \best{14{,}89} & \best{77{,}75} \\
+DSCNN & PCEN & SCAF+GE2E   & 69{,}44 & 50{,}00 & 50{,}00 & sụp. \\
+Edge  & MFCC & Triplet     & 69{,}63 & 52{,}84 & 48{,}05 & 39{,}79 \\
+Edge  & MFCC & SCAF        & 69{,}44 & 50{,}00 & 50{,}00 & sụp. \\
+Edge  & MFCC & GE2E        & 70{,}76 & 65{,}30 & 39{,}05 & 48{,}82 \\
+Edge  & MFCC & SCAF+GE2E   & 69{,}67 & 50{,}88 & 50{,}39 & 37{,}57 \\
+Edge  & PCEN & Triplet     & 79{,}58 & 89{,}85 & 18{,}22 & 73{,}29 \\
+Edge  & PCEN & SCAF        & 69{,}44 & 50{,}00 & 50{,}00 & sụp. \\
+\rowcolor{blue!7}
+Edge  & PCEN & GE2E        & \best{79{,}98} & 87{,}23 & 20{,}23 & 70{,}68 \\
+Edge  & PCEN & SCAF+GE2E   & 69{,}44 & 50{,}00 & 50{,}00 & sụp. \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.96\linewidth]{res_ranked_bar.png}
+\caption{Các cấu hình xếp hạng theo GSC ACC@1\%FAR (sàng lọc giai đoạn 1 trên
+MSWC đầy đủ). Pipeline PCEN$+$GE2E dẫn đầu; màu sắc mã hóa backbone$\times$
+đặc trưng. \emph{Hình kết quả từ dự án.}}
+\label{fig:ranked}
+\end{figure}
+
+\paragraph{Delta hiệu ứng cặp.}
+Cô lập từng trục (\Cref{tab:deltas}, \Cref{fig:deltas}) cho thấy hai lợi thế ổn
+định. PCEN cải thiện mọi backbone --- ấn tượng nhất là bộ mã hóa cạnh ($+9{,}22$
+ACC, $+21{,}86$ F1) --- và GE2E nhất quán vượt triplet. Bộ trích xuất đặc trưng vì
+vậy mang gánh nặng biểu diễn nhiều hơn theo tỷ lệ khi backbone nhỏ.
+
+\begin{table}[t]
+\centering
+\caption{Delta hiệu ứng cặp (điểm phần trăm), MSWC toàn từ vựng,
+GSC test100 @ 1\% FAR. Dương nghĩa là tùy chọn đầu tiên tốt hơn.}
+\label{tab:deltas}
+\small
+\begin{tabular}{l r r r}
+\toprule
+\textbf{So sánh (các trục khác cố định)} & $\Delta\acc_{1\%}$ & $\Delta\auc$ & $\Delta$F1\\
+\midrule
+PCEN $-$ MFCC \;(DSCNN, GE2E)    & +5{,}26 & +5{,}96  & +9{,}25 \\
+PCEN $-$ MFCC \;(Edge, GE2E)     & +9{,}22 & +21{,}93 & +21{,}86 \\
+GE2E $-$ Triplet \;(DSCNN, PCEN) & +2{,}36 & +1{,}77  & +3{,}61 \\
+DSCNN $-$ Edge \;(PCEN, GE2E)    & +2{,}36 & +5{,}19  & +7{,}07 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.92\linewidth]{res_effect_deltas.png}
+\caption{Các delta hiệu ứng cặp chính. PCEN và GE2E là hai cải tiến nhất quán qua
+các backbone. \emph{Hình kết quả từ dự án.}}
+\label{fig:deltas}
+\end{figure}
+
+\section{Q2: Quy Mô --- Bão Hòa và Sụp Đổ SCAF}\label{sec:res-q2}
+
+\paragraph{Độ chính xác bão hòa gần 2\,M clip.}
+\Cref{fig:saturation} và \Cref{tab:scale} quét giới hạn mỗi từ cho frontend/loss
+tốt nhất (PCEN$+$GE2E). Có bước nhảy lớn giữa cap-50 và cap-220 ($+3{,}55$ ACC
+cho DSCNN, $+3{,}79$ cho EdgeSpot tại 5\% FAR) và vùng phẳng từ cap-220 đến
+cap-620 ($+0{,}33$/$-0{,}02$). Độ chính xác thực sự bão hòa dữ liệu tại
+$\sim$2\,M clip huấn luyện.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.80\linewidth]{fig_data_saturation.png}
+\caption{Độ chính xác chéo kho ngữ liệu vs.\ khối lượng dữ liệu huấn luyện (giới
+hạn mỗi từ). Hiệu suất bão hòa gần $\sim$2\,M clip (vùng tô màu).
+\emph{Tạo từ kết quả dự án.}}
+\label{fig:saturation}
+\end{figure}
+
+\begin{table}[t]
+\centering
+\caption{Quét quy mô dữ liệu (PCEN$+$GE2E), GSC test100. ACC tại 5\% FAR.}
+\label{tab:scale}
+\small
+\begin{tabular}{l c r r r r}
+\toprule
+\textbf{Bộ mã hóa} & \textbf{Giới hạn} & \acc$_{5\%}$ & \auc & \eer & F1\\
+\midrule
+\multirow{4}{*}{DSCNN-L}
+ & 20  & 86{,}05 & 91{,}57 & 16{,}25 & 75{,}90 \\
+ & 50  & 84{,}68 & 90{,}45 & 17{,}42 & 74{,}34 \\
+ & 220 & 88{,}23 & 93{,}87 & 12{,}78 & 80{,}67 \\
+ & 620 & \best{88{,}56} & \best{94{,}04} & \best{12{,}53} & \best{81{,}02} \\
+\midrule
+\multirow{4}{*}{EdgeSpot}
+ & 20  & 83{,}06 & 87{,}22 & 20{,}40 & 70{,}46 \\
+ & 50  & 82{,}24 & 87{,}74 & 20{,}19 & 70{,}73 \\
+ & 220 & \best{86{,}03} & 91{,}31 & 16{,}47 & 75{,}61 \\
+ & 620 & 86{,}01 & \best{91{,}34} & 16{,}64 & 75{,}38 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\paragraph{Sụp đổ SCAF tại 37k lớp.}
+Kết quả ấn tượng nhất của nghiên cứu quy mô là thất bại định tính. Trên micro-set
+31 lớp và phân chia Top-500 $\sim$500 lớp, SCAF và SCAF$+$GE2E rất xuất sắc (AUC
+$\approx 95$). Tuy nhiên, trên từ vựng đầy đủ 37.387 lớp với trọng số SCAF mặc
+định 1{,}0, huấn luyện sụp đổ từ epoch~2: AUC kiểm định ghim tại 0{,}5000, độ
+chính xác GE2E trong phép học giảm xuống $\approx 0{,}033$ (ngẫu nhiên), và các
+chỉ số GSC trở nên suy biến (AUC 50, F1 0, $\frr{=}100\%$, keyword ACC 9{,}09\%).
+Cơ chế là mất cân bằng gradient: thang logit ArcFace ($s{=}30$) nhân qua
+$\sim$3{,}7$\times$10$^4$ lớp tạo ra gradient phân loại áp đảo các số hạng
+centroid/cosine. Các biện pháp khắc phục thực tế: (i) giảm trọng số SCAF xuống
+$\sim$5$\times$10$^{-5}$, (ii) làm ấm biên/thang, hoặc (iii) bỏ số hạng phân loại
+và dùng GE2E hoặc KD.
+
+\colabfig{Đường sụp đổ cho run SCAF$+$GE2E \emph{toàn từ vựng} (AUC kiểm định
+ghim 0{,}50 từ epoch~2). Log của run cụ thể này \emph{không có} trong repo local
+(chỉ có log Microset/Top500), nên phải chạy lại trên Colab. Khi có thư mục
+\code{runs/} TensorBoard, vẽ bằng \code{make\_training\_curves.py} và lưu thành
+\code{assets/scaf\_collapse.png}. \textbf{Lưu ý: đường huấn luyện lành mạnh
+Microset đã có tại \Cref{fig:traincurves}; hộp đỏ này chỉ dành cho run sụp đổ
+đối chiếu.}}
+
+\section{Q3: Chưng Cất Đổi Kiến Thức Giáo Viên Lấy Dữ Liệu}\label{sec:res-q3}
+
+\Cref{tab:kd} chưng cất mô hình giáo viên Wav2Vec\,2.0 đóng băng vào sinh viên
+EdgeSpot nhỏ gọn. Ở cap-50, KD cải thiện mọi chỉ số so với GE2E ($+3{,}60$
+ACC@1\%FAR, $-4{,}78$ EER, $+6{,}31$ F1) và, đáng chú ý, KD ở cap-50 khớp GE2E
+ở cap-220 --- cùng độ chính xác với khoảng một nửa clip huấn luyện. KD cũng bão
+hòa sớm (cap-50$\to$cap-220 gần như phẳng), cho thấy mô hình giáo viên tiêm hầu
+hết thiên kiến quy nạp hữu ích từ dữ liệu hạn chế.
+
+\begin{table}[t]
+\centering
+\caption{Chưng cất kiến thức vs.\ GE2E (sinh viên EdgeSpot), GSC test100.}
+\label{tab:kd}
+\small
+\begin{tabular}{l l r r r r}
+\toprule
+\textbf{Giới hạn} & \textbf{Loss} & \acc$_{1\%}$ & \acc$_{5\%}$ & \eer & F1\\
+\midrule
+50  & GE2E & 77{,}14 & 82{,}24 & 20{,}19 & 70{,}73 \\
+\rowcolor{blue!7}
+50  & KD   & \best{80{,}74} & \best{85{,}82} & \best{15{,}41} & \best{77{,}04} \\
+220 & GE2E & --    & 86{,}03 & 16{,}47 & 75{,}61 \\
+220 & KD   & 80{,}82 & 85{,}90 & 15{,}36 & 77{,}10 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Q4: Các Hệ Thống Triển Khai Tốt Nhất}\label{sec:res-q4}
+
+\Cref{tab:final} tổng hợp các cấu hình mạnh nhất theo từng chế độ dữ liệu.
+Ba điểm nổi bật:
+\begin{itemize}[leftmargin=1.3em,itemsep=2pt]
+\item \textbf{Tốt nhất tổng thể:} DSCNN-L$+$PCEN$+$GE2E (cap-620) đạt
+\best{$86{,}36\pm1{,}29$} ACC@1\%FAR và $89{,}93\pm0{,}65$ tại 5\% FAR, với AUC
+95{,}21, EER 11{,}32, F1 82{,}73, keyword ACC 92{,}92\%.
+\item \textbf{Tốt nhất nhỏ gọn:} EdgeSpot-Full$+$PCEN$+$GE2E (cap-620) đạt
+$82{,}87\pm1{,}22$ ACC@1\%FAR với 0{,}131\,M tham số --- cách hệ thống tốt nhất
+$\sim$3{,}5 điểm nhưng nhỏ hơn ba lần.
+\item \textbf{Tốt nhất từ vựng nhỏ:} trên phân chia Top-500, kết hợp
+EdgeSpot$+$PCEN$+$SCAF$+$GE2E là mô hình nhỏ gọn mạnh nhất ($85{,}62\pm1{,}04$
+ACC@1\%FAR, AUC 95{,}34), xác nhận rằng kết hợp lai xuất sắc \emph{khi số lớp
+đủ nhỏ để không kích hoạt sụp đổ}.
+\end{itemize}
+
+\begin{table}[t]
+\centering
+\caption{Tổng hợp hệ thống tốt nhất theo chế độ dữ liệu (GSC test100,
+EdgeSpot-exact 10 mẫu, 100 lần chạy). ``sụp.''$=$ sụp đổ suy biến.}
+\label{tab:final}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{l l l c r r r r r r}
+\toprule
+\textbf{Chế độ} & \textbf{Bộ mã hóa} & \textbf{Loss} & \textbf{Tham số} &
+\acc$_{1\%}$ & \acc$_{5\%}$ & \auc & \eer & F1 & KW\\
+\midrule
+Micro (31)    & EdgeSpot & SCAF+GE2E      & 0{,}131M & 84{,}61 & 86{,}12 & 95{,}61 & 11{,}54 & 82{,}41 & 77{,}66 \\
+Top-500       & EdgeSpot & SCAF+GE2E\,ep13& 0{,}131M & 85{,}62 & 88{,}79 & 95{,}34 & 11{,}51 & 82{,}45 & 90{,}44 \\
+Top-500       & DSCNN-L  & GE2E           & 0{,}413M & 81{,}55 & 86{,}56 & 93{,}17 & 14{,}00 & 78{,}97 & 88{,}62 \\
+Full cap20    & DSCNN-L  & GE2E           & 0{,}413M & 82{,}10 & 86{,}05 & 91{,}57 & 16{,}25 & 75{,}90 & 88{,}90 \\
+Full cap220   & DSCNN-L  & GE2E           & 0{,}413M & --    & 88{,}23 & 93{,}87 & 12{,}78 & 80{,}67 & 89{,}82 \\
+\rowcolor{blue!7}
+Full cap620   & DSCNN-L  & GE2E\,ep300    & 0{,}413M & \best{86{,}36} & \best{89{,}93} & \best{95{,}21} & \best{11{,}32} & \best{82{,}73} & \best{92{,}92} \\
+Full cap620   & EdgeSpot & GE2E\,ep300    & 0{,}131M & 82{,}87 & 86{,}76 & 92{,}41 & 14{,}82 & 77{,}85 & 87{,}29 \\
+Full cap50    & EdgeSpot & KD             & 0{,}131M & 80{,}74 & 85{,}82 & 91{,}19 & 15{,}41 & 77{,}04 & 87{,}95 \\
+Full cap220   & EdgeSpot & SCAF+GE2E      & 0{,}131M & sụp. & sụp. & 50{,}00 & 50{,}00 & sụp. & 9{,}09 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{figure}[t]
+\centering
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{res_det_dscnn.png}
+  \caption{Đường cong DET (DSCNN-L$+$PCEN$+$GE2E).}
+  \label{fig:detcurve}
+\end{subfigure}\hfill
+\begin{subfigure}{0.49\linewidth}
+  \centering
+  \includegraphics[width=\linewidth]{res_cap620_heatmap.png}
+  \caption{Bản đồ nhiệt ACC@1\%FAR (cap-620).}
+  \label{fig:heatmap}
+\end{subfigure}
+\caption{Các góc nhìn về điểm hoạt động. (a) Đường cong đánh đổi lỗi phát hiện
+của hệ thống tổng thể tốt nhất; (b) bản đồ nhiệt độ chính xác qua các cấu hình
+cap-620. \emph{Hình kết quả từ dự án.}}
+\label{fig:res-q4}
+\end{figure}
+
+\section{Suy Luận Trên Audio Dài}\label{sec:res-inference}
+\reviewnote{Mục mới, tương tự mục ``Kết Quả Suy Luận'' của đồ án mẫu.
+\Cref{fig:longinfer} được tạo bằng cách thực sự chạy mô hình đã huấn luyện trên
+bản ghi đa từ thật.}
+
+Để xác minh hệ thống hoạt động đầu cuối --- không chỉ trên clip kiểm tra riêng lẻ
+--- chúng tôi đăng ký prototype cho 17 từ khóa (10 mẫu mỗi từ từ GSC) và chạy
+suy luận prototype gần nhất trên bản ghi liên tục đa từ thật. \Cref{fig:longinfer}
+chồng lên dạng sóng từ khóa dự đoán và khoảng cách prototype của nó cho 16 đoạn
+nói đầu tiên. Mô hình nhận dạng đúng $15/16$ đoạn ($\approx$94\%); lỗi duy nhất
+(``sheila'', tên dài, hiếm) cũng có khoảng cách prototype lớn nhất --- đúng là tín
+hiệu mà ngưỡng tập mở dùng để đánh dấu phát hiện độ tin thấp.
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.98\linewidth]{fig_long_inference.png}
+\caption{\NEW{Suy luận prototype gần nhất trên bản ghi dài thật. Trên: dạng sóng
+với tô màu đúng (xanh)/sai (đỏ) mỗi đoạn. Dưới: khoảng cách prototype tối thiểu
+và từ khóa dự đoán mỗi đoạn. Tạo từ checkpoint local bằng
+\code{make\_inference\_figures.py}.}}
+\label{fig:longinfer}
+\end{figure}
+
+\begin{figure}[t]
+\centering
+\includegraphics[width=0.82\linewidth]{res_interaction_heatmap.png}
+\caption{\NEW{Tương tác frontend $\times$ loss (ACC@1\%FAR). Ô PCEN$+$GE2E chi
+phối; các ô chỉ phân loại suy giảm ở quy mô từ vựng đầy đủ.}}
+\label{fig:interaction}
+\end{figure}
+
+%==============================================================================
+\chapter{Kết Luận}\label{ch:conclusion}
+\reviewnote{Chương mới ($\sim$2 trang): hiện trạng, điểm mạnh, điểm yếu, hướng
+phát triển tương lai.}
+
+\section{Hiện Trạng}\label{sec:status}
+
+Đồ án này nhằm xây dựng hệ thống nhận dạng từ khóa thoát khỏi hai giới hạn cấu
+trúc của các engine từ đánh thức cổ điển --- từ vựng đóng băng và không thể từ
+chối --- đồng thời hiểu được, chứ không chỉ đơn thuần báo cáo, điều gì khiến hệ
+thống như vậy hoạt động khi từ vựng huấn luyện tăng. Chúng tôi đã cung cấp một
+pipeline hoàn chỉnh, có thể tái tạo, ít phụ thuộc: hai bộ mã hóa nhỏ gọn (DSCNN-L
+$\approx$0{,}41\,M và EdgeSpot-Full $\approx$0{,}13\,M tham số), ba bộ trích xuất
+đặc trưng, bốn hàm mục tiêu học độ đo, bốn đầu từ chối tập mở, engine phát trực
+tuyến CPU và bản demo web offline. Mọi hệ thống được huấn luyện trên MSWC tiếng
+Anh và đánh giá chéo kho ngữ liệu trên GSC v2 theo một giao thức EdgeSpot-exact
+10 mẫu nghiêm ngặt với 100 lần chạy ngẫu nhiên.
+
+Kết quả chính là nhận dạng từ khóa ít mẫu tập mở khả thi và thậm chí mạnh ở quy
+mô từ vựng thật: huấn luyện một lần trên $37{.}387$ từ, cấu hình tốt nhất
+(DSCNN-L $+$ PCEN $+$ GE2E) đạt $86{,}36\%$ độ chính xác tập mở tại 1\% FAR và
+AUC $95{,}21$ trên kho ngữ liệu chưa từng được huấn luyện, trong khi mô hình nhỏ
+hơn ba lần vẫn cách vài điểm. Người dùng có thể tự định nghĩa tập từ khóa tùy ý
+từ mười ví dụ mỗi từ, không cần huấn luyện lại, và hệ thống có thể từ chối lời
+nói không biết và tiếng im lặng.
+
+\section{Điểm Mạnh và Điểm Yếu}\label{sec:goodbad}
+
+\paragraph{Điều hoạt động tốt.} Ba phát hiện bền vững và có thể chuyển giao.
+(1) Bộ trích xuất PCEN có thể học được là cải tiến đơn lẻ đáng tin cậy nhất, và
+nó giúp bộ mã hóa nhỏ hơn nhiều nhất --- một đòn bẩy hữu ích chính xác khi ngân
+sách tham số hạn chế nhất. (2) Hàm mục tiêu centroid GE2E, tối ưu hóa cùng tính
+toán đăng ký-rồi-khớp dùng khi triển khai, nhất quán vượt cả triplet lẫn phân
+loại cho tổng quát hóa tập mở. (3) Mô hình giáo viên Wav2Vec\,2.0 đóng băng chưng
+cất với hàm mất mát cosine đơn giản cho phép mô hình nhỏ gọn đạt độ chính xác
+ngang GE2E với khoảng một nửa dữ liệu.
+
+\paragraph{Điểm yếu / những gì chúng tôi học được theo cách khó.} Kết quả phủ
+định rõ ràng nhất là sụp đổ của hàm mục tiêu phân loại Sub-center ArcFace (SCAF)
+ở quy mô $10^4$ lớp: một hàm mất mát xuất sắc ở hàng chục đến hàng trăm lớp đẩy
+embedding đến nghiệm tầm thường ở hàng chục nghìn lớp trừ khi trọng số của nó bị
+cắt bốn bậc độ lớn. Đây là bài học cảnh báo quan trọng cho bất kỳ ai mở rộng hàm
+mất mát biên góc sang không gian nhãn lớn. Hai hạn chế nữa ràng buộc các yêu cầu
+hiện tại. Thứ nhất, các điểm hoạt động ACC@FAR/FRR@FAR được đọc từ ROC đánh giá
+(ngưỡng oracle) chứ không được chuyển từ tập hiệu chỉnh độc lập. Thứ hai, đăng ký
+cố định ở $k{=}10$ mẫu và các con số độ trễ phát trực tuyến là ngân sách thiết kế,
+không phải điểm chuẩn thực địa đo được.
+
+\section{Hướng Phát Triển Tương Lai}\label{sec:future}
+
+Bốn hướng xuất phát trực tiếp từ các hạn chế trên.
+(1) \emph{Nhạy cảm $k$-mẫu:} quét $k\in\{1,3,5,10\}$ để lập biểu đồ đường cong
+độ chính xác vs.\ nỗ lực đăng ký, là chỉ số người dùng cuối thực sự cảm nhận được.
+(2) \emph{Ngưỡng hiệu chỉnh:} học hoặc chuyển ngưỡng tập mở từ tập phân chia
+độc lập và báo cáo ACC@FAR thực tế triển khai.
+(3) \emph{Điểm chuẩn trên thiết bị:} đo độ trễ đầu cuối, tỷ lệ kích hoạt nhầm mỗi
+giờ và tỷ lệ bỏ sót trên phần cứng mục tiêu.
+(4) \emph{Ổn định phân loại ở quy mô lớn:} làm ấm biên/thang, chương trình giảng
+dạy hoặc cắt tỉa sub-center để khôi phục sức mạnh phân biệt của hàm mất mát biên
+góc mà không sụp đổ --- có khả năng kết hợp các cụm chặt của SCAF với hàm mục tiêu
+khớp-triển khai của GE2E ở toàn bộ từ vựng.
+
+Tóm lại, đồ án trình bày một bộ nhận dạng từ khóa tập mở, không cần huấn luyện
+lại, có thể triển khai được và, quan trọng không kém, một bản đồ thực nghiệm rõ
+ràng về lựa chọn thiết kế nào giúp ích, ở đâu chúng bão hòa và ở đâu chúng thất
+bại khi bài toán mở rộng quy mô.
+
+%==============================================================================
+\begin{thebibliography}{99}
+\footnotesize
+
+\bibitem{zhang2017hello} Y.~Zhang, N.~Suda, L.~Lai, và V.~Chandra,
+``Hello edge: Keyword spotting on microcontrollers,'' \emph{arXiv:1711.07128}, 2017.
+\bibitem{kim2021bcresnet} B.~Kim, S.~Chang, J.~Lee, và D.~Sung,
+``Broadcasted residual learning for efficient keyword spotting,'' \emph{Interspeech}, 2021.
+\bibitem{snell2017prototypical} J.~Snell, K.~Swersky, và R.~Zemel,
+``Prototypical networks for few-shot learning,'' \emph{NeurIPS}, 2017.
+\bibitem{schroff2015facenet} F.~Schroff, D.~Kalenichenko, và J.~Philbin,
+``FaceNet: A unified embedding for face recognition and clustering,'' \emph{CVPR}, 2015.
+\bibitem{wan2018ge2e} L.~Wan, Q.~Wang, A.~Papir, và I.~L.~Moreno,
+``Generalized end-to-end loss for speaker verification,'' \emph{ICASSP}, 2018.
+\bibitem{deng2019arcface} J.~Deng, J.~Guo, N.~Xue, và S.~Zafeiriou,
+``ArcFace: Additive angular margin loss for deep face recognition,'' \emph{CVPR}, 2019.
+\bibitem{deng2020subcenter} J.~Deng, J.~Guo, T.~Liu, M.~Gong, và S.~Zafeiriou,
+``Sub-center ArcFace: Boosting face recognition by large-scale noisy web faces,'' \emph{ECCV}, 2020.
+\bibitem{bendale2016openmax} A.~Bendale và T.~E.~Boult,
+``Towards open set deep networks,'' \emph{CVPR}, 2016.
+\bibitem{liu2020energy} W.~Liu, X.~Wang, J.~Owens, và Y.~Li,
+``Energy-based out-of-distribution detection,'' \emph{NeurIPS}, 2020.
+\bibitem{wang2017trainable} Y.~Wang, P.~Getreuer, T.~Hughes, R.~F.~Lyon, và R.~A.~Saurous,
+``Trainable frontend for robust and far-field keyword spotting,'' \emph{ICASSP}, 2017.
+\bibitem{baevski2020wav2vec} A.~Baevski, H.~Zhou, A.~Mohamed, và M.~Auli,
+``wav2vec 2.0: A framework for self-supervised learning of speech representations,'' \emph{NeurIPS}, 2020.
+\bibitem{mazumder2021mswc} M.~Mazumder \emph{và cộng sự},
+``Multilingual Spoken Words Corpus,'' \emph{NeurIPS Datasets and Benchmarks}, 2021.
+\bibitem{warden2018speech} P.~Warden,
+``Speech Commands: A dataset for limited-vocabulary speech recognition,'' \emph{arXiv:1804.03209}, 2018.
+
+\end{thebibliography}
+
+\end{document}

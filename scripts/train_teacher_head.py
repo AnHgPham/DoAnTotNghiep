@@ -66,6 +66,18 @@ def load_words(data_dir: Path, split: str) -> list[str] | None:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_word_list_override(data_dir: Path, path_or_name: str | None) -> list[str] | None:
+    if not path_or_name:
+        return None
+    path = Path(path_or_name)
+    if not path.is_absolute() and path.parent == Path("."):
+        path = data_dir / "splits" / path
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, list):
+        raise ValueError(f"Expected list in {path}")
+    return [str(item) for item in payload]
+
+
 def _scan_word_files(word_dir: Path, limit: int) -> list[Path]:
     files: list[Path] = []
     for ext in AUDIO_EXTENSIONS:
@@ -271,6 +283,8 @@ def main() -> None:
     parser.add_argument("--split", type=str, default="train", choices=["train", "val", "eval"])
     parser.add_argument("--train-files", type=str, default=None,
                         help="Manifest json (e.g. train_files_cap220_flac.json) under <data-dir>/splits.")
+    parser.add_argument("--train-words-file", type=str, default=None,
+                        help="Optional word-list JSON. Basenames resolve under <data-dir>/splits.")
     parser.add_argument("--max-per-word", type=int, default=50,
                         help="Cap samples per word for head training (speed). 0 = all.")
     parser.add_argument("--max-words", type=int, default=0,
@@ -297,7 +311,9 @@ def main() -> None:
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logger.info("Device: %s", device)
 
-    words = load_words(args.data_dir, args.split)
+    words = load_word_list_override(args.data_dir, args.train_words_file)
+    if words is None:
+        words = load_words(args.data_dir, args.split)
     if not words:
         raise FileNotFoundError(
             f"No {args.split}_words.json under {args.data_dir}/splits. Prepare MSWC splits first."
