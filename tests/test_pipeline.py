@@ -8,6 +8,7 @@ import torch.nn.functional as F
 
 from src.features.mfcc import MFCCExtractor
 from src.models.dscnn import DSCNN
+from src.streaming.enrollment import EmbeddingBackend
 
 
 def test_full_pipeline():
@@ -73,3 +74,19 @@ def test_pipeline_different_audio_lengths():
         with torch.no_grad():
             embedding = model(mfcc)
         assert embedding.shape == (1, 276)
+
+
+def test_embedding_backend_batch_matches_single_inference():
+    torch.manual_seed(7)
+    waveforms = [torch.randn(1, 16000) for _ in range(3)]
+    backend = EmbeddingBackend(
+        DSCNN(model_size="S"),
+        MFCCExtractor(),
+        device="cpu",
+    )
+
+    batched = backend.embed_batch(waveforms)
+    individual = torch.stack([backend.embed(waveform) for waveform in waveforms])
+
+    assert batched.shape == individual.shape == (3, 64)
+    assert torch.allclose(batched, individual, atol=1e-5, rtol=1e-5)

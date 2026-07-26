@@ -8,9 +8,15 @@ from pathlib import Path
 import data.mswc_drive_cache as cache
 
 
-def _write_split_cache(root: Path, words: list[str], with_wavs: bool = True) -> Path:
+def _write_split_cache(
+    root: Path,
+    words: list[str],
+    with_wavs: bool = True,
+    split_mode: str = "full",
+    max_per_word: int = 200,
+) -> Path:
     drive_project = root / "drive"
-    drive_cache = drive_project / cache.cache_dir_name("top500", 200)
+    drive_cache = drive_project / cache.cache_dir_name(split_mode, max_per_word)
     splits = drive_cache / "splits"
     clips = drive_cache / "clips"
     splits.mkdir(parents=True)
@@ -33,7 +39,7 @@ def test_drive_cache_validates_train_val_coverage(tmp_path):
 
     valid, status = cache.is_drive_cache_valid(
         drive_project,
-        split_mode="top500",
+        split_mode="full",
         max_per_word=200,
         min_train_val_coverage=0.9,
     )
@@ -46,7 +52,11 @@ def test_drive_cache_validates_train_val_coverage(tmp_path):
 def test_drive_cache_rejects_missing_wavs(tmp_path):
     drive_project = _write_split_cache(tmp_path, ["yes", "no", "up"], with_wavs=False)
 
-    valid, status = cache.is_drive_cache_valid(drive_project)
+    valid, status = cache.is_drive_cache_valid(
+        drive_project,
+        split_mode="full",
+        max_per_word=200,
+    )
 
     assert valid is False
     assert status["n_wav"] == 0
@@ -58,7 +68,11 @@ def test_setup_loads_valid_cache(tmp_path, monkeypatch):
     monkeypatch.setattr(cache, "LOCAL_MSWC", Path("data/mswc_en"))
     monkeypatch.setattr(cache, "LOCAL_CLIPS", Path("data/mswc_en/clips"))
 
-    from_cache = cache.setup_mswc_from_drive(drive_project, max_per_word=200)
+    from_cache = cache.setup_mswc_from_drive(
+        drive_project,
+        split_mode="full",
+        max_per_word=200,
+    )
 
     assert from_cache is True
     assert Path("data/mswc_en/splits/train_words.json").exists()
@@ -100,7 +114,7 @@ def test_setup_miss_runs_download_and_save(tmp_path, monkeypatch):
 
 def test_setup_repairs_partial_cache_with_wavs_but_no_splits(tmp_path, monkeypatch):
     drive_project = tmp_path / "drive"
-    drive_cache = drive_project / cache.cache_dir_name("top500", 200)
+    drive_cache = drive_project / cache.cache_dir_name("full", 200)
     clips = drive_cache / "clips"
     for i in range(35):
         word_dir = clips / f"word{i:02d}"
@@ -115,7 +129,11 @@ def test_setup_repairs_partial_cache_with_wavs_but_no_splits(tmp_path, monkeypat
     monkeypatch.setattr(cache, "LOCAL_CLIPS", Path("data/mswc_en/clips"))
     monkeypatch.setattr(cache, "download_and_convert", fail_download)
 
-    from_cache = cache.setup_mswc_from_drive(drive_project, max_per_word=200)
+    from_cache = cache.setup_mswc_from_drive(
+        drive_project,
+        split_mode="full",
+        max_per_word=200,
+    )
 
     assert from_cache is True
     assert (drive_cache / "splits" / "train_words.json").exists()
@@ -124,7 +142,7 @@ def test_setup_repairs_partial_cache_with_wavs_but_no_splits(tmp_path, monkeypat
 
 def test_setup_repairs_cache_with_splits_that_do_not_match_wavs(tmp_path, monkeypatch):
     drive_project = tmp_path / "drive"
-    drive_cache = drive_project / cache.cache_dir_name("top500", 200)
+    drive_cache = drive_project / cache.cache_dir_name("full", 200)
     clips = drive_cache / "clips"
     splits = drive_cache / "splits"
     splits.mkdir(parents=True)
@@ -150,8 +168,31 @@ def test_setup_repairs_cache_with_splits_that_do_not_match_wavs(tmp_path, monkey
     monkeypatch.setattr(cache, "LOCAL_CLIPS", Path("data/mswc_en/clips"))
     monkeypatch.setattr(cache, "download_and_convert", fail_download)
 
-    from_cache = cache.setup_mswc_from_drive(drive_project, max_per_word=200)
+    from_cache = cache.setup_mswc_from_drive(
+        drive_project,
+        split_mode="full",
+        max_per_word=200,
+    )
 
     assert from_cache is True
     repaired = json.loads((drive_cache / "splits" / "train_words.json").read_text())
     assert repaired[0].startswith("cached")
+
+
+def test_top500_cache_rejects_incomplete_vocabulary(tmp_path):
+    words = [f"word{i:03d}" for i in range(40)]
+    drive_project = _write_split_cache(
+        tmp_path,
+        words,
+        split_mode="top500",
+        max_per_word=200,
+    )
+
+    valid, status = cache.is_drive_cache_valid(
+        drive_project,
+        split_mode="top500",
+        max_per_word=200,
+    )
+
+    assert valid is False
+    assert status["min_required_words"] == 500

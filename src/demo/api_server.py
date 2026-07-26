@@ -6,7 +6,9 @@ Open: http://127.0.0.1:8000
 
 from __future__ import annotations
 
+import asyncio
 import base64
+from contextlib import asynccontextmanager
 import io
 import json
 import os
@@ -52,8 +54,17 @@ from src.demo.artifacts import artifact_markdown, discover_artifacts
 # -- Globals --------------------------------------------------
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SR = 16000
+PROCESS_STARTED_AT = time.time()
 ENROLL_DIR = PROJECT_ROOT / "data" / "enroll_profiles"
 GSC_DIR = PROJECT_ROOT / "data" / "gsc_v2"
+MAX_SINGLE_UPLOAD_BYTES = int(os.environ.get("KWS_MAX_SINGLE_UPLOAD_MB", "8")) * 1024 * 1024
+MAX_LONG_UPLOAD_BYTES = int(os.environ.get("KWS_MAX_LONG_UPLOAD_MB", "64")) * 1024 * 1024
+MAX_MODEL_UPLOAD_BYTES = int(os.environ.get("KWS_MAX_MODEL_UPLOAD_MB", "128")) * 1024 * 1024
+MAX_LONG_AUDIO_SECONDS = float(os.environ.get("KWS_MAX_LONG_AUDIO_SECONDS", "600"))
+MAX_ENROLL_WORDS = int(os.environ.get("KWS_MAX_ENROLL_WORDS", "100"))
+MAX_ENROLL_SAMPLES_PER_WORD = int(os.environ.get("KWS_MAX_ENROLL_SAMPLES_PER_WORD", "50"))
+STATE_MUTATION_LOCK = asyncio.Lock()
+KEYWORD_RE = re.compile(r"^[a-z0-9][a-z0-9_-]{0,63}$")
 
 
 def resolve_project_path(path: str | Path) -> Path:
@@ -80,8 +91,58 @@ MICROSET_EPOCH05 = first_existing(
     "edgespot_full_t4_scaf_ge2e_microset_en_v1" / "epoch_05.pt"
 )
 LEGACY_DSCNN = PROJECT_ROOT / "checkpoints" / "triplet" / "best_v2_margin1.0_colab.pt"
+DSCNN_PCEN_GE2E = (
+    PROJECT_ROOT / "checkpoints" /
+    "dscnn_pcen_ge2e_accdev_ep300_composite_colab_mswc.pt"
+)
+EDGESPOT_T4_PCEN_GE2E = (
+    PROJECT_ROOT / "checkpoints" /
+    "edgespot_t4_pcen_ge2e_ep300_composite_colab_mswc_c.pt"
+)
 
 MODEL_PROFILES = {
+    "dscnn_pcen_ge2e": {
+        "label": "DSCNN-L + PCEN + GE2E - Composite 300",
+        "short_label": "DSCNN Composite 300",
+        "description": "Best-accuracy profile selected by the GSC-dev composite metric.",
+        "description_en": "Best-accuracy profile selected by the GSC-dev composite metric.",
+        "description_vi": "Profile có độ chính xác tốt nhất, được chọn bằng composite metric trên GSC-dev.",
+        "checkpoint": DSCNN_PCEN_GE2E,
+        "model_family": "dscnn",
+        "edge_tau": 4,
+        "feature_type": "mel",
+        "threshold_hint": 0.30,
+        "featured": True,
+        "metrics": [
+            {"label": "ACC@1%FAR", "value": "86.36%"},
+            {"label": "AUC", "value": "95.21%"},
+            {"label": "Params", "value": "412.9K"},
+        ],
+        "notes": "Best accuracy; 60-epoch run, 300 episodes/epoch; selected checkpoint: epoch 60.",
+        "notes_en": "Best accuracy; 60-epoch run, 300 episodes/epoch; selected checkpoint: epoch 60.",
+        "notes_vi": "Bản tốt nhất về độ chính xác; run 60 epoch, 300 episode/epoch; chọn checkpoint epoch 60.",
+    },
+    "edgespot_t4_pcen_ge2e": {
+        "label": "EdgeSpotFull T4 + PCEN + GE2E - Composite 300",
+        "short_label": "EdgeSpot T4 Composite 300",
+        "description": "Best compact profile selected by the GSC-dev composite metric.",
+        "description_en": "Best compact profile selected by the GSC-dev composite metric.",
+        "description_vi": "Profile compact tốt nhất, được chọn bằng composite metric trên GSC-dev.",
+        "checkpoint": EDGESPOT_T4_PCEN_GE2E,
+        "model_family": "edgespot_full",
+        "edge_tau": 4,
+        "feature_type": "mel",
+        "threshold_hint": 0.30,
+        "featured": True,
+        "metrics": [
+            {"label": "ACC@1%FAR", "value": "82.87%"},
+            {"label": "AUC", "value": "92.41%"},
+            {"label": "Params", "value": "130.6K"},
+        ],
+        "notes": "Best compact; 60-epoch run, 300 episodes/epoch; selected checkpoint: epoch 25.",
+        "notes_en": "Best compact; 60-epoch run, 300 episodes/epoch; selected checkpoint: epoch 25.",
+        "notes_vi": "Bản compact tốt nhất; run 60 epoch, 300 episode/epoch; chọn checkpoint epoch 25.",
+    },
     "top500_epoch13": {
         "label": "Top500 Full - EdgeSpotFull T4 + SCAF+GE2E - epoch 13",
         "short_label": "Top500 epoch13",
@@ -93,6 +154,7 @@ MODEL_PROFILES = {
         "edge_tau": 4,
         "feature_type": "mel",
         "threshold_hint": 0.30,
+        "featured": False,
         "metrics": [
             {"label": "ACC@1%FAR", "value": "86.68%"},
             {"label": "ACC@5%FAR", "value": "88.87%"},
@@ -113,6 +175,7 @@ MODEL_PROFILES = {
         "edge_tau": 4,
         "feature_type": "mel",
         "threshold_hint": 0.30,
+        "featured": False,
         "metrics": [
             {"label": "ACC@5%FAR", "value": "86.12%"},
             {"label": "KW-ACC", "value": "77.66%"},
@@ -133,6 +196,7 @@ MODEL_PROFILES = {
         "edge_tau": 4,
         "feature_type": "mfcc",
         "threshold_hint": 0.80,
+        "featured": False,
         "metrics": [
             {"label": "Baseline", "value": "DSCNN-L"},
             {"label": "Feature", "value": "MFCC"},
@@ -191,6 +255,7 @@ def discover_checkpoint_profiles() -> dict:
             "edge_tau": 4,
             "feature_type": "auto",
             "threshold_hint": None,
+            "featured": False,
             "metrics": [],
             "notes": "Auto-discovered from the checkpoints/ folder.",
             "notes_en": "Auto-discovered from the checkpoints/ folder.",
@@ -222,7 +287,8 @@ if ENV_CKPT:
         "notes": "Loaded from KWS_CHECKPOINT environment variable.",
     }
 else:
-    requested_profile = os.environ.get("KWS_MODEL_PROFILE", "top500_epoch13")
+    default_profile = "dscnn_pcen_ge2e" if DSCNN_PCEN_GE2E.exists() else "top500_epoch13"
+    requested_profile = os.environ.get("KWS_MODEL_PROFILE", default_profile)
     if requested_profile not in MODEL_PROFILES or not resolve_project_path(MODEL_PROFILES[requested_profile]["checkpoint"]).exists():
         requested_profile = next(
             (pid for pid, profile in MODEL_PROFILES.items()
@@ -428,6 +494,9 @@ def init_model():
         print(f"  WARNING: {CKPT} not found - random weights")
     encoder = encoder.to(DEVICE).eval()
     embedding_backend = EmbeddingBackend(encoder, mfcc_ext, DEVICE, SR)
+    # Pay one-time kernel/setup costs during startup or model switching, not on
+    # the first microphone request seen by the user.
+    embedding_backend.embed(torch.zeros(1, SR, dtype=torch.float32))
     print(f"  Device: {DEVICE}, Params: {sum(p.numel() for p in encoder.parameters()):,}")
 
 
@@ -464,7 +533,7 @@ def embed(wav_1s: torch.Tensor) -> torch.Tensor:
 
 def recompute(word: str):
     if sample_waveforms.get(word) and embedding_backend is not None:
-        rebuild_enrollment_profile()
+        rebuild_enrollment_profile({word})
         return
 
     embs = sample_embeddings.get(word, [])
@@ -797,20 +866,28 @@ def sync_legacy_from_profile() -> None:
         sample_count[label] = len(sample_waveforms.get(label, [])) or len(profile.qualities)
 
 
-def rebuild_enrollment_profile() -> None:
+def rebuild_enrollment_profile(labels: set[str] | None = None) -> None:
     global enrollment_profile, profile_version
 
     if embedding_backend is None:
         return
 
-    active_samples = {
+    all_active_samples = {
         label: wavs for label, wavs in sample_waveforms.items() if wavs
     }
-    if not active_samples:
+    if not all_active_samples:
         enrollment_profile = EnrollmentProfile()
         sync_legacy_from_profile()
         profile_version += 1
         return
+
+    active_samples = all_active_samples
+    if labels is not None:
+        active_samples = {
+            label: wavs for label, wavs in all_active_samples.items() if label in labels
+        }
+        if not active_samples:
+            return
 
     rebuilt = build_enrollment_profile(
         active_samples,
@@ -938,9 +1015,45 @@ def fig_to_b64(fig) -> str:
 
 
 # -- FastAPI app ----------------------------------------------
-app = FastAPI(title="Few-Shot KWS API")
-app.add_middleware(CORSMiddleware, allow_origins=["*"],
-                   allow_methods=["*"], allow_headers=["*"])
+@asynccontextmanager
+async def app_lifespan(_app: FastAPI):
+    """Initialize the model for both ``python -m`` and uvicorn import modes."""
+    if embedding_backend is None:
+        await asyncio.to_thread(init_model)
+    yield
+
+
+app = FastAPI(title="Few-Shot KWS API", lifespan=app_lifespan)
+cors_origins = [
+    origin.strip()
+    for origin in os.environ.get(
+        "KWS_CORS_ORIGINS",
+        "http://127.0.0.1:8000,http://localhost:8000,"
+        "http://127.0.0.1:5173,http://localhost:5173",
+    ).split(",")
+    if origin.strip()
+]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_methods=["GET", "POST"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/api/health")
+async def health_check():
+    ready = encoder is not None and embedding_backend is not None and CKPT.exists()
+    payload = {
+        "status": "ready" if ready else "not_ready",
+        "model_profile": ACTIVE_MODEL_PROFILE_ID,
+        "model_family": MODEL_FAMILY,
+        "checkpoint": CKPT.name,
+        "device": str(DEVICE),
+        "enrolled_keywords": len(prototypes),
+        "uptime_sec": round(time.time() - PROCESS_STARTED_AT, 1),
+    }
+    return JSONResponse(payload, status_code=200 if ready else 503)
 
 WEB_DIR = Path(__file__).parent / "web"
 UI_DIST_DIR = Path(__file__).parent / "ui" / "dist"
@@ -952,6 +1065,16 @@ async def index():
     if react_index.exists():
         return FileResponse(react_index)
     return FileResponse(WEB_DIR / "index.html")
+
+
+@app.get("/favicon.svg", include_in_schema=False)
+@app.get("/favicon.ico", include_in_schema=False)
+@app.get("/ui/favicon.svg", include_in_schema=False)
+async def favicon():
+    favicon_path = UI_DIST_DIR / "favicon.svg"
+    if favicon_path.exists():
+        return FileResponse(favicon_path, media_type="image/svg+xml")
+    return JSONResponse({}, status_code=204)
 
 
 app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
@@ -1011,6 +1134,8 @@ def model_profile_payload(profile_id: str, profile: dict) -> dict:
         "edge_tau": profile.get("edge_tau", 4),
         "feature_type": profile.get("feature_type", "auto"),
         "threshold_hint": profile.get("threshold_hint"),
+        "featured": bool(profile.get("featured", False)),
+        "auto_discovered": bool(profile.get("auto_discovered", False)),
         "metrics": profile.get("metrics", []),
         "notes": profile.get("notes", ""),
         "notes_en": profile.get("notes_en", profile.get("notes", "")),
@@ -1089,12 +1214,14 @@ async def enroll_status():
     }
 
 
-@app.post("/api/enroll/gsc")
-async def enroll_gsc(words: str = Form(...), k: int = Form(5)):
+def _enroll_gsc_sync(word_list: list[str], k: int) -> dict:
+    started = time.perf_counter()
     results = []
-    word_list = [w.strip().lower() for w in words.split(",") if w.strip()]
     changed_words = []
     for word in word_list:
+        if not KEYWORD_RE.fullmatch(word):
+            results.append({"word": word, "status": "invalid_keyword"})
+            continue
         d = GSC_DIR / word
         if not d.exists():
             results.append({"word": word, "status": "not_found"})
@@ -1130,37 +1257,55 @@ async def enroll_gsc(words: str = Form(...), k: int = Form(5)):
         })
 
     if changed_words:
-        rebuild_enrollment_profile()
+        rebuild_enrollment_profile(set(changed_words))
 
     for item in results:
         if item.get("status") == "ok":
             word = item["word"]
             item["threshold"] = round(proto_thresholds.get(word, 0), 3)
 
-    return {"results": results, "enrolled": len(prototypes)}
+    return {
+        "results": results,
+        "enrolled": len(prototypes),
+        "timing_ms": round((time.perf_counter() - started) * 1000.0, 2),
+    }
 
 
-@app.post("/api/enroll/mic")
-async def enroll_mic(keyword: str = Form(...), audio: UploadFile = File(...)):
-    keyword = keyword.strip().lower()
-    if not keyword:
-        return JSONResponse({"error": "No keyword name"}, 400)
-    data = await audio.read()
+@app.post("/api/enroll/gsc")
+async def enroll_gsc(words: str = Form(...), k: int = Form(5)):
+    word_list = list(dict.fromkeys(
+        word.strip().lower() for word in words.split(",") if word.strip()
+    ))
+    if not word_list:
+        return JSONResponse({"error": "No keywords provided"}, 400)
+    if len(word_list) > MAX_ENROLL_WORDS:
+        return JSONResponse({"error": "Too many keywords"}, 413)
+    if k < 1 or k > MAX_ENROLL_SAMPLES_PER_WORD:
+        return JSONResponse({
+            "error": f"k must be between 1 and {MAX_ENROLL_SAMPLES_PER_WORD}",
+        }, 422)
+
+    async with STATE_MUTATION_LOCK:
+        return await asyncio.to_thread(_enroll_gsc_sync, word_list, k)
+
+
+def _enroll_mic_sync(keyword: str, data: bytes) -> tuple[dict, int]:
+    started = time.perf_counter()
     wav = bytes_to_wav(data)
     if wav is None:
-        return JSONResponse({"error": "Invalid audio"}, 400)
+        return {"error": "Invalid audio"}, 400
     wav = normalize_waveform(wav)
     cropped, _, quality = crop_to_active_region(wav, SR)
     quality_payload = quality_to_dict(quality)
     if not quality.accepted:
-        return JSONResponse({
+        return {
             "error": f"Audio quality rejected: {quality.reason}",
             "quality": quality_payload,
-        }, 422)
+        }, 422
 
     if embedding_backend is not None:
         sample_waveforms.setdefault(keyword, []).append(cropped)
-        rebuild_enrollment_profile()
+        rebuild_enrollment_profile({keyword})
     else:
         e = embed(pad_trim(cropped))
         sample_embeddings.setdefault(keyword, []).append(e)
@@ -1171,12 +1316,31 @@ async def enroll_mic(keyword: str = Form(...), audio: UploadFile = File(...)):
         "count": sample_count[keyword],
         "threshold": round(proto_thresholds.get(keyword, 0), 3),
         "quality": quality_payload,
-    }
+        "timing_ms": round((time.perf_counter() - started) * 1000.0, 2),
+    }, 200
+
+
+@app.post("/api/enroll/mic")
+async def enroll_mic(keyword: str = Form(...), audio: UploadFile = File(...)):
+    keyword = keyword.strip().lower()
+    if not keyword:
+        return JSONResponse({"error": "No keyword name"}, 400)
+    if not KEYWORD_RE.fullmatch(keyword):
+        return JSONResponse({"error": "Invalid keyword name"}, 422)
+
+    data = await audio.read(MAX_SINGLE_UPLOAD_BYTES + 1)
+    if len(data) > MAX_SINGLE_UPLOAD_BYTES:
+        return JSONResponse({"error": "Audio file is too large"}, 413)
+
+    async with STATE_MUTATION_LOCK:
+        payload, status_code = await asyncio.to_thread(_enroll_mic_sync, keyword, data)
+    return payload if status_code == 200 else JSONResponse(payload, status_code)
 
 
 @app.post("/api/enroll/clear")
 async def clear_all():
-    clear_enrollment_state()
+    async with STATE_MUTATION_LOCK:
+        clear_enrollment_state()
     return {"status": "cleared"}
 
 
@@ -1256,14 +1420,29 @@ async def detect_single(audio: UploadFile = File(...),
                         threshold: float = Form(0.6),
                         use_per_class: bool = Form(True),
                         use_close_word_guard: bool = Form(True)):
+    request_started = time.perf_counter()
     if not prototypes:
         return JSONResponse({"error": "No keywords enrolled"}, 400)
-    data = await audio.read()
-    wav = bytes_to_wav(data)
+    data = await audio.read(MAX_SINGLE_UPLOAD_BYTES + 1)
+    if len(data) > MAX_SINGLE_UPLOAD_BYTES:
+        return JSONResponse({"error": "Audio file is too large"}, 413)
+    decode_started = time.perf_counter()
+    wav = await asyncio.to_thread(bytes_to_wav, data)
     if wav is None:
         return JSONResponse({"error": "Invalid audio"}, 400)
+    decode_ms = (time.perf_counter() - decode_started) * 1000.0
     wav = pad_trim(wav)
-    e = embed(wav)
+
+    inference_started = time.perf_counter()
+    if embedding_backend is not None:
+        e, feature_map = await asyncio.to_thread(
+            embedding_backend.embed_with_features,
+            wav,
+        )
+    else:
+        e = await asyncio.to_thread(embed, wav)
+        feature_map = await asyncio.to_thread(mfcc_ext.extract, wav)
+    inference_ms = (time.perf_counter() - inference_started) * 1000.0
 
     policy = build_detection_policy(threshold, use_per_class, use_close_word_guard)
     score = rounded_score_payload(
@@ -1275,13 +1454,19 @@ async def detect_single(audio: UploadFile = File(...),
         )
     )
 
-    # MFCC data for frontend rendering
-    mfcc = mfcc_ext.extract(wav).squeeze(0).numpy().tolist()
+    # The UI keeps the legacy `mfcc` field name; for a PCEN profile this is the
+    # checkpoint-matched mel map already computed during inference.
+    mfcc = feature_map.squeeze(0).numpy().tolist()
 
     return {
         **score,
         "mfcc": mfcc,
         "settings": policy.settings("single"),
+        "timing_ms": {
+            "decode": round(decode_ms, 2),
+            "inference": round(inference_ms, 2),
+            "total": round((time.perf_counter() - request_started) * 1000.0, 2),
+        },
     }
 
 
@@ -1292,14 +1477,26 @@ async def detect_long(audio: UploadFile = File(...),
                       use_close_word_guard: bool = Form(True),
                       seg_method: str = Form("Energy"),
                       min_duration_ms: int = Form(200)):
+    request_started = time.perf_counter()
     if not prototypes:
         return JSONResponse({"error": "No keywords enrolled"}, 400)
-    data = await audio.read()
-    wav = bytes_to_wav(data)
+    data = await audio.read(MAX_LONG_UPLOAD_BYTES + 1)
+    if len(data) > MAX_LONG_UPLOAD_BYTES:
+        return JSONResponse({"error": "Audio file is too large"}, 413)
+    decode_started = time.perf_counter()
+    wav = await asyncio.to_thread(bytes_to_wav, data)
     if wav is None:
         return JSONResponse({"error": "Invalid audio"}, 400)
+    decode_ms = (time.perf_counter() - decode_started) * 1000.0
+    duration_sec = wav.shape[-1] / SR
+    if duration_sec > MAX_LONG_AUDIO_SECONDS:
+        return JSONResponse(
+            {"error": f"Audio exceeds {MAX_LONG_AUDIO_SECONDS:g} seconds"},
+            413,
+        )
 
     policy = build_detection_policy(threshold, use_per_class, use_close_word_guard)
+    inference_started = time.perf_counter()
 
     if embedding_backend is not None and profile_ready() and policy.use_per_class:
         cfg = StreamingDecisionConfig(
@@ -1310,27 +1507,23 @@ async def detect_long(audio: UploadFile = File(...),
             cooldown_ms=300,
         )
         engine = RobustStreamingKWS(embedding_backend, enrollment_profile, config=cfg)
-        events = engine.process_file(wav)
+        events = await asyncio.to_thread(engine.process_file, wav)
         results = []
         for event in events:
-            start = max(0, int(event["start_sec"] * SR))
-            end = min(wav.shape[-1], int(event["end_sec"] * SR))
-            event_wav = wav[..., start:end] if end > start else wav
-            score = rounded_score_payload(
-                score_embedding(
-                    embed(event_wav),
-                    policy.threshold,
-                    policy.use_per_class,
-                    min_margin=policy.accept_margin,
-                )
-            )
+            top_3 = [
+                {
+                    "word": item["word"],
+                    "dist": round(float(item["dist"]), 4),
+                }
+                for item in event.get("top_3", [])
+            ]
             results.append({
                 "t0": round(event["start_sec"], 2),
                 "t1": round(event["end_sec"], 2),
                 "speech_t0": round(event["speech_start_sec"], 2),
                 "speech_t1": round(event["speech_end_sec"], 2),
                 "keyword": event["keyword"],
-                "best_label": score.get("best_label", event["keyword"]),
+                "best_label": top_3[0]["word"] if top_3 else event["keyword"],
                 "distance": round(event["distance"], 4),
                 "threshold": round(event["threshold"], 3),
                 "margin": round(event["margin"], 4),
@@ -1339,9 +1532,10 @@ async def detect_long(audio: UploadFile = File(...),
                 "confidence": round(event["confidence"], 3),
                 "second_label": event["second_label"],
                 "detected": True,
-                "top_3": score["top_3"],
+                "top_3": top_3,
             })
 
+        inference_ms = (time.perf_counter() - inference_started) * 1000.0
         return {
             "duration": round(wav.shape[-1] / SR, 1),
             "segments": len(results),
@@ -1349,6 +1543,11 @@ async def detect_long(audio: UploadFile = File(...),
             "sequence": [r["keyword"] for r in results],
             "engine": "robust_state_machine",
             "settings": policy.settings("robust_state_machine"),
+            "timing_ms": {
+                "decode": round(decode_ms, 2),
+                "inference": round(inference_ms, 2),
+                "total": round((time.perf_counter() - request_started) * 1000.0, 2),
+            },
         }
 
     total = wav.shape[-1]
@@ -1361,11 +1560,23 @@ async def detect_long(audio: UploadFile = File(...),
     else:
         segments = _energy_segments(wav, min_dur)
 
+    segment_waveforms = [pad_trim(wav[..., start:end]) for start, end in segments]
+    if segment_waveforms and embedding_backend is not None:
+        embeddings = await asyncio.to_thread(
+            embedding_backend.embed_batch,
+            segment_waveforms,
+        )
+    elif segment_waveforms:
+        embeddings = await asyncio.to_thread(
+            lambda: torch.stack([embed(segment) for segment in segment_waveforms])
+        )
+    else:
+        embeddings = torch.empty((0, 0), dtype=torch.float32)
+
+    if len(segments) != len(embeddings):
+        raise RuntimeError("Segment and embedding counts do not match")
     results = []
-    for start, end in segments:
-        seg = wav[..., start:end]
-        seg_1s = pad_trim(seg)
-        e = embed(seg_1s)
+    for (start, end), e in zip(segments, embeddings):
         score = rounded_score_payload(
             score_embedding(
                 e,
@@ -1391,6 +1602,7 @@ async def detect_long(audio: UploadFile = File(...),
         })
 
     preds = [r["keyword"] for r in results if r["detected"]]
+    inference_ms = (time.perf_counter() - inference_started) * 1000.0
     return {
         "duration": round(total / SR, 1),
         "segments": len(results),
@@ -1398,6 +1610,11 @@ async def detect_long(audio: UploadFile = File(...),
         "sequence": preds,
         "engine": "legacy_segments",
         "settings": policy.settings("legacy_segments"),
+        "timing_ms": {
+            "decode": round(decode_ms, 2),
+            "inference": round(inference_ms, 2),
+            "total": round((time.perf_counter() - request_started) * 1000.0, 2),
+        },
     }
 
 
@@ -1408,8 +1625,10 @@ def _energy_segments(wav, min_dur_ms):
     hop = int(SR * 0.01)
     if total < frame:
         return [(0, total)] if total > 0 else []
-    starts = list(range(0, total - frame + 1, hop))
-    energies = [float(torch.sqrt(torch.mean(mono[s:s+frame]**2)).item()) for s in starts]
+    frames = mono.unfold(0, frame, hop)
+    energy_tensor = torch.sqrt(frames.square().mean(dim=-1) + 1e-8)
+    starts = (torch.arange(energy_tensor.numel(), dtype=torch.long) * hop).tolist()
+    energies = energy_tensor.tolist()
     mx = max(energies) if energies else 0
     if mx <= 1e-6:
         return []
@@ -1767,8 +1986,10 @@ async def upload_model_checkpoint(
     dest_dir = PROJECT_ROOT / "checkpoints" / "uploaded"
     dest_dir.mkdir(parents=True, exist_ok=True)
     dest = dest_dir / name
-    data = await checkpoint.read()
-    dest.write_bytes(data)
+    data = await checkpoint.read(MAX_MODEL_UPLOAD_BYTES + 1)
+    if len(data) > MAX_MODEL_UPLOAD_BYTES:
+        return JSONResponse({"error": "Checkpoint file is too large"}, 413)
+    await asyncio.to_thread(dest.write_bytes, data)
 
     family, short = _infer_profile_meta(dest.name)
     chosen_family = model_family.strip().lower() or "auto"
@@ -1794,16 +2015,17 @@ async def upload_model_checkpoint(
     }
     merge_discovered_profiles()
 
-    CKPT = dest
-    MODEL_FAMILY = chosen_family
-    EDGE_TAU = 4
-    ACTIVE_MODEL_PROFILE_ID = "custom_runtime"
-    init_model()
-    if enrollment_policy == "rebuild":
-        enrollment_status = rebuild_enrollment_for_current_model()
-    else:
-        clear_enrollment_state()
-        enrollment_status = {"policy": "clear", "rebuilt": False}
+    async with STATE_MUTATION_LOCK:
+        CKPT = dest
+        MODEL_FAMILY = chosen_family
+        EDGE_TAU = 4
+        ACTIVE_MODEL_PROFILE_ID = "custom_runtime"
+        await asyncio.to_thread(init_model)
+        if enrollment_policy == "rebuild":
+            enrollment_status = await asyncio.to_thread(rebuild_enrollment_for_current_model)
+        else:
+            clear_enrollment_state()
+            enrollment_status = {"policy": "clear", "rebuilt": False}
     return {
         "status": "ok",
         "active": ACTIVE_MODEL_PROFILE_ID,
@@ -1859,16 +2081,17 @@ async def select_model_profile(
     if not checkpoint.exists():
         return JSONResponse({"error": f"Checkpoint not found: {checkpoint}"}, 404)
 
-    CKPT = checkpoint
-    MODEL_FAMILY = profile.get("model_family", "auto")
-    EDGE_TAU = int(profile.get("edge_tau", 4))
-    ACTIVE_MODEL_PROFILE_ID = profile_id
-    init_model()
-    if enrollment_policy == "rebuild":
-        enrollment_status = rebuild_enrollment_for_current_model()
-    else:
-        clear_enrollment_state()
-        enrollment_status = {"policy": "clear", "rebuilt": False}
+    async with STATE_MUTATION_LOCK:
+        CKPT = checkpoint
+        MODEL_FAMILY = profile.get("model_family", "auto")
+        EDGE_TAU = int(profile.get("edge_tau", 4))
+        ACTIVE_MODEL_PROFILE_ID = profile_id
+        await asyncio.to_thread(init_model)
+        if enrollment_policy == "rebuild":
+            enrollment_status = await asyncio.to_thread(rebuild_enrollment_for_current_model)
+        else:
+            clear_enrollment_state()
+            enrollment_status = {"policy": "clear", "rebuilt": False}
     return {
         "status": "ok",
         "active": ACTIVE_MODEL_PROFILE_ID,
@@ -1930,7 +2153,6 @@ async def export_session_report(title: str = Form("Few-Shot KWS Demo Session")):
 # -- Streaming WebSocket --------------------------------------
 @app.websocket("/ws/stream")
 async def ws_stream(ws: WebSocket):
-    import asyncio
     chunk_count = 0
     await ws.accept()
     print(f"[WS] Connection accepted.", flush=True)

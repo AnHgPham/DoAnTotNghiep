@@ -20,6 +20,8 @@ export type ModelProfile = {
   model_family?: string;
   feature_type?: string;
   threshold_hint?: number | null;
+  featured?: boolean;
+  auto_discovered?: boolean;
   exists: boolean;
   metrics?: ModelMetric[];
 };
@@ -58,6 +60,12 @@ export type DetectionSettings = {
   model_label?: string;
 };
 
+export type RequestTiming = {
+  decode: number;
+  inference: number;
+  total: number;
+};
+
 export type DetectResult = {
   keyword: string;
   best_label?: string;
@@ -69,6 +77,7 @@ export type DetectResult = {
   second_label?: string | null;
   top_3?: TopCandidate[];
   settings?: DetectionSettings;
+  timing_ms?: RequestTiming;
 };
 
 export type LongSegment = DetectResult & {
@@ -85,6 +94,7 @@ export type LongResult = {
   sequence: string[];
   engine: string;
   settings?: DetectionSettings;
+  timing_ms?: RequestTiming;
 };
 
 export type OpenSetSummary = {

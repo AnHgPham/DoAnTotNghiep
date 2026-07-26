@@ -27,6 +27,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
 LOCAL_MSWC = Path("data/mswc_en")
 LOCAL_CLIPS = LOCAL_MSWC / "clips"
 SPLIT_FILES = ("train_words.json", "val_words.json", "eval_words.json")
@@ -473,7 +474,8 @@ def download_and_convert(
         LOCAL_CLIPS.unlink()
 
     logger.info("Downloading MSWC English...")
-    cmd = [sys.executable, "data/download_mswc.py"]
+    download_script = PROJECT_ROOT / "data" / "download_mswc.py"
+    cmd = [sys.executable, str(download_script)]
     if split_mode == "top500":
         cmd.append("--top500-splits")
     elif split_mode != "full":
@@ -507,7 +509,7 @@ def download_and_convert(
         subprocess.run(
             [
                 sys.executable,
-                "data/convert_opus.py",
+                str(PROJECT_ROOT / "data" / "convert_opus.py"),
                 "--workers",
                 str(n_cpu),
                 "--delete-opus",

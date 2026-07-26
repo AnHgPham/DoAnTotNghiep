@@ -1,0 +1,2 @@
+kind	run_tag	checkpoint	dev_status	test_status	started_at	finished_at
+eval_existing_best	edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200	checkpoints/edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200/best.pt	ok	ok	2026-06-06 00:30:34	2026-06-06 01:10:25

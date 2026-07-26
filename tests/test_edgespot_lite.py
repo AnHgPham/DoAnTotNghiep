@@ -19,6 +19,8 @@ def test_mel_batch_shape():
     wavs = torch.randn(3, 1, 16000)
     mel = ext.extract_batch(wavs)
     assert mel.shape == (3, 1, 40, 101)
+    expected = torch.stack([ext.extract(wav) for wav in wavs])
+    assert torch.allclose(mel, expected, atol=1e-6, rtol=1e-6)
 
 
 def test_edgespot_lite_output_shape():

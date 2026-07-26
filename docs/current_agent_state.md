@@ -1,6 +1,27 @@
 # Current Agent State
 
-Last updated: 2026-06-14 21:25 ICT
+Last updated: 2026-07-13 ICT
+
+## 2026-07-13 Update - April-July Timeline And ICT6 Audit
+
+Created the evidence-backed Vietnamese audit:
+
+- `docs/reports/project_timeline_training_audit_2026_04_to_07_vi.md`
+
+Critical reconciliation:
+
+- ICTLab/ict6 was a substantial training environment, not only a dataset host.
+- The server fixed40 matrix
+  `full_mswc_16_pipeline_manifest20_e40_ep150_fixed` did not complete 16/16.
+  The copied server TSV shows 1 completed row and 15 `failed_rc_1` rows.
+- The completed fixed 16-pipeline matrix used by the thesis is the Colab A100
+  cap620 run, followed by the three-run cap620 development stage.
+- Raw ict6 audit files copied on 2026-07-13 are under
+  `reports/server_metrics_raw/ict6_audit_20260713/`.
+- The original pasted Colab fixed16 log was preserved at
+  `reports/colab_cap620_fixed_raw/colab_mswc_cap620_fixed16_20260611_154517.txt`.
+- The project timeline now separates completed training, eval-only work,
+  failed/resumed jobs, log-only historical results and locked artifacts.
 
 ## 2026-06-14 Update - Reference-Style Vietnamese Thesis Draft
 
@@ -374,11 +395,11 @@ Server deployment:
 - Launched tmux session:
   - `kws_mswc16_e40_fixed`
 - Wait log:
-  - `/storage/student4/an_kws/logs/full_mswc_16_pipeline_manifest20_e40_ep150_fixed_wait_gpu.log`
+  - `/storage/<user>/an_kws/logs/full_mswc_16_pipeline_manifest20_e40_ep150_fixed_wait_gpu.log`
 - Run log:
-  - `/storage/student4/an_kws/logs/full_mswc_16_pipeline_manifest20_e40_ep150_fixed.log`
+  - `/storage/<user>/an_kws/logs/full_mswc_16_pipeline_manifest20_e40_ep150_fixed.log`
 - Summary TSV:
-  - `/storage/student4/an_kws/logs/full_mswc_16_pipeline_manifest20_e40_ep150_fixed_runs.tsv`
+  - `/storage/<user>/an_kws/logs/full_mswc_16_pipeline_manifest20_e40_ep150_fixed_runs.tsv`
 - Evidence at launch:
   - waiter selected GPU `1`
   - first process started:
@@ -443,7 +464,7 @@ Server ict6:
 
 - Top500Full EdgeSpotFull T4 + PCEN + SCAF+GE2E resume has already completed:
   - summary:
-    `/storage/student4/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume_runs.tsv`
+    `/storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume_runs.tsv`
   - status: `train=ok`, `dev=ok`, `test=ok`
   - completed: `2026-06-05 04:58:56`
   - test100 at target FAR 5%:
@@ -458,7 +479,7 @@ Server ict6:
   - command uses:
     `TARGET_FAR=0.01 RUN_ID=top500_full_recheck_e20_ep200_far1 bash server/eval_top500_edgespot_best.sh`
   - log:
-    `/storage/student4/an_kws/logs/top500_full_recheck_e20_ep200_far1_edgespot_best_eval.log`
+    `/storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200_far1_edgespot_best_eval.log`
   - purpose: obtain ACC@1%FAR-compatible final dev30/test100 result for Top500 EdgeSpot hybrid.
 
 Colab package:
@@ -884,8 +905,8 @@ Active server state:
 
 - tmux session: `kws_top500_recheck`
 - run ID: `top500_full_recheck_e20_ep200`
-- log: `/storage/student4/an_kws/logs/top500_full_recheck_e20_ep200.log`
-- summary TSV: `/storage/student4/an_kws/logs/top500_full_recheck_e20_ep200_runs.tsv`
+- log: `/storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200.log`
+- summary TSV: `/storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200_runs.tsv`
 - data profile: `data/mswc_top500_full`
 - source clips: `data/mswc_en/clips`
 - GPU: `4`
@@ -930,12 +951,12 @@ Experiment order:
 Monitoring commands:
 
 ```bash
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
 tmux attach -t kws_top500_recheck
-tail -n 120 /storage/student4/an_kws/logs/top500_full_recheck_e20_ep200.log
-cat /storage/student4/an_kws/logs/top500_full_recheck_e20_ep200_runs.tsv
-ls -lh /storage/student4/an_kws/DoAnTotNghiep/data/mswc_top500_full/splits
+tail -n 120 /storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200.log
+cat /storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200_runs.tsv
+ls -lh /storage/<user>/an_kws/DoAnTotNghiep/data/mswc_top500_full/splits
 ```
 
 Claim hygiene:
@@ -948,7 +969,7 @@ Claim hygiene:
 
 ## 2026-06-02 18:10 ICT Update - Top500 Recheck Progress
 
-Verified on ict6 from `/storage/student4/an_kws/logs/top500_full_recheck_e20_ep200.log`
+Verified on ict6 from `/storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200.log`
 and copied JSON evidence under `reports/top500_full_recheck/raw/`.
 
 Completed:
@@ -994,11 +1015,11 @@ Server state:
 - `kws_manifest50_fixed` and `kws_dscnn_max50_recovery` tmux sessions are no longer listed.
 - GPU 4 is idle: `11 MiB`, `0%` utilization at check time.
 - Main TSV:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv`
   - EdgeSpot row: `train_status=ok`, `dev30_status=ok`, `test100_status=ok`.
   - Original DSCNN row remains `failed_rc_1` because it failed before recovery.
 - Recovery TSV:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.tsv`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.tsv`
   - DSCNN recovery row: `train_status=ok`, `dev30_status=ok`, `test100_status=ok`.
 
 Local evidence copied:
@@ -1041,9 +1062,9 @@ Server job state:
 - Main tmux session: `kws_manifest50_fixed`.
 - Recovery tmux session: `kws_dscnn_max50_recovery`.
 - Main run ID: `full_mswc_shortlist_manifest50_clips_e20_ep200`.
-- Main TSV: `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv`.
-- Recovery TSV: `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.tsv`.
-- Recovery log: `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.log`.
+- Main TSV: `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv`.
+- Recovery TSV: `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.tsv`.
+- Recovery log: `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.log`.
 
 EdgeSpotFull T4 + PCEN + GE2E max50:
 
@@ -1090,12 +1111,12 @@ Verified:
 Next check command:
 
 ```bash
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
-tail -n 120 /storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200.log
-tail -n 120 /storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.log
-cat /storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv
-cat /storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.tsv
+tail -n 120 /storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200.log
+tail -n 120 /storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.log
+cat /storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv
+cat /storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_dscnn_recovery.tsv
 ```
 
 ## 2026-06-01 23:36 ICT Update - Max50 Follow-Up Fixed And Relaunched
@@ -1128,17 +1149,17 @@ Verified:
 Active server job:
 
 - tmux session: `kws_manifest50_fixed`
-- host path: `/storage/student4/an_kws/DoAnTotNghiep`
+- host path: `/storage/<user>/an_kws/DoAnTotNghiep`
 - GPU: `4`
 - current stage at last observation: building max50 manifests from extracted clips
 - process observed:
   - `python data/build_mswc_file_splits.py --data-dir data/mswc_en --max-per-word 50 --output-suffix max50 --source clips`
 - logs:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_wait_gpu.log`
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_bootstrap.log`
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200.log` once training starts
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_wait_gpu.log`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_bootstrap.log`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200.log` once training starts
 - expected summary TSV after train/eval:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv`
 
 Expected runtime from relaunch around 2026-06-01 23:31 ICT:
 
@@ -1154,7 +1175,7 @@ Verified live on ict6 at 2026-06-01 15:36 ICT:
   - no active `kws_shortlist_manifest20` tmux session was listed.
   - no active `scripts/train.py`, `scripts/evaluate.py`, `run_full_mswc_shortlist`, or `launch_shortlist` process was observed.
 - Server summary:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200_runs.tsv`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200_runs.tsv`
   - contains 2 rows, both `train_status=ok`, `dev30_status=ok`, `test100_status=ok`.
 - Local copied evidence:
   - `D:\Downloads\DoAnTotNghiep\reports\full_mswc_shortlist_manifest20\raw\full_mswc_shortlist_manifest20_e20_ep200_runs.tsv`
@@ -1187,18 +1208,18 @@ Checked again on ict6 at 2026-06-01 23:03 ICT:
   - `data/mswc_en/splits/val_files_max50.json`
   - `data/mswc_en/splits/file_manifest_summary_max50.json`
 - No max50 summary TSV was present:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200_runs.tsv`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200_runs.tsv`
 - Bootstrap log exists and was last modified at `2026-06-01 16:03:00 +0700`:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200_bootstrap.log`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200_bootstrap.log`
 - Conclusion: the max50 follow-up stopped during manifest construction before producing usable output. Do not cite max50 as running or completed.
 
 Previous attempted launch on ict6 at 2026-06-01 15:58 ICT:
 
 - tmux session: `kws_manifest50`
-- Bootstrap log: `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200_bootstrap.log`
-- Main runner log after manifest build: `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200.log`
-- Summary TSV after training/eval starts: `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200_runs.tsv`
-- Script: `/storage/student4/an_kws/DoAnTotNghiep/server/run_full_mswc_shortlist_manifest50.sh`
+- Bootstrap log: `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200_bootstrap.log`
+- Main runner log after manifest build: `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200.log`
+- Summary TSV after training/eval starts: `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_e20_ep200_runs.tsv`
+- Script: `/storage/<user>/an_kws/DoAnTotNghiep/server/run_full_mswc_shortlist_manifest50.sh`
 - Purpose: create named max50 manifests, then train/evaluate only the two shortlist candidates:
   - `DSCNN-L + PCEN + GE2E`
   - `EdgeSpotFull T4 + PCEN + GE2E`
@@ -1248,10 +1269,10 @@ Previous attempted launch on ict6 at 2026-06-01 15:58 ICT:
 
 Last observed by Codex on ict6/frontend:
 
-- Host path: `/storage/student4/an_kws/DoAnTotNghiep`
+- Host path: `/storage/<user>/an_kws/DoAnTotNghiep`
 - Full MSWC English archive downloaded successfully:
   - `data/mswc_en/en.tar.gz`
-  - Log: `/storage/student4/an_kws/logs/kws_full_mswc.log`
+  - Log: `/storage/<user>/an_kws/logs/kws_full_mswc.log`
 - Extraction reached `100%|6662520/6662520` at `2026-05-29 18:12:52`.
 - Log line `Extracted 2081233 clips for 38150 words (skipped 1 non-target files)` should not be treated as the total available MSWC English clip count. It is an extraction-run statistic from the resumed/full extraction script, not the final training manifest size and not proof that only 2.08M clips exist.
 - Correct MSWC count check on 2026-05-31:
@@ -1273,7 +1294,7 @@ Last observed by Codex on ict6/frontend:
 MSWC manifest state:
 
 - Script: `data/build_mswc_file_splits.py`
-- Log: `/storage/student4/an_kws/logs/kws_manifest_max20.log`
+- Log: `/storage/<user>/an_kws/logs/kws_manifest_max20.log`
 - Outputs:
   - `data/mswc_en/splits/train_files.json`
   - `data/mswc_en/splits/val_files.json`
@@ -1286,9 +1307,9 @@ MSWC manifest state:
 Completed smoke matrix:
 
 - tmux session: `kws_matrix12`
-- Log: `/storage/student4/an_kws/logs/full_mswc_12_combo_manifest20_smoke.log`
-- Summary: `/storage/student4/an_kws/logs/full_mswc_12_combo_manifest20_smoke_runs.tsv`
-- Wrapper: `/storage/student4/an_kws/run_matrix12_smoke.sh`
+- Log: `/storage/<user>/an_kws/logs/full_mswc_12_combo_manifest20_smoke.log`
+- Summary: `/storage/<user>/an_kws/logs/full_mswc_12_combo_manifest20_smoke_runs.tsv`
+- Wrapper: `/storage/<user>/an_kws/run_matrix12_smoke.sh`
 - Settings:
   - `MATRIX_ID=full_mswc_12_combo_manifest20_smoke`
   - `MATRIX_EPOCHS=1`
@@ -1310,7 +1331,7 @@ Latest verified state on 2026-05-30:
 
 - Smoke matrix `full_mswc_12_combo_manifest20_smoke` finished all 12 requested combinations with `status=ok`.
 - Summary file:
-  - `/storage/student4/an_kws/logs/full_mswc_12_combo_manifest20_smoke_runs.tsv`
+  - `/storage/<user>/an_kws/logs/full_mswc_12_combo_manifest20_smoke_runs.tsv`
 - Smoke settings:
   - `MATRIX_EPOCHS=1`
   - `MATRIX_EPISODES=20`
@@ -1325,14 +1346,14 @@ Active phase-1 training launcher:
 - tmux session:
   - `kws_matrix12_phase1_wait`
 - Wait log:
-  - `/storage/student4/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_wait_gpu.log`
+  - `/storage/<user>/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_wait_gpu.log`
 - Matrix log, once launched:
-  - `/storage/student4/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20.log`
+  - `/storage/<user>/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20.log`
 - Summary TSV, once launched:
-  - `/storage/student4/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_runs.tsv`
+  - `/storage/<user>/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_runs.tsv`
 - Script:
-  - `/storage/student4/an_kws/DoAnTotNghiep/server/wait_gpu_then_run_full_mswc_matrix.sh`
-  - `/storage/student4/an_kws/DoAnTotNghiep/server/run_full_mswc_experiment_matrix.sh`
+  - `/storage/<user>/an_kws/DoAnTotNghiep/server/wait_gpu_then_run_full_mswc_matrix.sh`
+  - `/storage/<user>/an_kws/DoAnTotNghiep/server/run_full_mswc_experiment_matrix.sh`
 - Settings:
   - `MATRIX_ID=full_mswc_12_combo_phase1_e5_ep150_manifest20`
   - `MATRIX_EPOCHS=5`
@@ -1412,10 +1433,10 @@ Latest verified/resume state on 2026-05-30 11:34 ICT:
   - `python scripts/train.py --help` shows `--initial-best-metric`.
 - Relaunched tmux:
   - session: `kws_matrix_phase1_resume`
-  - wait log: `/storage/student4/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_wait_gpu.log`
-  - resume log: `/storage/student4/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_resume.log`
-  - primary summary: `/storage/student4/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_runs.tsv`
-  - supplementary EdgeSpot+MFCC summary, if reached: `/storage/student4/an_kws/logs/full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20_runs.tsv`
+  - wait log: `/storage/<user>/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_wait_gpu.log`
+  - resume log: `/storage/<user>/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_resume.log`
+  - primary summary: `/storage/<user>/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_runs.tsv`
+  - supplementary EdgeSpot+MFCC summary, if reached: `/storage/<user>/an_kws/logs/full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20_runs.tsv`
 - Relaunch command used:
   - `INCLUDE_EDGESPOT_MFCC=1`
   - `MATRIX_ID=full_mswc_12_combo_phase1_e5_ep150_manifest20`
@@ -1445,18 +1466,18 @@ Final verified state on 2026-05-31 09:22 ICT:
 - Host checked: `ictserver6`.
 - No active `scripts/train.py`, `run_full_mswc_experiment_matrix_resume.sh`, or wait-gpu process remains.
 - The phase-1 12-combo matrix finished successfully:
-  - summary: `/storage/student4/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_runs.tsv`
+  - summary: `/storage/<user>/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_runs.tsv`
   - rows: `12`
   - status counts: `ok=12`
   - final primary run finished: `2026-05-30 17:17:59`
 - The supplementary EdgeSpotFull T4 + MFCC 4-combo matrix also finished successfully:
-  - summary: `/storage/student4/an_kws/logs/full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20_runs.tsv`
+  - summary: `/storage/<user>/an_kws/logs/full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20_runs.tsv`
   - rows: `4`
   - status counts: `ok=4`
   - final supplementary run finished: `2026-05-30 19:23:04`
 - The supplementary runs are logged in the shared resume log:
-  - `/storage/student4/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_resume.log`
-  - A separate `/storage/student4/an_kws/logs/full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20.log` was not created; this is expected for the current resume runner.
+  - `/storage/<user>/an_kws/logs/full_mswc_12_combo_phase1_e5_ep150_manifest20_resume.log`
+  - A separate `/storage/<user>/an_kws/logs/full_mswc_edgespot_mfcc_4_combo_phase1_e5_ep150_manifest20.log` was not created; this is expected for the current resume runner.
 - GPU 4 is free after completion:
   - `GPU 4: 11 MiB, 0% util`
 
@@ -1552,17 +1573,17 @@ Launched on ict6 on 2026-05-31 10:31 ICT:
 - tmux session:
   - `kws_shortlist_manifest20`
 - Launcher:
-  - `/storage/student4/an_kws/DoAnTotNghiep/server/launch_shortlist_manifest20.sh`
+  - `/storage/<user>/an_kws/DoAnTotNghiep/server/launch_shortlist_manifest20.sh`
 - Runner:
-  - `/storage/student4/an_kws/DoAnTotNghiep/server/run_full_mswc_shortlist_manifest20.sh`
+  - `/storage/<user>/an_kws/DoAnTotNghiep/server/run_full_mswc_shortlist_manifest20.sh`
 - Wait log:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200_wait_gpu.log`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200_wait_gpu.log`
 - Run log:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200.log`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200.log`
 - Summary TSV:
-  - `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200_runs.tsv`
+  - `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200_runs.tsv`
 - Results directory:
-  - `/storage/student4/an_kws/DoAnTotNghiep/results/full_mswc_shortlist_manifest20_e20_ep200`
+  - `/storage/<user>/an_kws/DoAnTotNghiep/results/full_mswc_shortlist_manifest20_e20_ep200`
 
 Shortlist configurations:
 
@@ -1644,11 +1665,11 @@ Server compatibility patch:
 Check progress with:
 
 ```bash
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
 tmux attach -t kws_shortlist_manifest20
-tail -n 80 /storage/student4/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200.log
-cat /storage/student4/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200_runs.tsv
+tail -n 80 /storage/<user>/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200.log
+cat /storage/<user>/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200_runs.tsv
 ```
 
 - Removed `.pytest_cache`.
@@ -1660,17 +1681,17 @@ cat /storage/student4/an_kws/logs/full_mswc_shortlist_manifest20_e20_ep200_runs.
 Use lightweight log reads rather than raw `tail` on tqdm-heavy logs:
 
 ```bash
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
 tmux ls | grep kws
-ps -u student4 -o pid,stat,etime,%cpu,%mem,cmd | grep -E 'scripts/train.py|run_matrix12|run_full_mswc' | grep -v grep
+ps -u <user> -o pid,stat,etime,%cpu,%mem,cmd | grep -E 'scripts/train.py|run_matrix12|run_full_mswc' | grep -v grep
 python3 - <<'PY'
 from pathlib import Path
 for name in [
     "full_mswc_12_combo_manifest20_smoke.log",
     "full_mswc_12_combo_manifest20_smoke_runs.tsv",
 ]:
-    p = Path("/storage/student4/an_kws/logs") / name
+    p = Path("/storage/<user>/an_kws/logs") / name
     print("---", name, p.exists())
     if p.exists():
         data = p.read_bytes()[-24000:].decode("utf-8", "replace").replace("\r", "\n")
@@ -1694,8 +1715,8 @@ Checked at `2026-06-02 22:58 ICT` from frontend.
 
 Current Top500Full recheck run:
 
-- Log: `/storage/student4/an_kws/logs/top500_full_recheck_e20_ep200.log`
-- Summary TSV: `/storage/student4/an_kws/logs/top500_full_recheck_e20_ep200_runs.tsv`
+- Log: `/storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200.log`
+- Summary TSV: `/storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200_runs.tsv`
 - Data profile: `data/mswc_top500_full`
 - Train manifest: `3,346,271` files across `450` train words
 - Val manifest: `96,493` files across `50` val words
@@ -1773,9 +1794,9 @@ Checked at `2026-06-03 14:03 ICT`.
 Evidence:
 
 - `ssh ict14` from frontend succeeds.
-- `/storage/student4/an_kws/DoAnTotNghiep` exists on `ict14`.
+- `/storage/<user>/an_kws/DoAnTotNghiep` exists on `ict14`.
 - Resume checkpoint is visible:
-  - `/storage/student4/an_kws/DoAnTotNghiep/checkpoints/edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200/latest.pt`
+  - `/storage/<user>/an_kws/DoAnTotNghiep/checkpoints/edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200/latest.pt`
 - `nvidia-smi` is not found on `ict14`.
 - No `/dev/nvidia*` devices were visible.
 - No `kws_cu102` conda env was found under the checked user env paths.
@@ -1812,7 +1833,7 @@ Action taken:
 - Added local/server scripts:
   - `server/resume_top500_edgespot_scaf_ge2e.sh`
   - `server/launch_resume_top500_edgespot.sh`
-- Copied both scripts to `/storage/student4/an_kws/DoAnTotNghiep/server/`.
+- Copied both scripts to `/storage/<user>/an_kws/DoAnTotNghiep/server/`.
 - Launched tmux session on ict6:
   - `kws_top500_edgespot_resume`
 - Resume settings:
@@ -1822,9 +1843,9 @@ Action taken:
   - best checkpoint: `checkpoints/edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200/best.pt`
   - initial best metric: `0.7791`
 - Resume log:
-  - `/storage/student4/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume.log`
+  - `/storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume.log`
 - Resume summary:
-  - `/storage/student4/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume_runs.tsv`
+  - `/storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume_runs.tsv`
 
 Confirmed resume startup:
 
@@ -1840,9 +1861,135 @@ Follow-up note:
 - Recheck later with:
 
 ```bash
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
 tmux attach -t kws_top500_edgespot_resume
-tail -n 80 /storage/student4/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume.log
-cat /storage/student4/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume_runs.tsv
+tail -n 80 /storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume.log
+cat /storage/<user>/an_kws/logs/top500_full_recheck_e20_ep200_edgespot_resume_runs.tsv
 ```
+
+## 2026-07-11 Local Production Demo
+
+The DSCNN production-demo optimization and final verification are documented in:
+
+- `docs/session_handoff_2026_07_11_production_demo.md`
+
+Current verified default profile: DSCNN-L + PCEN + GE2E composite-300. The second featured profile is EdgeSpotFull T4 + PCEN + GE2E composite-300. Older Top500, Microset, legacy, and auto-discovered checkpoints are available only under the expanded model list.
+
+Verified local model results and runtime:
+
+- DSCNN composite: test100 ACC@1%FAR `86.36%`, `412,900` encoder parameters, median single request `26.97 ms` on local CPU.
+- EdgeSpot T4 composite: test100 ACC@1%FAR `82.87%`, `130,598` encoder parameters, median single request `21.94 ms` on local CPU.
+- Both checkpoints load with the PCEN frontend and `(1, 40, 101)` input.
+- Full Python suite: `165 passed` with one torchaudio future warning.
+- UI typecheck/build passed. Desktop/mobile checks show exactly two flagship cards by default, no horizontal overflow, and no browser console warnings/errors.
+- Local server URL: `http://127.0.0.1:8000/`.
+
+## 2026-07-13 Defense Q&A And Five-Day Study Plan
+
+Created and verified:
+
+- `docs/presentation/defense_practical_qa_and_5_day_plan_vi.md`
+- 71 answered defense questions, 30 rapid follow-ups, four detailed English answers, and a five-day plan at six hours/day.
+- UTF-8 validation passed with no replacement characters; Q1-Q71 are complete with no duplicate or missing numbers.
+
+Critical implementation facts for defense:
+
+- Encoder is the network; an embedding is one clip's encoder output. Training updates the encoder through embedding losses, while enrollment freezes the encoder and averages support embeddings into a prototype.
+- Canonical GSC evaluation normalizes each support embedding, averages 10 supports, and does not normalize the mean again. The robust demo normalizes its mean prototype and uses a mixed prototype/exemplar score. Keep these paths distinct.
+- Benchmark `ACC@1%FAR` uses `score = -minimum L2 distance` and selects the ROC operating point whose empirical FAR is at most 1%. This is not a deployment threshold frozen from dev; deployment needs separate calibration and an independently tested frozen threshold.
+- DSCNN-MFCC has `412,896` encoder parameters. DSCNN-PCEN has `412,900`: PCEN adds four shared scalars (`alpha`, `delta`, `r`, `s`) because `per_channel=False`. GE2E adds two training-only scalars, not included in the reported encoder count.
+- MFCC and mel-PCEN use different input geometry (`1x47x10` versus `1x40x101`), so the comparison is between complete frontend pipelines, not an isolated compression-only ablation. Similar parameter counts do not imply equal MACs or latency.
+- Main result claims remain DSCNN-L+PCEN+GE2E `86.36 +/- 1.29%` and EdgeSpotFull T4+PCEN+GE2E `82.87 +/- 1.22%` at GSC test100 ACC@1%FAR.
+- MSWC-to-GSC is cross-corpus, not guaranteed lexical-disjoint: six GSC targets were found in the reconstructed cap620 MSWC train vocabulary. Do not call the result strict unseen-vocabulary evaluation.
+
+Practical readiness target:
+
+- Thirty focused hours are sufficient for defense-level mastery of the critical path, not line-by-line memorization of the entire repository.
+- Memorize six anchors: `10-shot`, `100 runs`, `1% FAR`, DSCNN `86.36% / 412,900`, EdgeSpot `82.87% / 130,598`.
+- Answer in four parts: problem, decision, evidence, limitation.
+
+## 2026-07-15 Consolidated 30-Hour Mastery Curriculum
+
+Created the single comprehensive study artifact requested for code, slides,
+script, exercises, and defense preparation:
+
+- `docs/learning/kws_30_hour_code_slide_mastery_vi.md`
+
+Scope and structure:
+
+- 5 days x 6 hours with all 30 hourly sections present;
+- source triage across 108 Python files into deep-read, call-flow, and awareness
+  levels;
+- exact training, canonical test100, and robust-demo call flows;
+- runnable PowerShell/Python exercises with expected shapes/results;
+- handwritten calculations for prototype/L2/FAR/FRR/ACC/AUC/EER/F1;
+- result JSON/checkpoint integrity exercises and claim boundaries;
+- full 17-slide-to-source crosswalk, script rehearsal, 30 oral questions,
+  flashcards, progress checklist, and defense-day schedule;
+- current slide/script claim corrections, especially three development branches,
+  per-run ROC threshold semantics, cross-corpus-not-lexical-zero-shot wording,
+  and compactness versus target-device efficiency.
+
+Verification completed:
+
+- `scripts/trace_core_pipeline.py` reproduced all expected shapes and parameter
+  counts (`412,896`, `412,900`, `130,598`).
+- The consolidated focused Python suite covering frontend, encoders, losses,
+  evaluation, profiles, API, and robust streaming passed (exit code 0).
+- `npm.cmd run typecheck` passed in `src/demo/ui`.
+- Markdown audit: 2,187 lines, exactly 30 hourly sections, 5 day sections,
+  balanced code fences, UTF-8 content, and all referenced focused test files
+  exist.
+
+No model, checkpoint, result, slide PDF, or server process was changed.
+## 2026-07-17 Hostile-Jury Defense Audit
+
+- Added `docs/presentation/defense_hostile_jury_title_formula_pipeline_streaming_qa_vi.md` with 72 evidence-scoped questions, rapid follow-ups, figure/slide traps, and a show-code map.
+- Critical title mismatch: the user confirmed the registered title is `Enhanced Few-Shot Open-Set Keyword Spotting with Noise-Robust Prototype Classification and Real-Time Streaming` (without `Inference`). Proposal/outline, compiled English thesis, and slide 1 use different wording. The slide/script should be corrected immediately, and the submitted thesis mismatch must be reported to the supervisor/academic office for an approved replacement page, resubmission, or erratum.
+- The official-topic wording is supported only with scoped claims: PCEN plus DEMAND/gain augmentation is noise-aware, but there is no controlled SNR/denoising test; streaming is implemented and locally benchmarked, but the thesis reports design budgets and lacks field FA/hour/onset-to-detection validation.
+- Thesis streaming text describes the fixed 1 s / 0.5 s baseline in `src/streaming/vad_engine.py`; the current API uses the richer rolling-buffer `RobustStreamingKWS` path in `src/streaming/robust_engine.py`. Keep these implementations distinct when answering.
+
+## 2026-07-17 DEMAND And Streaming Evidence Correction
+
+- `src/features/augmentation.py` implements RMS-scaled DEMAND noise mixing and
+  supports random SNR in `0-10 dB`; `tests/test_augmentation.py` unit-tests the
+  behavior.
+- `scripts/train.py` enables the augmenter only if `data/demand` exists.
+- Audit evidence: `data/demand` is missing both locally and under the ICTLab
+  project; the composite-300 runner does not download DEMAND; retained final
+  checkpoints do not store augmentation config; retained logs contain no active
+  `Noise augmentation:` line.
+- Therefore do not claim the two headline composite checkpoints were verified to
+  use DEMAND. Treat it as an implemented/tested optional path and mark final-run
+  activation as a reproducibility gap.
+- Live streaming is implemented via `/ws/stream`, a 3.5 s rolling buffer, 250 ms
+  cadence, multi-duration windows, threshold/margin/votes, and cooldown. The raw
+  engineering RTF artifact uses offline `process_file()`, so it proves compute
+  throughput only, not live onset-to-detection latency or field FA/hour.
+- Updated the reviewed script, the 30-hour curriculum, and hostile-jury Q&A.
+- Added `docs/presentation/slide_noise_streaming_corrections_2026_07_17.md` with
+  exact slide copy and claim boundaries.
+
+## 2026-07-17 Final Presentation Title Decision
+
+- The submitted thesis title is the presentation source of truth:
+  `Few-Shot Open-Set Keyword Spotting at Vocabulary Scale`, with subtitle
+  `A Metric-Learning Study of Feature Front-Ends, Encoders, and Open-Set Rejection`.
+- Slide 1 and the reviewed oral script should use that exact thesis title/subtitle.
+- The April registered title is described as the broader intended scope. By July,
+  controlled noise and field-streaming evidence remained incomplete, so the thesis
+  headline was narrowed to the fully evaluated vocabulary-scale metric-learning work.
+- The defense answer must acknowledge the administrative synchronization mistake and
+  must not claim that an official title change was approved without evidence.
+
+## 2026-07-17 Slides 7-16 Copy Audit
+
+- Added `docs/presentation/slides_7_16_exact_copy_2026_07_17.md` with exact concise
+  slide text aligned to the reviewed eight-minute script.
+- Corrected the spoken main-result description from two to three extended-training
+  branches; the slide still reports the two successful final profiles.
+- Kept slide 15 as a general demo slide and scoped streaming as an engineering
+  prototype rather than a validated field result.
+- Corrected slide 10 architecture labels: PCEN receives non-log mel energy, encoder
+  boxes report raw output dimensions, and L2 normalization is external to the model.

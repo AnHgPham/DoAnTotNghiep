@@ -1,0 +1,2 @@
+kind	run_tag	model_family	frontend	loss	edge_tau	checkpoint	epochs	episodes	max_per_word	resume_checkpoint	initial_best_metric	train_status	dev_status	test_status	started_at	finished_at
+resume_train_and_eval	edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200	edgespot_full	mel_pcen	scaf_ge2e	4	checkpoints/edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200/best.pt	20	200	0	checkpoints/edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200/latest.pt	0.7791	ok	ok	ok	2026-06-04 09:41:24	2026-06-05 04:58:56

@@ -2,6 +2,8 @@ import type { Lang } from './types';
 
 export const text = {
   en: {
+    latency: 'Latency',
+    processingSpeed: 'Processing speed',
     appTitle: 'Few-Shot Open-Set KWS',
     appSubtitle: 'Enroll keywords, switch checkpoints, calibrate open-set rejection, and inspect every detection decision.',
     enrollment: 'Enrollment',
@@ -84,6 +86,8 @@ export const text = {
     error: 'Error'
   },
   vi: {
+    latency: 'Độ trễ',
+    processingSpeed: 'Tốc độ xử lý',
     appTitle: 'Few-Shot Open-Set KWS',
     appSubtitle: 'Ghi danh keyword, đổi checkpoint, hiệu chỉnh open-set và xem rõ từng quyết định nhận diện.',
     enrollment: 'Ghi danh',

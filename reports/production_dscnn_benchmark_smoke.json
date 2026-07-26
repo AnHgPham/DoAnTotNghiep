@@ -1,0 +1,294 @@
+{
+  "checkpoint": "checkpoints\\dscnn_pcen_ge2e_accdev_ep300_composite_colab_mswc.pt",
+  "epoch": 59,
+  "model_family": "dscnn",
+  "frontend_type": "mel_pcen",
+  "device": "cpu",
+  "target_words": [
+    "yes",
+    "no",
+    "stop"
+  ],
+  "k_shot": 3,
+  "queries_per_word": 1,
+  "policy": {
+    "threshold_scale": 1.0,
+    "min_margin": 0.05,
+    "min_votes": 2,
+    "candidate_window_ms": [
+      600,
+      800,
+      1000,
+      1200
+    ],
+    "candidate_offsets_ms": [
+      -120,
+      0,
+      120
+    ]
+  },
+  "metrics": {
+    "targets": 3,
+    "hits": 1,
+    "misses": 2,
+    "miss_rate": 0.6666666666666666,
+    "false_alarms": 0,
+    "false_alarms_per_hour": 0.0,
+    "duplicates": 0,
+    "mean_latency_sec": 0.23499999999999988,
+    "duration_sec": 58.8,
+    "enrollment_wall_sec": 0.50525019998895,
+    "inference_wall_sec": 4.447688599990215,
+    "real_time_factor": 0.0756409625848676,
+    "audio_x_realtime": 13.220350003849045
+  },
+  "events": [
+    {
+      "state": "detected",
+      "keyword": "stop",
+      "start_sec": 3.635,
+      "end_sec": 4.435,
+      "start_ms": 3635,
+      "end_ms": 4435,
+      "confidence": 0.3480517425846599,
+      "distance": 0.5119955897331238,
+      "threshold": 0.6014540195465088,
+      "margin": 0.4729980766773224,
+      "second_label": "no",
+      "speech_start_sec": 3.63,
+      "speech_end_sec": 4.2,
+      "all_distances": {
+        "stop": 0.5119955897331238,
+        "no": 0.9849936664104462,
+        "yes": 0.9962742328643799
+      },
+      "top_3": [
+        {
+          "word": "stop",
+          "dist": 0.5119955897331238
+        },
+        {
+          "word": "no",
+          "dist": 0.9849936664104462
+        },
+        {
+          "word": "yes",
+          "dist": 0.9962742328643799
+        }
+      ],
+      "timestamp": 1783670620.3899348
+    }
+  ],
+  "timeline": [
+    {
+      "label": "bed",
+      "is_target": false,
+      "start_sec": 0.0,
+      "end_sec": 1.0
+    },
+    {
+      "label": "nine",
+      "is_target": false,
+      "start_sec": 1.7,
+      "end_sec": 2.7
+    },
+    {
+      "label": "stop",
+      "is_target": true,
+      "start_sec": 3.4,
+      "end_sec": 4.4
+    },
+    {
+      "label": "tree",
+      "is_target": false,
+      "start_sec": 5.1,
+      "end_sec": 6.1
+    },
+    {
+      "label": "cat",
+      "is_target": false,
+      "start_sec": 6.8,
+      "end_sec": 7.8
+    },
+    {
+      "label": "two",
+      "is_target": false,
+      "start_sec": 8.5,
+      "end_sec": 9.5
+    },
+    {
+      "label": "sheila",
+      "is_target": false,
+      "start_sec": 10.2,
+      "end_sec": 11.2
+    },
+    {
+      "label": "learn",
+      "is_target": false,
+      "start_sec": 11.9,
+      "end_sec": 12.9
+    },
+    {
+      "label": "go",
+      "is_target": false,
+      "start_sec": 13.6,
+      "end_sec": 14.6
+    },
+    {
+      "label": "four",
+      "is_target": false,
+      "start_sec": 15.3,
+      "end_sec": 16.3
+    },
+    {
+      "label": "five",
+      "is_target": false,
+      "start_sec": 17.0,
+      "end_sec": 18.0
+    },
+    {
+      "label": "forward",
+      "is_target": false,
+      "start_sec": 18.7,
+      "end_sec": 19.7
+    },
+    {
+      "label": "left",
+      "is_target": false,
+      "start_sec": 20.4,
+      "end_sec": 21.4
+    },
+    {
+      "label": "seven",
+      "is_target": false,
+      "start_sec": 22.1,
+      "end_sec": 23.1
+    },
+    {
+      "label": "dog",
+      "is_target": false,
+      "start_sec": 23.8,
+      "end_sec": 24.8
+    },
+    {
+      "label": "house",
+      "is_target": false,
+      "start_sec": 25.5,
+      "end_sec": 26.5
+    },
+    {
+      "label": "up",
+      "is_target": false,
+      "start_sec": 27.2,
+      "end_sec": 28.2
+    },
+    {
+      "label": "happy",
+      "is_target": false,
+      "start_sec": 28.9,
+      "end_sec": 29.9
+    },
+    {
+      "label": "right",
+      "is_target": false,
+      "start_sec": 30.6,
+      "end_sec": 31.6
+    },
+    {
+      "label": "backward",
+      "is_target": false,
+      "start_sec": 32.3,
+      "end_sec": 33.3
+    },
+    {
+      "label": "wow",
+      "is_target": false,
+      "start_sec": 34.0,
+      "end_sec": 35.0
+    },
+    {
+      "label": "marvin",
+      "is_target": false,
+      "start_sec": 35.7,
+      "end_sec": 36.7
+    },
+    {
+      "label": "zero",
+      "is_target": false,
+      "start_sec": 37.4,
+      "end_sec": 38.4
+    },
+    {
+      "label": "down",
+      "is_target": false,
+      "start_sec": 39.1,
+      "end_sec": 40.1
+    },
+    {
+      "label": "one",
+      "is_target": false,
+      "start_sec": 40.8,
+      "end_sec": 41.8
+    },
+    {
+      "label": "eight",
+      "is_target": false,
+      "start_sec": 42.5,
+      "end_sec": 43.5
+    },
+    {
+      "label": "off",
+      "is_target": false,
+      "start_sec": 44.2,
+      "end_sec": 45.2
+    },
+    {
+      "label": "bird",
+      "is_target": false,
+      "start_sec": 45.9,
+      "end_sec": 46.9
+    },
+    {
+      "label": "six",
+      "is_target": false,
+      "start_sec": 47.6,
+      "end_sec": 48.6
+    },
+    {
+      "label": "no",
+      "is_target": true,
+      "start_sec": 49.3,
+      "end_sec": 50.3
+    },
+    {
+      "label": "follow",
+      "is_target": false,
+      "start_sec": 51.0,
+      "end_sec": 52.0
+    },
+    {
+      "label": "on",
+      "is_target": false,
+      "start_sec": 52.7,
+      "end_sec": 53.7
+    },
+    {
+      "label": "yes",
+      "is_target": true,
+      "start_sec": 54.4,
+      "end_sec": 55.4
+    },
+    {
+      "label": "three",
+      "is_target": false,
+      "start_sec": 56.1,
+      "end_sec": 57.1
+    },
+    {
+      "label": "visual",
+      "is_target": false,
+      "start_sec": 57.8,
+      "end_sec": 58.8
+    }
+  ]
+}

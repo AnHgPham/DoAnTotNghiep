@@ -3,20 +3,13 @@
 %  Single-file LaTeX source, Overleaf-ready (compiler: pdfLaTeX).
 %
 %  Figures live in ./assets/ — upload that folder to Overleaf together with
-%  this .tex file.  Generated-from-real-data figures and copied result figures
-%  are already in ./assets/.
+%  this .tex file.
 %
 %  ---------------------------------------------------------------------------
-%  REVIEW MARKERS (so you can tell what I changed vs. what you wrote):
-%    * \NEW{...}        -> inline text I ADDED inside one of YOUR existing
-%                          sections.  Renders in dark-blue + a margin tag.
-%    * \reviewnote{...} -> a yellow banner marking a WHOLE NEW section/block
-%                          that did not exist in your draft.
-%    * \colabfig{...}   -> a red placeholder: a figure you must export from
-%                          Colab (training curves, etc.).
-%    * \webfig{...}     -> a placeholder for an image to be sourced from the
-%                          web (please confirm the source/licence first).
-%  Search the source for "REVIEW", "NEW", "colabfig", "webfig" to find them.
+%  REVIEW TOGGLE: set \reviewmarkstrue to SHOW the review markers (to
+%  self-check the added content); set \reviewmarksfalse for a CLEAN copy for
+%  the committee (hides the yellow banners and removes the colour of added
+%  text). \NEW{...} = inline addition; \reviewnote{...} = whole new block.
 %==============================================================================
 \documentclass[12pt,a4paper]{report}
 
@@ -25,7 +18,7 @@
 \usepackage[english]{babel}
 \usepackage{lmodern}
 \usepackage{microtype}
-\usepackage[a4paper,margin=2.5cm,marginparwidth=1.8cm]{geometry}
+\usepackage[a4paper,margin=2.5cm]{geometry}
 
 \usepackage{amsmath,amssymb,amsfonts}
 \usepackage{graphicx}
@@ -48,29 +41,32 @@
 \usepackage[hidelinks,colorlinks=true,linkcolor=blue!55!black,
             citecolor=blue!55!black,urlcolor=blue!55!black]{hyperref}
 \usepackage{cleveref}
+\usepackage{float}
 
 \captionsetup{font=small,labelfont=bf}
 
 %------------------------------ review markers --------------------------------
+% Set \reviewmarkstrue to reveal added-content markers; \reviewmarksfalse gives
+% the clean committee copy (banners hidden, added text rendered as normal text).
+\newif\ifreviewmarks
+\reviewmarksfalse
 \definecolor{addcolor}{rgb}{0.05,0.25,0.6}
-% inline addition inside an existing (user-written) section.
-% Colored text + small superscript marker; safe in captions/tables.
-\newcommand{\NEW}[1]{{\color{addcolor}#1\,\textsuperscript{\tiny[+]}}}
-% whole new block / section banner
-\newcommand{\reviewnote}[1]{%
-  \par\smallskip\noindent
-  \colorbox{yellow!35}{\parbox{0.97\linewidth}{\small\textbf{[REVIEW — NEW, written by assistant]}\; #1}}%
-  \par\smallskip}
-% placeholder: figure to export from Colab
+\ifreviewmarks
+  \newcommand{\NEW}[1]{{\color{addcolor}#1\,\textsuperscript{\tiny[+]}}}
+  \newcommand{\reviewnote}[1]{%
+    \par\smallskip\noindent
+    \colorbox{yellow!35}{\parbox{0.97\linewidth}{\small\textbf{[REVIEW — NEW, written by assistant]}\; #1}}%
+    \par\smallskip}
+\else
+  \newcommand{\NEW}[1]{#1}
+  \newcommand{\reviewnote}[1]{}
+\fi
+% placeholder kept for any remaining Colab export (both pending figures are now
+% included, so this is normally unused).
 \newcommand{\colabfig}[1]{%
   \par\smallskip\begin{center}
   \fcolorbox{red!60!black}{red!6}{\parbox{0.9\linewidth}{\centering\small
   \textbf{[FIGURE TO ADD FROM COLAB]}\\[2pt] #1}}\end{center}\par\smallskip}
-% placeholder: image to source from the web (confirm licence)
-\newcommand{\webfig}[1]{%
-  \par\smallskip\begin{center}
-  \fcolorbox{OrangeRed}{orange!8}{\parbox{0.9\linewidth}{\centering\small
-  \textbf{[IMAGE TO SOURCE FROM WEB — please confirm source/licence]}\\[2pt] #1}}\end{center}\par\smallskip}
 
 \newcommand{\code}[1]{\texttt{\small #1}}
 \newcommand{\acc}{\text{ACC}}
@@ -87,50 +83,74 @@
 
 %------------------------------ title page ------------------------------------
 \begin{titlepage}
+\thispagestyle{empty}
+\begin{tikzpicture}[remember picture, overlay]
+  \draw[line width=0.8pt]
+    ([shift={(1.6cm,1.6cm)}]current page.south west)
+    rectangle
+    ([shift={(-1.6cm,-1.6cm)}]current page.north east);
+\end{tikzpicture}%
 \centering
-\vspace*{1.5cm}
-{\scshape\large University Name \par}
-{\scshape Department of \dots \par}
-\vfill
-{\Huge\bfseries Few-Shot Open-Set Keyword Spotting\\[4pt]
-at Vocabulary Scale\par}
-\vspace{6pt}
-{\large A Metric-Learning Study of Feature Front-Ends, Encoders,\\
+\vspace*{0.6cm}
+{\bfseries\resizebox{0.98\linewidth}{!}{\Large UNIVERSITY OF SCIENCE AND TECHNOLOGY OF HANOI}\par}
+{\small\bfseries DEPARTMENT OF INFORMATION AND COMMUNICATION TECHNOLOGY\par}
+\vspace{0.6cm}
+\includegraphics[width=8.5cm]{Logo_USTH.png}\par
+\vspace{0.5cm}
+{\Huge\bfseries BACHELOR THESIS\par}
+\vspace{0.7cm}
+{\large By\par}
+{\large\bfseries Pham Hoang An - 23BI14002\par}
+\vspace{1.0cm}
+{\large\bfseries Title:\par}
+{\Large\bfseries FEW-SHOT OPEN-SET KEYWORD SPOTTING AT VOCABULARY SCALE\par}
+\vspace{0.35cm}
+{\large\bfseries A Metric-Learning Study of Feature Front-Ends, Encoders,\\
 and Open-Set Rejection\par}
 \vfill
-{\large Bachelor/Engineer Thesis\par}
-\vspace{1cm}
-\begin{tabular}{rl}
-Author: & \textit{Author Name} \\
-Supervisor: & \textit{Dr.\ Tran Hoang Tung} \\
-Infrastructure: & \textit{Dr.\ Tran Giang Son (ICTLab server)} \\
-\end{tabular}
-\vfill
-{\large \today\par}
+{\Large Supervisor:\quad Prof.\ Dr.\ Tran Hoang Tung\par}
+\vspace{1.6cm}
+{\large\bfseries Hanoi, June 2026\par}
+\vspace*{0.5cm}
 \end{titlepage}
+
+%------------------------------ certification page ---------------------------
+\thispagestyle{empty}
+\vspace*{2.5cm}
+\begin{center}
+To whom it may concern,
+\end{center}
+\vspace{0.6cm}
+\noindent I, Dr.\ Tran Hoang Tung, certify that the thesis / internship report of
+Mr.\ Pham Hoang An is qualified to be presented in the Internship Jury 2025--2026.
+\vspace{2.5cm}
+\begin{flushright}
+Hanoi, June 2026\\[1.4cm]
+\textbf{Supervisor's signature}
+\end{flushright}
+\clearpage
+
+% Front matter (cover/acknowledgements/abstract/TOC) uses roman numerals;
+% Chapter 1 resets to arabic.
+\pagenumbering{roman}
 
 %------------------------------ acknowledgements ------------------------------
 \chapter*{Acknowledgements}
 \addcontentsline{toc}{chapter}{Acknowledgements}
 
-First and foremost, I would like to express my support and appreciation for my
-supportive and insightful supervisor, Dr.\ Tran Hoang Tung, for insightful
-feedback and guidance throughout the 3 months of internship. I would also like
-to extend my thanks to Dr.\ Tran Giang Son for providing full access to the
-ICTLab server, which made my computational part of this project a success.
+First and foremost, I would like to express my deep gratitude to my supervisor,
+Dr.\ Tran Hoang Tung, for his insightful feedback and dedicated guidance
+throughout the three months of the internship. I would also like to sincerely
+thank Dr.\ Tran Giang Son for granting full access to the ICTLab server, which
+made the computational part of this project possible.
 
-For my family, thank you for the encouragement and supportive emotion, which
-keep me motivated and encourage me to complete this project. Finally, thanks to
-those who have time to read this entire paper, thank you, and I hope you have a
-wonderful time reading this.
+I am grateful to my family for their constant encouragement and support, which
+kept me motivated to complete this work. Finally, I would like to thank everyone
+who took the time to read and give feedback on this thesis.
 
-%------------------------------ TOC -------------------------------------------
-\tableofcontents
-
-%==============================================================================
-\chapter{Introduction}\label{ch:intro}
-
-\section{Abstract}\label{sec:abstract}
+%------------------------------ abstract -------------------------------------
+\chapter*{Abstract}
+\addcontentsline{toc}{chapter}{Abstract}
 
 We study few-shot open-set keyword spotting (KWS): a single embedding encoder is
 trained once on a large word vocabulary and is then deployed to recognize an
@@ -161,6 +181,61 @@ test, while the best compact model (EdgeSpot-Full + PCEN + GE2E) reaches
 $82.87\%$ at one third of the parameters. We release the complete code,
 training/evaluation protocols, and an offline web demonstrator.
 
+\bigskip
+\noindent\textbf{Keywords:} keyword spotting, few-shot learning, open-set
+recognition, metric learning, PCEN, GE2E, MSWC, Google Speech Commands.
+
+%------------------------------ TOC -------------------------------------------
+\tableofcontents
+
+%==============================================================================
+% Reset to arabic page numbers, starting at Chapter 1.
+\clearpage
+\pagenumbering{arabic}
+\chapter{Introduction}\label{ch:intro}
+
+This chapter introduces the problem this thesis addresses and why it matters.
+\Cref{sec:context} places keyword spotting in the context of modern voice
+interfaces and motivates the move from a closed-set design to a few-shot open-set
+one. \Cref{sec:objectives} states the objectives of the thesis and
+\Cref{sec:outcomes} the expected outcomes. \Cref{sec:plain} explains the problem
+in plain terms. Finally, \Cref{sec:thesisstruct} outlines the structure of the
+whole thesis.
+
+Before going into detail, \Cref{fig:overview} summarizes the system at a
+conceptual level: the encoder is \emph{trained once} to learn how to compare two
+sounds; at deployment the user \emph{enrolls} a few
+examples per keyword to form representative points (prototypes); each incoming
+sound is \emph{matched} to the nearest prototype; and if it lies far from every
+prototype it is \emph{rejected} as ``not a keyword''. The entire thesis revolves
+around these four steps.
+
+\begin{figure}[H]
+\centering
+\resizebox{\linewidth}{!}{%
+\begin{tikzpicture}[
+  node distance=6mm and 9mm,
+  stage/.style={draw,rounded corners=3pt,align=center,minimum height=11mm,
+              minimum width=24mm,font=\footnotesize,fill=blue!5},
+  arr/.style={-{Latex[length=2.4mm]},thick},
+  lbl/.style={font=\scriptsize\itshape,align=center,text=black!60}]
+\node[stage] (train) {\textbf{1. Train once}\\learn to compare audio\\(large vocabulary)};
+\node[stage,right=of train] (enroll) {\textbf{2. Enroll}\\a few shots per keyword\\$\to$ prototype};
+\node[stage,right=of enroll] (match) {\textbf{3. Match}\\nearest prototype\\in embedding space};
+\node[stage,right=of match] (reject) {\textbf{4. Decide}\\keyword \emph{or}\\``unknown''};
+\draw[arr](train)--(enroll);
+\draw[arr](enroll)--(match);
+\draw[arr](match)--(reject);
+\node[lbl,below=3mm of train]{model fixed\\after this step};
+\node[lbl,below=3mm of enroll]{user defines\\the keywords};
+\node[lbl,below=3mm of reject]{open-set rejection};
+\end{tikzpicture}}
+\caption{Conceptual overview of the few-shot open-set keyword-spotting system:
+train once $\to$ enroll $\to$ nearest-prototype match $\to$ open-set decision.
+The detailed technical diagram is given in \Cref{fig:pipeline}.}
+\label{fig:overview}
+\end{figure}
+
 \section{Context and Motivation}\label{sec:context}
 
 Keyword spotting (KWS) --- the task of detecting a small set of spoken commands
@@ -171,10 +246,10 @@ This design has two structural limitations. First, the keyword set is frozen at
 training time: supporting a new wake word or command requires collecting data and
 retraining the model. Second, a softmax classifier is, by construction, not
 open-set: every input is forced into one of the known classes, so unseen words
-and background noise are silently misclassified as commands, producing false
+and background noise are misclassified as commands, producing false
 activations. This work targets the more realistic and more difficult few-shot
 open-set formulation. We train a single embedding encoder on a very large and
-diverse word vocabulary, and at deployment time the end user defines an arbitrary
+diverse word vocabulary, and at deployment time the end user defines a
 keyword set by providing only a few ($k$) enrollment utterances per word. Each
 keyword is represented by a prototype (the mean embedding of its enrollment
 shots); recognition is performed by nearest-prototype matching in embedding
@@ -182,15 +257,10 @@ space, and an explicit open-set decision rejects anything that is too far from
 all prototypes. Because the encoder is never retrained for a particular keyword,
 the same model serves unlimited downstream vocabularies; because rejection is
 distance-based, the system can abstain on out-of-vocabulary speech and silence.
-The central scientific question we pursue is what makes such an encoder
-generalize, and in particular how the design choices interact with the scale of
-the training vocabulary. We perform a controlled factorial study over three axes
---- feature front-end, encoder backbone, and metric-learning objective --- and we
-deliberately push the training vocabulary from a 31-word ``micro-set'' up to the
-full 37,387-word MSWC English corpus. This scaling exposes a phenomenon that is
-invisible at small scale: a classification-style angular-margin loss that is
-competitive on a few hundred classes catastrophically collapses on tens of
-thousands of classes.
+The question we pursue throughout this thesis is what makes such an encoder
+generalize and at what scale of the training vocabulary the
+problem must be tackled --- whether a small vocabulary suffices or a large one is
+required, and if so how large --- in order to achieve that generalization.
 
 \paragraph{Contributions.} Our main contributions are:
 \begin{itemize}[leftmargin=1.4em,itemsep=2pt]
@@ -201,9 +271,12 @@ all sharing a common prototype interface (\Cref{ch:method}).
 \item A 16-configuration factorial screen on full-vocabulary MSWC that isolates
 the contribution of each axis with paired deltas; PCEN and GE2E emerge as the two
 robust wins (\Cref{ch:results}).
-\item A scale analysis showing (a) accuracy saturation near $\sim$2\,M training
-clips and (b) the failure mode of Sub-center ArcFace at $37$k classes, with a
+\item A scale analysis showing:
+\begin{itemize}[leftmargin=1.3em,itemsep=1pt]
+\item Accuracy saturation near $\sim$2\,M training clips; and
+\item The failure mode of Sub-center ArcFace at $37$k classes, with a
 gradient-magnitude explanation and a practical fix (\Cref{ch:results}).
+\end{itemize}
 \item A knowledge-distillation study showing that a cosine objective against a
 frozen Wav2Vec\,2.0 teacher matches GE2E accuracy with roughly half the training
 data (\Cref{ch:results}).
@@ -212,28 +285,25 @@ protocol (100 runs), together with a CPU streaming pipeline (Silero VAD +
 smoothing state machine) and an offline web demonstrator (\Cref{ch:method}).
 \end{itemize}
 
-%------------------------------------------------------- NEW 1.3 Objectives ----
 \section{Project objectives}\label{sec:objectives}
-\reviewnote{New subsection, modelled on the sample thesis's ``Project Objective''.
-Keeps the 5-chapter skeleton; only enriches Chapter~1.}
+\reviewnote{New section, modelled on the sample thesis's ``Project Objective''.}
 
 The primary objective of this thesis is to design, implement, and rigorously
 evaluate a \emph{retraining-free, open-set} keyword-spotting system that learns a
 single transferable embedding and supports arbitrary user-defined vocabularies
 from a few enrollment examples. Concretely, we aim to:
 \begin{enumerate}[leftmargin=1.5em,itemsep=2pt]
-\item build a compact, dependency-light encoder that runs offline on modest
-hardware ($\sim$0.1--0.4\,M parameters);
-\item identify, through a controlled factorial study, which feature front-end,
+\item Build a compact encoder that runs offline on modest hardware;
+\item Identify, through a controlled factorial study, which feature front-end,
 encoder backbone, and metric-learning objective generalize best across corpora;
-\item characterize how design choices behave as the training vocabulary scales
+\item Characterize how design choices behave as the training vocabulary scales
 from tens to tens of thousands of words; and
-\item deliver an honest open-set evaluation (DET/AUC/EER/ACC@FAR) under a strict,
+\item Deliver an honest open-set evaluation (DET/AUC/EER/ACC@FAR) under a strict,
 reproducible protocol, plus a working streaming demonstrator.
 \end{enumerate}
 
 \section{Desired outcomes}\label{sec:outcomes}
-\reviewnote{New subsection, modelled on the sample thesis's ``Desired Outcomes''.}
+\reviewnote{New section, modelled on the sample thesis's ``Desired Outcomes''.}
 
 The system is expected to (i) recognize a user's own keyword set enrolled from
 $\le 10$ examples per word without any retraining; (ii) reject out-of-vocabulary
@@ -243,104 +313,134 @@ on a different one (GSC); and (iv) remain small enough for offline, on-device us
 The accompanying deliverables are the trained encoders, the evaluation/training
 scripts, and an offline web demonstrator with long-audio timing analysis.
 
-%------------------------------------------------------------------ NEW 1.4 ----
-\section{The problem in plain language}\label{sec:plain}
-\reviewnote{This entire section (\ref{sec:plain}) is new --- you asked for a
-$\sim$2-page, non-technical explanation of the problem, why it is useful, and why
-it is hard. It is written so a non-technical reader can follow it. Please review
-the tone and trim if needed.}
+\section{The problem in plain terms}\label{sec:plain}
+\reviewnote{New section --- a non-technical explanation of the problem written in
+an objective register, about one page long.}
 
-Imagine talking to a device --- a smart speaker, a pair of earbuds, a car, a
-washing machine --- and having it react the instant you say a short command such
-as ``stop'', ``next'', or a custom wake word you chose yourself. The piece of
-software that constantly listens for those few words, and only those words, is
-called a \emph{keyword spotting} (KWS) system. It is deliberately small and
-always running, so that the big, power-hungry speech recognizer only wakes up
-\emph{after} the keyword is heard. KWS is therefore the gatekeeper of almost
-every voice interface in daily use.
+Keyword spotting is the always-on software component of voice-controlled devices
+(smart speakers, earbuds) whose task is to detect a small
+number of short spoken commands such as ``stop'' or ``next'', or a wake word.
+Because it must run continuously, it is deliberately kept small and
+energy-efficient; the full, resource-intensive speech recognizer is activated
+only \emph{after} a keyword has been detected. Keyword spotting therefore acts as
+the gateway to most voice interfaces.
 
-\paragraph{Why the usual approach is limiting.}
-Most commercial KWS systems are trained like a multiple-choice exam: the model is
-shown thousands of examples of a \emph{fixed} list of words (say, the ten words
-\textit{yes, no, up, down, \dots}) and learns to pick exactly one of them for any
-sound it hears. This works, but it has two practical headaches that anyone who has
-shipped a voice product will recognize:
-\begin{enumerate}[leftmargin=1.5em,itemsep=2pt]
-\item \textbf{You cannot add a new command without going back to the factory.}
-If a customer wants the wake word ``Hey Aurora'' instead of ``Hey Google'', the
-manufacturer must collect a new dataset and retrain the model. The vocabulary is
-literally baked into the network.
-\item \textbf{It cannot say ``I don't know''.} A multiple-choice model is forced
-to choose one of its known words for \emph{every} sound, including a cough, a
-song on the radio, or a word it has never heard. The result is the familiar
-annoyance of a device that activates when nobody addressed it --- a
-\emph{false activation}.
-\end{enumerate}
+\paragraph{Limitations of the closed-set approach.}
+Most commercial keyword-spotting systems are trained as classifiers over a
+\emph{fixed} list of words (for example, the ten commands \textit{yes, no, up,
+down, \dots}).
+This design has two limitations. First, the keyword set is fixed at
+training time: adding a new command or word requires the manufacturer to
+collect data and retrain the model. Second, a closed-set classifier is forced to
+choose a label for \emph{every} input, including a cough, music, or a previously
+unseen word; the device is therefore prone to \emph{false activations} when no
+command was actually spoken.
 
-\paragraph{What we build instead.}
-This thesis builds a KWS system that behaves much more like a helpful human
-assistant. Instead of memorizing a fixed word list, the system learns a general
-skill: \emph{how to tell whether two short audio clips are the same word or
-different words}. We train this skill once, on a very large and varied collection
-of spoken words. After that, an end user can define \emph{their own} commands
-simply by recording a few examples of each --- the system does not need to be
-retrained. Internally, each user command is summarized as a single point in a
-``meaning map'' (we call it an \emph{embedding}); to recognize speech, the system
-places the new sound on the same map and checks which command it lands closest
-to. Crucially, if the new sound lands far away from \emph{every} command, the
-system is allowed to answer ``none of them'' --- this is the open-set ability
-that lets it ignore unrelated speech and noise.
+\paragraph{The approach taken in this thesis.}
+This thesis builds the system around \emph{metric learning}: instead of memorizing
+a fixed set of labels, the model learns the more general skill of deciding whether
+two audio segments contain the same word. This skill is trained once on a
+large and diverse corpus of spoken words. At deployment, the user defines a
+command set by providing a few recordings per word, and the system requires
+no retraining. In terms of representation, each command is summarized as a single
+representative point in a feature space (an \emph{embedding}); to recognize an
+input, the system maps the new audio into this space and determines which command
+it lies closest to. If the audio lies far from all enrolled commands, the system
+concludes ``not a keyword'' --- this is the \emph{open-set} capability that lets
+it ignore irrelevant speech and noise.
 
-\paragraph{Why this is genuinely useful.}
-The payoff is threefold and practical. (1) \emph{Personalization without
-retraining}: a single shipped model supports unlimited, user-chosen vocabularies,
-which is exactly what privacy-preserving on-device assistants, accessibility
-tools, and custom industrial controls need. (2) \emph{Robustness to the
-unexpected}: because the system can decline to answer, it produces far fewer false
-activations in the messy real world. (3) \emph{Tiny footprint}: our models are
-small enough ($\sim$0.1--0.4 million parameters) to run on a microcontroller or a
-phone without the cloud, which protects user privacy and works offline.
+\paragraph{Practical value and challenges.}
+This approach offers three benefits: (i) personalization without retraining,
+which suits privacy-preserving on-device assistants, accessibility tools, and
+customizable industrial controls; (ii) fewer false activations thanks to the
+rejection capability; and (iii) a small model footprint ($\sim$0.1--0.4 million
+parameters), sufficient to run offline on-device and thereby preserve privacy.
+At the same time, the problem poses three main challenges. The first is
+\emph{generalization}: the model must operate on words, recording devices, and
+accents unseen during training, so this thesis deliberately trains on one corpus
+and evaluates on a different one. The second is the \emph{open-set
+boundary}: reliably rejecting the very large space of ``everything that is not a
+command'' is considerably harder than a few known commands, and the
+trade-off between over-rejection and under-rejection must be quantified honestly.
+The third is \emph{scale}: as the training vocabulary grows from a few dozen to
+nearly forty thousand words, some techniques that are effective at small scale
+break down --- a phenomenon analyzed in \Cref{ch:results}.
 
-\paragraph{Why it is hard.}
-Three difficulties make this more than a toy problem, and they are the threads
-that run through this thesis. First, \emph{generalization}: the model must work on
-words --- and even on a recording device and accent --- that it never saw during
-training, so we deliberately train on one corpus and test on a completely
-different one. Second, \emph{the open-set boundary}: teaching a model to confidently
-reject the infinite space of ``everything that is not a command'' is much harder
-than separating a few known words from each other, and a system that rejects too
-eagerly becomes deaf while one that rejects too little becomes annoying; we must
-quantify this trade-off honestly. Third, and most surprising, \emph{scale}: as we
-grow the training vocabulary from a few dozen words to nearly forty thousand, some
-techniques that look excellent on small vocabularies break down completely. A
-large part of this thesis is about discovering, measuring, and explaining where
-the design choices help, where they saturate, and where they fail.
+\section{Thesis structure}\label{sec:thesisstruct}
+\reviewnote{New section --- introduces the chapter layout, following thesis
+convention.}
 
-In the chapters that follow we first review the necessary background on how sound
-becomes data (\Cref{ch:background}); we then describe exactly what we built and
-how we measured it (\Cref{ch:method}); we present and analyze the results
-(\Cref{ch:results}); and we close with the current status and future directions
-(\Cref{ch:conclusion}).
+The remainder of this thesis is organized as follows. \Cref{ch:background}
+presents the necessary background: how sound is digitized and represented as a
+mel-spectrogram, the difference between closed-set and open-set recognition, the
+ideas of few-shot and metric learning, and the related work this thesis builds
+upon. \Cref{ch:method} describes the proposed method: the problem formulation,
+the feature front-ends, the two encoders, the metric-learning objectives, the
+open-set rejection heads, the evaluation methodology, and the experimental design
+--- this chapter states \emph{what was done and measured}.
+\Cref{ch:results} presents and analyzes the results around four research
+questions, tied to practical use. \Cref{ch:conclusion}
+summarizes the current status, strengths, weaknesses, and future directions.
 
 %==============================================================================
 \chapter{Background and Related Work}\label{ch:background}
-\reviewnote{This entire chapter is new. You asked Chapter~2 to cover the
-``general/foundational knowledge'': how audio is used, what the data looks like,
-and how it is turned into a mel-spectrum representation, plus the prior work this
-thesis builds on. All text and the audio-feature figure here are new.}
+\reviewnote{This entire chapter is new: foundational knowledge (how audio is
+used, what the data looks like, the mel-spectrum representation) plus the prior
+work this thesis builds on.}
+
+This chapter provides the background needed to follow the method.
+\Cref{sec:sound2data} describes how sound is digitized into data a computer can
+process; \Cref{sec:mel} presents the time--frequency representation (the
+mel-spectrogram) used as model input. \Cref{sec:kws-bg} distinguishes closed-set
+from open-set keyword spotting, \Cref{sec:fewshot-bg} introduces few-shot and
+metric learning, and \Cref{sec:arc-bg} reviews the angular-margin and
+open-set-rejection methods that this thesis builds on and compares against.
 
 \section{From sound to data}\label{sec:sound2data}
 
-Sound is a continuous pressure wave. To process it on a computer we
-\emph{sample} the wave at a fixed rate; throughout this work we use $16{,}000$
-samples per second (16\,kHz), which is the de-facto standard for speech tasks and
-captures all frequencies relevant to spoken words (up to 8\,kHz by the Nyquist
-limit). Each spoken-command clip is standardized to exactly one second, i.e.\ a
-vector of $16{,}000$ numbers (\emph{the raw waveform}); shorter clips are padded
-with zeros and longer clips are trimmed. \Cref{fig:audiofeat}(a) shows such a
-waveform for the word ``yes''. The waveform alone is a poor input for a
-classifier: it is high-dimensional, and the same word spoken slightly louder or
-shifted in time looks very different sample-by-sample.
+Sound in nature is a \emph{continuous pressure wave} that varies over time. A
+computer cannot store a continuous signal, so the first step is
+\emph{digitization} via two operations: \emph{sampling}, which measures the wave
+amplitude at evenly spaced instants, and \emph{quantization}, which rounds each
+measured value to one of a finite set of levels. The result is a discrete
+sequence of numbers representing the waveform.
+
+The sampling rate determines which frequency band the digital signal preserves.
+By the \emph{Nyquist sampling theorem}, a sampling rate $f_s$ faithfully
+represents only frequency components below $f_s/2$. The energy that distinguishes
+phonemes in speech is concentrated below about 8\,kHz, so a rate of
+$f_s = 16{,}000$ samples per second (16\,kHz) --- with a Nyquist limit of
+8\,kHz --- is sufficient and has become the de-facto standard for speech tasks.
+Increasing the sampling rate further mainly raises the computational cost while
+adding little to word-recognition quality. Throughout this thesis we use 16\,kHz,
+single-channel (mono) audio.
+
+So that every clip has the same input size, each spoken-command segment is
+standardized to exactly one second, i.e.\ a vector of $16{,}000$ numbers (the
+\emph{raw waveform}): shorter clips are zero-padded at both ends and longer clips
+are trimmed. Fixing the length lets us pack data into batches and keeps the
+downstream front-end at a constant tensor size. \Cref{fig:audiofeat}(a) shows a
+one-second waveform of the word ``yes''.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\linewidth]{fig_audio_features.png}
+\caption{From sound to features, computed from a real Google Speech Commands
+recording of the word ``yes''.
+(a) the 1\,s, 16\,kHz raw waveform;
+(b) the 40-band log-mel spectrogram (perceptual time--frequency image);
+(c) the first 10 MFCC coefficients over $T{=}47$ frames --- the tensor actually
+fed to the DSCNN encoder.}
+\label{fig:audiofeat}
+\end{figure}
+
+Although it represents the signal, the raw waveform is a poor input for a
+classifier. First, it is \emph{very high-dimensional} ($16{,}000$ values for one
+second). Second, it is \emph{not invariant to harmless transformations}: the same
+word spoken slightly louder, shifted in time, or recorded on a different device
+produces a very different sample sequence at the per-sample level, even though a
+human still hears the same word. We therefore transform the waveform into a more
+compact and stable time--frequency representation, presented in \Cref{sec:mel}.
 
 \section{Time--frequency representations: the mel-spectrogram}\label{sec:mel}
 
@@ -356,13 +456,17 @@ into a perceptual ``mel'' axis via
 m \;=\; 2595\,\log_{10}\!\Big(1+\frac{f}{700}\Big),
 \label{eq:mel}
 \end{equation}
-and a bank of (here 40) overlapping triangular filters spaced evenly on this mel
-axis pools the STFT energy into 40 \emph{mel bands}. Taking a logarithm of the
-band energies (because loudness is also perceived logarithmically) yields the
-\emph{log-mel spectrogram} of \Cref{fig:audiofeat}(b): a compact image in which
-the horizontal axis is time, the vertical axis is mel frequency, and brightness
-is energy. The harmonic structure of the voiced part of ``yes'' is clearly
-visible as bright horizontal bands.
+where $f$ is the frequency in Hz and $m$ the corresponding value on the mel
+scale; the constants $700$ and $2595$ shape the curve so that the mel axis is
+approximately linear in Hz at low frequencies and compresses logarithmically at
+high frequencies, mirroring the decreasing resolution of human hearing.
+Consequently, a bank of (here 40) overlapping triangular filters spaced evenly on
+this mel axis pools the STFT energy into 40 \emph{mel bands}, allocating more
+bands to the frequency region where human hearing is most sensitive. Taking a
+logarithm of the band energies (because loudness is also perceived
+logarithmically) yields the \emph{log-mel spectrogram} of
+\Cref{fig:audiofeat}(b): a compact image in which the horizontal axis is time,
+the vertical axis is mel frequency, and brightness is energy.
 
 \paragraph{MFCC.}
 A further classical step decorrelates the log-mel bands with a discrete cosine
@@ -384,22 +488,8 @@ designed for robust, far-field detection and, as \Cref{ch:results} shows, is the
 single most reliable improvement in our study. The exact equation is given in
 \Cref{sec:frontends}.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.92\linewidth]{fig_audio_features.png}
-\caption{From sound to features, computed from a real Google Speech Commands
-recording of the word ``yes''.
-(a) the 1\,s, 16\,kHz raw waveform;
-(b) the 40-band log-mel spectrogram (perceptual time--frequency image);
-(c) the first 10 MFCC coefficients over $T{=}47$ frames --- the tensor actually
-fed to the DSCNN encoder. \emph{Generated from project data with
-\code{make\_thesis\_figures.py}.}}
-\label{fig:audiofeat}
-\end{figure}
-
-\reviewnote{Two new data-illustration figures added below
-(\ref{fig:dataexamples}, \ref{fig:melfb}), both generated from real project data,
-in the spirit of the sample thesis's dataset-example figures.}
+\reviewnote{Two new data-illustration figures (\ref{fig:dataexamples},
+\ref{fig:melfb}), both generated from real project data.}
 
 To build intuition for what the model actually sees, \Cref{fig:dataexamples} shows
 the log-mel spectrograms of six different command words. Each word has a
@@ -407,12 +497,12 @@ characteristic time--frequency signature --- the rising voiced segment of
 ``yes'', the plosive burst of ``stop'', the nasal onset of ``no'' --- and it is
 this structure, not the raw waveform, that the encoder learns to compare.
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.95\linewidth]{fig_data_examples.png}
 \caption{Log-mel spectrograms of six Google Speech Commands words (real data).
 Different words occupy visibly different time--frequency patterns, which is what
-makes metric learning in this space effective.}
+makes metric learning in this space effective. \emph{Generated from project data.}}
 \label{fig:dataexamples}
 \end{figure}
 
@@ -420,12 +510,11 @@ makes metric learning in this space effective.}
 triangular filters that pool STFT energy --- densely packed at low frequencies and
 sparse at high frequencies --- and (b) the Hz-to-mel warping of \Cref{eq:mel}.
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.95\linewidth]{fig_mel_filterbank.png}
 \caption{The mel front-end. (a) the 40-channel triangular mel filterbank used in
-this work; (b) the perceptual Hz$\to$mel warping curve. \emph{Generated from the
-project's feature code.}}
+this work; (b) the perceptual Hz$\to$mel warping curve.}
 \label{fig:melfb}
 \end{figure}
 
@@ -433,53 +522,105 @@ project's feature code.}}
 
 Small-footprint KWS was popularized by depthwise-separable convolutional networks
 (DS-CNN)~\cite{zhang2017hello} and later refined by broadcasted-residual networks
-(BC-ResNet)~\cite{kim2021bcresnet}, both of which trade accuracy against parameter
-count for microcontroller deployment. These are \emph{closed-set} classifiers:
-they output a probability over a fixed label set and therefore cannot, by design,
-abstain on unknown inputs. The open-set requirement --- accepting known keywords
-while rejecting everything else --- is what separates a laboratory accuracy number
-from a deployable wake-word engine.
+(BC-ResNet)~\cite{kim2021bcresnet}, both of which trade accuracy against a small
+parameter count for microcontroller deployment. Fundamentally these are
+\emph{closed-set} classifiers: the model outputs a probability distribution over a
+\emph{fixed} label set and always chooses the highest-probability label.
+
+The core limitation is that a closed-set classifier has \emph{no ``none of the
+above'' option}. The softmax function forces the probabilities over the known
+classes to sum to one, so every input --- including a cough, music, or a word
+outside the list --- is mapped to one of the known keywords. In laboratory
+conditions, where every test sample belongs to a known class, this is not exposed.
+In practice, however, the overwhelming majority of audio a device hears is
+\emph{not} a keyword, so a closed-set classifier will continually mislabel
+background sound, causing false activations.
+
+The \emph{open-set} problem poses a harder and more realistic requirement: the
+system must both recognize the known keywords and \emph{reject} any audio that
+does not belong to the keyword set. The challenge is that the space of
+``everything that is not a keyword'' is essentially infinite and cannot be
+enumerated at training time, so it cannot be treated as an ordinary class.
+Instead, the system needs a \emph{rejection mechanism}: it measures ``how much an
+input resembles the known keywords'' and rejects it when this measure is too low.
+The ability to quantify and tune the rejection threshold --- accepting correct
+keywords while keeping the false-activation rate low --- is exactly what separates
+a laboratory accuracy number from a deployable wake-word engine. This thesis
+pursues precisely that open-set scenario, with the concrete measurement defined in
+\Cref{sec:eval}.
 
 \section{Few-shot learning and metric learning}\label{sec:fewshot-bg}
 
-To support \emph{arbitrary} vocabularies we cast KWS as metric learning: the
-network learns an embedding space in which utterances of the same word are close
-and utterances of different words are far apart. Prototypical
+\emph{Few-shot learning} is the scenario in which a model must recognize a new
+class from only a very small number of examples ($k$ shots). This is exactly the
+need of user-defined KWS: the user provides a few samples per keyword and expects
+the system to recognize that word immediately, without retraining. Since we cannot
+train a new classifier for every vocabulary, we need a representation that allows
+direct ``matching'' between a new sample and the few enrolled samples.
+
+The natural approach is \emph{metric learning}: instead of learning a mapping from
+audio to a fixed label, the network learns an \emph{embedding space} in which
+distance reflects semantic similarity --- utterances of the \emph{same} word lie
+close together and utterances of \emph{different} words lie far apart. Given such a
+space, a new keyword is represented simply by the positions of its enrollment
+samples, and recognition reduces to a nearest-point search --- independent of
+whether the word appeared during training.
+
+To make the model learn this property, training is organized into
+\emph{episodes} (episodic training): each episode simulates a small few-shot
+problem by sampling a group of classes and splitting each class's samples into a
+\emph{support set} (playing the role of enrollment) and a \emph{query set}
+(playing the role of the samples to be recognized). This mirrors the deployment
+condition, so the learned skill transfers well to real use. Prototypical
 networks~\cite{snell2017prototypical} represent each class by the mean
-(``prototype'') of its few support embeddings and classify queries by nearest
-prototype; triplet embeddings~\cite{schroff2015facenet} optimize relative
-distances directly. The Generalized End-to-End (GE2E) loss~\cite{wan2018ge2e},
-originally proposed for speaker verification, builds centroids inside each
-training batch exactly as deployment builds prototypes, making it a natural fit
-for few-shot KWS. We adopt GE2E as a centroid objective and compare it against
-triplet and against angular-margin classification.
+(\emph{prototype}) of its support embeddings and then classify queries by nearest
+prototype; triplet embeddings~\cite{schroff2015facenet} instead optimize relative
+distances directly, pulling same-class pairs together and pushing different-class
+pairs apart. The Generalized End-to-End (GE2E) loss~\cite{wan2018ge2e}, originally
+proposed for speaker verification, builds centroids inside each training batch
+exactly as deployment builds prototypes; this match between the training objective
+and the deployment procedure makes GE2E particularly well suited to few-shot
+open-set KWS, which we confirm experimentally in \Cref{ch:results}.
 
 \section{Angular-margin classification and open-set rejection}\label{sec:arc-bg}
 
-ArcFace~\cite{deng2019arcface} and its sub-center variant
-SCAF~\cite{deng2020subcenter} learn highly discriminative embeddings for face
-recognition with thousands of identities by enforcing an angular margin between
-classes. A natural question --- which this thesis answers negatively at extreme
-scale --- is whether the same machinery transfers to tens of thousands of word
-classes. For the open-set decision itself, OpenMax~\cite{bendale2016openmax}
-fits Weibull tails to per-class activations, and energy
-scores~\cite{liu2020energy} offer a calibration-free alternative; we adapt both
-to operate on prototype distances and compare them with a plain nearest-class-mean
-threshold. Finally, self-supervised speech models such as
-Wav2Vec\,2.0~\cite{baevski2020wav2vec} provide powerful representations; we use a
-frozen Wav2Vec\,2.0 only as a distillation \emph{teacher}, keeping the deployed
-student tiny.
+Another family of methods for learning highly discriminative embeddings is
+\emph{angular-margin classification}. The idea is to normalize both the embedding
+and the weight vector of each class to unit length, so that the classification
+score becomes the cosine of the angle between them; a \emph{margin} is then added
+to the angle of the correct class to force the classes to separate more clearly on
+the hypersphere. ArcFace~\cite{deng2019arcface} applies this principle and the
+sub-center variant SCAF~\cite{deng2020subcenter} lets each class have several
+sub-centers, improving robustness to noisy data; both are highly successful for
+face recognition with thousands of identities. The question that arises is whether this
+machinery transfers to tens of thousands of \emph{word} classes --- and this is
+the question the thesis answers \emph{negatively} at extreme scale
+(\Cref{ch:results}): once the number of classes reaches tens of thousands, the
+angular-margin classification term dominates and collapses training unless it is
+strongly down-weighted.
+
+Besides learning a good embedding, open-set KWS needs a \emph{rejection mechanism}
+to decide when an input belongs to no keyword. The simplest is a threshold on the
+distance to the nearest prototype (\emph{nearest-class-mean}): accept if close
+enough, reject if too far. More sophisticated methods are also studied:
+OpenMax~\cite{bendale2016openmax} fits a Weibull tail distribution to the
+per-class distances to estimate a ``belonging'' probability, while the energy
+score~\cite{liu2020energy} provides a calibration-free measure based on a weighted
+exponential sum of the distances. We adapt both to operate on prototype distances
+and compare them with the plain nearest-class-mean threshold (\Cref{sec:openset}).
+
+Finally, self-supervised speech models such as
+Wav2Vec\,2.0~\cite{baevski2020wav2vec} are trained on large amounts of unlabeled
+data and provide very strong representations, but they are too large to run on an
+edge device. We therefore use a \emph{frozen} Wav2Vec\,2.0 only as a
+\emph{teacher} in \emph{knowledge distillation}: the teacher's knowledge is
+transferred to a compact \emph{student} encoder, keeping the deployed model very
+small while benefiting from the teacher's representation (\Cref{sec:losses}).
 
 %==============================================================================
 \chapter{Proposed Method}\label{ch:method}
-\reviewnote{Chapter~3 collects \emph{what you did and how you measured it}, with
-no results (results are in Chapter~4), exactly as you requested. Your provided
-blocks --- ``Datasets and Training Protocol'', ``System Architecture'' and the
-methodology part of ``Evaluation'' --- are reproduced \textbf{verbatim} below;
-text shown \textcolor{addcolor}{in dark blue with a ``+ added'' margin tag} is
-material I added, and the pipeline diagram, the experimental-design section
-(\ref{sec:expdesign}), and the deployment/streaming section (\ref{sec:deploy})
-are new additions noted with their own banners.}
+\reviewnote{Chapter~3 collects \emph{what was done and how it was measured}, with
+no results (results are in Chapter~4).}
 
 \NEW{At a high level (\Cref{fig:pipeline}) the method has two phases that share a
 single, frozen encoder. In the \emph{training phase} the encoder is optimized
@@ -488,7 +629,7 @@ enrolls a few examples per keyword to form prototypes, and queries are recognize
 by nearest-prototype distance with an explicit open-set threshold --- the encoder
 is never retrained.}
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[
   node distance=5mm and 7mm,
@@ -522,8 +663,7 @@ by nearest-prototype distance with an open-set threshold.}}
 \end{figure}
 
 \section{Problem formulation}\label{sec:formulation}
-\reviewnote{Short formalization added so the equations referenced later
-(Eq.~\ref{eq:proto}, \ref{eq:score}) are defined.}
+\reviewnote{Short formalization so the equations referenced later are defined.}
 
 Let $f_\theta:\R^{T\times F}\!\to\!\R^{d}$ be an encoder mapping a one-second
 representation to a unit-norm embedding. The prototype of a keyword $w$ is the
@@ -532,6 +672,13 @@ mean of its $k$ support embeddings,
 p_w \;=\; \frac{1}{k}\sum_{i=1}^{k} f_\theta\!\big(x^{(w)}_i\big).
 \label{eq:proto}
 \end{equation}
+In \Cref{eq:proto}, $x^{(w)}_i$ is the $i$-th enrollment sample of keyword $w$,
+$f_\theta(\cdot)$ its embedding, and $k$ the number of enrollment shots (here
+$k{=}10$). Intuitively, the prototype $p_w$ is the central representative point of
+a keyword in embedding space; averaging several shots cancels the random variation
+of individual utterances and yields a stable description of the word --- this is
+precisely the user's ``enrollment'' operation.
+
 A query $x$ is assigned to the nearest prototype, with open-set score equal to the
 negated minimum distance,
 \begin{equation}
@@ -539,12 +686,19 @@ negated minimum distance,
 s(x)=-\!\min_{w} d\!\big(f_\theta(x),p_w\big),
 \label{eq:score}
 \end{equation}
-and accepted as $\hat w(x)$ iff $s(x)\ge\tau$, otherwise labelled \texttt{unknown}.
+and accepted as $\hat w(x)$ iff $s(x)\ge\tau$, otherwise labelled
+\texttt{unknown}. In \Cref{eq:score}, $d(\cdot,\cdot)$ is the distance in embedding
+space and $\tau$ the rejection threshold. The left expression determines
+\emph{which} keyword is nearest; the right expression turns the distance to the
+nearest prototype into a \emph{confidence score} $s(x)$ (close means high, far
+means low). The open-set decision is therefore intuitive: if the confidence
+exceeds $\tau$, accept the nearest keyword; otherwise treat the input as
+``unknown''. Raising or lowering $\tau$ is exactly the knob that trades off missed
+keywords against false activations.
 
-\reviewnote{New figure (\ref{fig:embedding}) added: a real t-SNE projection of the
+\reviewnote{New figure (\ref{fig:embedding}): a real t-SNE projection of the
 trained model's embedding space, produced by running the best local checkpoint on
-GSC. It is the most direct visualization of why the method works and is the
-analogue of the sample thesis's ``pipeline output'' figure.}
+GSC.}
 
 \Cref{fig:embedding} visualizes the learned space directly. Running the best
 trained encoder on real GSC recordings and projecting the embeddings to two
@@ -553,15 +707,33 @@ prototype (stars), while out-of-vocabulary words (grey crosses) fall in the gaps
 between clusters --- exactly the geometry that makes nearest-prototype matching
 with distance thresholding work for open-set rejection.
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
-\includegraphics[width=0.86\linewidth]{fig_embedding_space.png}
+\includegraphics[width=0.68\linewidth]{fig_embedding_space.png}
 \caption{\NEW{t-SNE projection of embeddings from the trained DSCNN-L\,+\,PCEN\,+\,GE2E
 model on real GSC audio. Coloured points are six known commands, stars are their
-prototypes, grey crosses are out-of-vocabulary words. Generated with
-\code{make\_inference\_figures.py} from the local checkpoint.}}
+prototypes, grey crosses are out-of-vocabulary words.}}
 \label{fig:embedding}
 \end{figure}
+
+\reviewnote{New worked example --- interprets \Cref{eq:proto,eq:score} with a
+concrete situation; the distance values are illustrative.}
+
+\paragraph{Worked example: enrollment, matching, and rejection.}
+Suppose a user wants the device to recognize the command ``stop''.
+\emph{Enrollment}: the user records $k{=}10$ clips of ``stop''; each clip is
+passed through the encoder into an embedding, and their mean gives the prototype
+$p_{\text{stop}}$ via \Cref{eq:proto}. Suppose the system has only this one
+keyword and the threshold is set so that the maximum accepted distance is $0.9$
+(i.e.\ $s(x)\ge\tau \Leftrightarrow d\le 0.9$). \emph{Matching}: when the user
+says ``stop'', the query embedding lands close to $p_{\text{stop}}$, say
+$d=0.45$; since $0.45\le 0.9$, the query is \emph{accepted} and labelled ``stop''.
+\emph{Rejection}: when the microphone picks up an unfamiliar sound --- for
+instance a piece of music or the out-of-vocabulary word ``elephant'' --- its
+embedding lies far from every prototype, say $d=1.6$; since $1.6>0.9$, the system
+\emph{rejects} it and returns \texttt{unknown} instead of forcing a wrong ``stop''
+label. This distance--threshold mechanism, applied simultaneously to many
+keywords, is the foundation of the open-set recognition in this thesis.
 
 \section{Datasets and Training Protocol}\label{sec:data}
 
@@ -577,13 +749,23 @@ architecture screening. \NEW{The three vocabulary regimes span more than three
 orders of magnitude (\Cref{fig:vocabscale}); this range is what makes the
 scale effects in \Cref{ch:results} observable.}
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.72\linewidth]{fig_vocab_scale.png}
 \caption{\NEW{Training-vocabulary size for the three regimes (log scale). The
-micro-set is used only for screening; full MSWC English is the headline regime.}}
+micro-set is used only for screening; full MSWC English is the headline regime.}
+\emph{Generated from project data.}}
 \label{fig:vocabscale}
 \end{figure}
+
+\NEW{The three regimes in \Cref{fig:vocabscale} serve three purposes. The
+\emph{micro-set} (31 words) is small enough to train in minutes and is used to
+verify that the pipeline is correct and to screen architecture choices quickly
+before committing to expensive runs. \emph{Top-500} is an intermediate scale
+under the legacy split, which lets us compare against prior work that uses the
+same setup. \emph{Full MSWC} (37,387 words) is the headline regime and reflects
+the realistic condition of a very large vocabulary; some phenomena --- such as
+the SCAF collapse in \Cref{ch:results} --- appear only at this scale.}
 
 \textbf{Episodic sampling and augmentation:} Episodes draw 30 classes $\times$ 20
 utterances (only classes with $\ge 20$ clips are eligible). Online augmentation
@@ -595,19 +777,22 @@ recording: additive background noise at 5\,dB SNR fills the quiet regions, and t
 SpecAugment frequency/time masks (black bands) force the encoder not to rely on any
 single band or instant.}
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{fig_augmentation.png}
 \caption{\NEW{Training-time augmentation on the word ``yes'' (real data):
 (a) clean log-mel; (b) $+$ real background noise at 5\,dB SNR; (c) $+$ SpecAugment
-frequency and time masks.}}
+frequency and time masks. \emph{Generated from project data.}}}
 \label{fig:augment}
 \end{figure}
 
 \textbf{Evaluation corpus (GSC v2):} We evaluate cross-corpus on Google Speech
 Commands v2. Enrollment (support) samples are drawn from the official
-\code{validation\_list.txt}; query samples from \code{testing\_list.txt}
-(``test'') or the remaining files (``dev''), preventing leakage. A synthetic
+\code{validation\_list.txt}. Query samples are drawn according to the evaluation
+split: in the ``test'' split they come from \code{testing\_list.txt}, whereas in
+the ``dev'' split they come from the files \emph{not} listed in either
+\code{validation\_list.txt} or \code{testing\_list.txt}. Because the three lists
+are disjoint, there is no leakage between enrollment and query samples. A synthetic
 \code{\_silence\_} class is generated from random one-second crops of
 \code{\_background\_noise\_}, with disjoint crops for support and query.
 
@@ -621,7 +806,58 @@ enrollment-shot selection (the known/unknown vocabulary itself is fixed across
 runs). ``test100'' denotes 100 runs on the test split, ``dev30'' denotes 30 runs
 on the dev split.
 
+\reviewnote{New dataset summary table (\ref{tab:datasets}): role, source, scale,
+and input/output sizes for both corpora.}
+
+\begin{table}[H]
+\centering
+\caption{The two corpora: MSWC English (training) and Google Speech Commands v2
+(evaluation). The model input and output are identical for both corpora because
+they share the same feature front-end.}
+\label{tab:datasets}
+\small
+\setlength{\tabcolsep}{4pt}
+\begin{tabular}{p{0.24\linewidth} p{0.38\linewidth} p{0.30\linewidth}}
+\toprule
+\textbf{Property} & \textbf{MSWC English} & \textbf{Google Speech Commands v2}\\
+\midrule
+Role           & Training the encoder & Cross-corpus evaluation \\
+Source / citation & Mazumder \emph{et al.}, 2021~\cite{mazumder2021mswc} &
+                 Warden, 2018~\cite{warden2018speech} \\
+Vocabulary     & 37,387 train / 763 val words (pool $\sim$38,150) &
+                 35 words: 11 positive (10 commands $+$ \code{\_silence\_}) $+$ 25 negatives \\
+Clips          & $\sim$6.6\,M (metadata); capped manifests $\{20,50,220,620\}$/word
+                 $\to \{0.53, 0.94, 2.05, 2.99\}$\,M &
+                 $\sim$105\,k utterances \\
+Sample rate    & 16\,kHz, mono & 16\,kHz, mono \\
+Clip length    & 1\,s (padded/trimmed to 16,000 samples) & 1\,s (padded/trimmed to 16,000 samples) \\
+Model input    & \multicolumn{2}{p{0.70\linewidth}}{16,000-sample waveform
+                 $\to$ features $(1,47,10)$ [MFCC] or $(1,40,101)$ [log-mel/PCEN]} \\
+Model output   & \multicolumn{2}{p{0.70\linewidth}}{$\ell_2$-normalized embedding
+                 $d\in\{276,64\}$ $\to$ prototype distance $\to$ keyword /
+                 \texttt{unknown}} \\
+Usage          & Caps $\{20,50,220,620\}$/word; legacy Top-500; 31-word micro-set
+                 (screening) & EdgeSpot-exact 10-shot, up to 50 queries/word,
+                 100 runs \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\Cref{tab:datasets} summarizes the two corpora used in this thesis. The key point
+is the \emph{cross-corpus evaluation}: the model is trained entirely on MSWC
+English and tested on GSC v2 --- a corpus independent in speakers, devices, and
+vocabulary --- so the results reflect genuine generalization rather than fitting a
+single dataset.
+
 \section{System Architecture}\label{sec:arch}
+
+This section describes the three components that make up the encoder and the
+decision procedure: \Cref{sec:frontends} presents the feature front-ends that turn
+the waveform into a time--frequency representation; \Cref{sec:encoders} describes
+the two encoder architectures (DSCNN-L and EdgeSpot-Full); and \Cref{sec:losses}
+presents the metric-learning objectives used to train them. The order follows the
+signal from input, through the network, to the embedding consumed by the
+deployment classifier.
 
 \subsection{Feature front-ends}\label{sec:frontends}
 
@@ -629,7 +865,7 @@ All audio is mono, 16\,kHz, and trimmed/zero-padded to exactly one second
 (16,000 samples). We support two spectral parameterizations, summarized in
 \Cref{tab:features}.
 
-\begin{table}[t]
+\begin{table}[H]
 \centering
 \caption{Feature front-end configurations.}
 \label{tab:features}
@@ -670,32 +906,63 @@ adaptive gain and dynamic-range compression,
 \label{eq:pcen}
 \end{equation}
 with learnable $\alpha,\delta,r,s$ (initialized to $0.96, 2.0, 0.5, 0.04$;
-$\epsilon{=}10^{-6}$). PCEN replaces the static log and adapts to channel
-statistics during training.
+$\epsilon{=}10^{-6}$). In \Cref{eq:pcen}, $E_t$ is the mel-band energy at time
+frame $t$ and $M_t$ its time-smoothed version (an estimate of the local background
+level). The roles of the components are as follows: the division
+$E_t/(\epsilon+M_t)^{\alpha}$ performs \emph{automatic gain control} ---
+normalizing each band by its recent background so that abrupt changes (consonant
+onsets) are emphasized and steady components (background noise) are suppressed; the
+exponent $r$ together with the offset $\delta$ performs a soft \emph{dynamic-range
+compression} in place of the static logarithm. Because $\alpha,\delta,r,s$ are
+learned jointly with the network, PCEN adapts to the recording conditions instead
+of using a fixed compression function --- which is why it is more robust and, as
+\Cref{ch:results} shows, the single most reliable improvement in this study.
+
+\reviewnote{New preprocessing flow diagram (\ref{fig:preproc}): the full path from
+waveform to feature tensor for both the MFCC and PCEN branches.}
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}[
+  font=\scriptsize, node distance=4mm and 6mm,
+  b/.style={draw,rounded corners=1.5pt,align=center,minimum height=8mm,
+            minimum width=17mm,fill=blue!4},
+  bm/.style={draw,rounded corners=1.5pt,align=center,minimum height=8mm,
+            minimum width=17mm,fill=green!6},
+  bp/.style={draw,rounded corners=1.5pt,align=center,minimum height=8mm,
+            minimum width=17mm,fill=orange!8},
+  a/.style={-{Latex[length=1.8mm]}}]
+\node[b] (wav) {Waveform\\$16{,}000$ samples\\(16\,kHz, 1\,s)};
+\node[b,right=of wav] (stft) {Framing\\$+$ STFT};
+\node[b,right=of stft] (mel) {Mel filterbank\\40 bands};
+\node[bm,above right=2mm and 8mm of mel] (mfcc) {log $+$ DCT\\keep 10 coeff.};
+\node[bp,below right=2mm and 8mm of mel] (pcen) {PCEN\\(trainable)};
+\node[bm,right=of mfcc] (t1) {Tensor\\$(1,47,10)$};
+\node[bp,right=of pcen] (t2) {Tensor\\$(1,40,101)$};
+\draw[a](wav)--(stft);\draw[a](stft)--(mel);
+\draw[a](mel.east) -- (mfcc.west);
+\draw[a](mel.east) -- (pcen.west);
+\draw[a](mfcc)--(t1);\draw[a](pcen)--(t2);
+\node[font=\scriptsize\itshape,text=green!45!black,above=0.5mm of mfcc]{MFCC branch (DSCNN)};
+\node[font=\scriptsize\itshape,text=orange!60!black,below=0.5mm of pcen]{log-mel$+$PCEN branch (EdgeSpot)};
+\end{tikzpicture}
+\caption{\NEW{Preprocessing flow: 1\,s waveform $\to$ framing/STFT $\to$ 40-band
+mel filterbank $\to$ two branches: log$+$DCT keeping 10 coefficients (MFCC, tensor
+$(1,47,10)$) or trainable PCEN (log-mel, tensor $(1,40,101)$).}}
+\label{fig:preproc}
+\end{figure}
+
+\Cref{fig:preproc} summarizes the entire preprocessing pipeline as a flow diagram,
+from the one-second waveform to the feature tensor the encoder receives, with two
+branches corresponding to the two front-ends.
 
 \subsection{Encoders}\label{sec:encoders}
 
-\textbf{DSCNN-L:} A depthwise-separable CNN built from a size table: an initial
-$\text{Conv}(1{\to}276, 10{\times}4, \text{stride } 2{\times}1)$ with
-TensorFlow-style asymmetric ``same'' padding, followed by five depthwise separable
-blocks (276 channels, $3{\times}3$ kernels; the first block strides $2{\times}2$).
-All but the last block use BatchNorm+ReLU; the last block uses an (affine-free)
-LayerNorm. A global average pool yields the embedding directly, so the embedding
-dimension equals the channel width, $d = 276$ (there is no final linear
-projection). DSCNN-L has $\approx 0.413$\,M parameters.
+\reviewnote{Two TikZ block diagrams of the encoders (\ref{fig:dscnn},
+\ref{fig:edgespot}), drawn to our exact custom networks, plus an
+accuracy-vs-size figure (\ref{fig:tradeoff}).}
 
-\textbf{EdgeSpot-Full ($\tau{=}4$):} A width-scaled edge encoder operating on the
-$(1,40,101)$ mel/PCEN input. A $5{\times}5$ stride-$(2,1)$ stem feeds four stages
-of fused-temporal and broadcasted-residual ``lite'' blocks with increasing
-temporal dilation $(1,2,4,8)$; a depthwise frequency-collapse block averages over
-frequency to a $(C,T)$ sequence; a depthwise positional convolution and a
-single-head temporal self-attention block ($d = 64$) model long-range temporal
-structure; finally a depthwise temporal head and global pooling produce a
-64-dimensional embedding. EdgeSpot-Full $\tau{=}4$ has $\approx 0.131$\,M
-parameters, $\sim$3.2$\times$ smaller than DSCNN-L. A lighter EdgeSpot-Lite
-variant and a clean BC-ResNet-FS baseline (no attention) are also provided.
-
-\begin{table}[t]
+\begin{table}[H]
 \centering
 \caption{Encoder comparison. $\ell_2$-normalization is applied outside the
 encoder so all losses and the deployment classifier operate on the hypersphere.}
@@ -712,13 +979,16 @@ BC-ResNet-FS $\tau{=}4$  & mel($+$PCEN)    & 64  & $\sim$0.1\,M \\
 \end{tabular}
 \end{table}
 
-\reviewnote{New: two TikZ block diagrams of the encoders (\ref{fig:dscnn},
-\ref{fig:edgespot}) --- the analogue of the sample thesis's architecture figures,
-but drawn to our exact custom networks (they are not public diagrams), plus an
-accuracy-vs-size figure (\ref{fig:tradeoff}) analogous to the sample's model-size
-comparison.}
+\textbf{DSCNN-L:} A depthwise-separable CNN built from a size table: an initial
+$\text{Conv}$ $(1{\to}276,$ $10{\times}4,$ stride $2{\times}1)$ with
+TensorFlow-style asymmetric ``same'' padding, followed by five depthwise separable
+blocks (276 channels, $3{\times}3$ kernels; the first block strides $2{\times}2$).
+All but the last block use BatchNorm+ReLU; the last block uses an (affine-free)
+LayerNorm. A global average pool yields the embedding directly, so the embedding
+dimension equals the channel width, $d = 276$ (there is no final linear
+projection). DSCNN-L has $\approx 0.413$\,M parameters.
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[
   font=\scriptsize, node distance=3.2mm,
@@ -739,7 +1009,18 @@ The embedding equals the final channel width (276); no linear projection.}}
 \label{fig:dscnn}
 \end{figure}
 
-\begin{figure}[t]
+\textbf{EdgeSpot-Full ($\tau{=}4$):} A width-scaled edge encoder operating on the
+$(1,40,101)$ mel/PCEN input. A $5{\times}5$ stride-$(2,1)$ stem feeds four stages
+of fused-temporal and broadcasted-residual ``lite'' blocks with increasing
+temporal dilation $(1,2,4,8)$; a depthwise frequency-collapse block averages over
+frequency to a $(C,T)$ sequence; a depthwise positional convolution and a
+single-head temporal self-attention block ($d = 64$) model long-range temporal
+structure; finally a depthwise temporal head and global pooling produce a
+64-dimensional embedding. EdgeSpot-Full $\tau{=}4$ has $\approx 0.131$\,M
+parameters, $\sim$3.2$\times$ smaller than DSCNN-L. A lighter EdgeSpot-Lite
+variant and a clean BC-ResNet-FS baseline (no attention) are also provided.
+
+\begin{figure}[H]
 \centering
 \begin{tikzpicture}[
   font=\scriptsize, node distance=2.6mm,
@@ -763,30 +1044,41 @@ single-head temporal self-attention stage, $\approx$0.13\,M params.}}
 \label{fig:edgespot}
 \end{figure}
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.78\linewidth]{fig_model_tradeoff.png}
-\caption{\NEW{Accuracy vs.\ model size. DSCNN-L leads on accuracy; EdgeSpot-Full
-reaches a competitive point at one third the parameters; KD lifts the compact
-model further at low data. (Accuracy numbers are detailed in \Cref{ch:results}.)}}
-\label{fig:tradeoff}
-\end{figure}
-
 \subsection{Metric-learning objectives}\label{sec:losses}
 
 All objectives are trained episodically: each episode samples $n_{\text{cls}}{=}30$
 classes with $n_{\text{spp}}{=}20$ utterances each (600 embeddings/episode).
 
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\linewidth]{fig_model_tradeoff.png}
+\caption{\NEW{Accuracy vs.\ model size. DSCNN-L leads on accuracy; EdgeSpot-Full
+reaches a competitive point at one third the parameters; KD lifts the compact
+model further at low data. (Accuracy numbers are detailed in \Cref{ch:results}.)}
+\emph{Generated from project results.}}
+\label{fig:tradeoff}
+\end{figure}
+
 \textbf{Triplet:} Semi-hard triplet loss~\cite{schroff2015facenet} with Euclidean
 distance, $\mathcal{L}=\frac{1}{N}\sum\max(0, d(a,p)-d(a,n)+m)$, with
-hardest-positive mining and FaceNet semi-hard negative mining.
+hardest-positive mining and FaceNet semi-hard negative mining. Here $a$ is the
+anchor, $p$ a sample of the \emph{same} word (positive), $n$ a sample of a
+\emph{different} word (negative), and $m$ the margin. The loss forces the
+anchor--positive distance to be smaller than the anchor--negative distance by at
+least $m$; the $\max(0,\cdot)$ means a triplet is penalized only when this
+condition is violated, i.e.\ the model learns only from ``hard'' triplets.
 
 \textbf{Sub-center ArcFace (SCAF):} An angular-margin softmax with $K{=}3$
 sub-centers per class. With normalized weights $W\in\R^{(C\cdot K)\times d}$, the
 per-class logit is the max cosine over its sub-centers,
 $\cos\theta_c = \max_{j\le K} w_{c,j}^{\top} z$; the additive margin $m{=}0.5$ is
 applied to the target class and logits are scaled by $s{=}30$ before
-cross-entropy.
+cross-entropy. Here $z$ is the normalized embedding and $w_{c,j}$ the $j$-th
+sub-center of class $c$; taking the max over sub-centers lets one word have several
+distinct ``pronunciation styles''. The margin $m$ forces the correct class to be
+clearly superior in angle, while the scale $s$ amplifies the logits before
+softmax --- and it is exactly these two factors that, multiplied across tens of
+thousands of classes, cause the collapse analyzed in \Cref{ch:results}.
 
 \textbf{GE2E (centroid):} Generalized end-to-end loss~\cite{wan2018ge2e} that
 mirrors deployment: within an episode each class is split into support/query; the
@@ -804,8 +1096,14 @@ embedding-cosine term,
 \cos\!\big(f_\theta(x_i),\, g_{\text{teacher}}(x_i)\big),
 \label{eq:kd}
 \end{equation}
-i.e.\ no temperature/soft-label term. Teacher embeddings are precomputed offline
-and looked up by file path during training.
+i.e.\ no temperature/soft-label term. In \Cref{eq:kd}, $f_\theta(x_i)$ is the
+student embedding and $g_{\text{teacher}}(x_i)$ the frozen Wav2Vec\,2.0 teacher
+embedding for the same input $x_i$. Since $\cos$ equals 1 when two vectors point in
+the same direction, minimizing $\mathcal{L}_{\text{KD}}$ is equivalent to aligning
+the student embedding with the teacher embedding --- i.e.\ forcing the small model
+to imitate the representation space of the large one. Teacher embeddings are
+precomputed offline and looked up by file path during training, so the additional
+training cost is negligible.
 
 \textbf{Hybrid combinations:} We form weighted sums, e.g.\ \code{scaf\_ge2e},
 \code{kd\_ge2e}, \code{kd\_scaf}, \code{kd\_scaf\_ge2e}. A crucial implementation
@@ -814,16 +1112,20 @@ KD it is set to $5\times10^{-5}$ while GE2E/KD weights are 1.0. The very small
 SCAF weight prevents the high-magnitude angular-margin classification loss from
 dominating the centroid/cosine terms.
 
-\NEW{\textbf{Optimization.} Unless noted, training uses Adam (learning rate
-$10^{-3}$, weight decay $10^{-4}$), gradient clipping at $5.0$, a
-cosine-annealing-with-warm-restarts schedule ($T_0{=}10$, $T_{\text{mult}}{=}2$,
-$\eta_{\min}{=}10^{-5}$), and a fixed seed (42) with cuDNN determinism for
-reproducibility. Per-experiment epoch/episode budgets are stated in
+\NEW{\textbf{Optimization.} Unless noted otherwise, every model is trained with the
+Adam optimizer (initial learning rate $10^{-3}$, weight decay $10^{-4}$). The
+gradient norm is clipped at $5.0$ (gradient clipping) to avoid overly large update
+steps that would destabilize training, especially for the hybrid losses. The
+learning rate decays on a \emph{cosine-annealing schedule with warm restarts}
+(CosineAnnealingWarmRestarts): it follows a cosine curve downward and is then reset
+periodically, with a first cycle of $T_0{=}10$ epochs, each subsequent cycle
+$T_{\text{mult}}{=}2\times$ longer than the previous one, and a floor of
+$\eta_{\min}{=}10^{-5}$. For reproducibility we fix all random seeds ($=42$) and
+enable cuDNN deterministic mode. Per-experiment epoch/episode budgets are stated in
 \Cref{ch:results}.}
 
 \section{Open-set rejection heads}\label{sec:openset}
-\reviewnote{Subsection added to document the four rejection heads you implemented
-(your draft mentioned them only in the abstract's contribution list).}
+\reviewnote{Subsection documenting the four rejection heads.}
 
 All heads share the prototype interface and differ only in the rejection score;
 the predicted keyword is always the argmin-distance class (\Cref{eq:score}).
@@ -839,21 +1141,28 @@ per-word confusion analysis.
 
 \section{Evaluation methodology}\label{sec:eval}
 
-We treat the open-set problem as a binary keyword-vs-non-keyword detection
-augmented by a multiclass identity track, and build all metrics on the ROC.
+This section defines the evaluation metrics \emph{before} they are used in
+\Cref{ch:results}. We treat the open-set problem as a binary
+keyword-vs-non-keyword detection augmented by a multiclass identity track, and
+build all metrics on the ROC curve. Two base concepts first: \far{} (False-Accept
+Rate) is the fraction of \emph{non-keyword} audio that is wrongly accepted, and
+\frr{} (False-Reject Rate) is the fraction of \emph{genuine} keywords that are
+wrongly rejected. The symbol $\uparrow$ means \emph{higher is better} and
+$\downarrow$ means \emph{lower is better}.
 \begin{itemize}[leftmargin=1.3em,itemsep=1pt]
-\item \textbf{AUC:} area under the ROC of the open-set scores (\Cref{eq:score});
-threshold-free.
-\item \textbf{EER:} equal-error rate, the operating point minimizing
-$|\far-\frr|$, reported as $(\far+\frr)/2$.
-\item \textbf{FRR@FAR:} false-reject rate at the largest threshold whose
-false-accept rate does not exceed the target (1\% or 5\%).
-\item \textbf{Open-set ACC@FAR:} the headline accuracy. A known query is correct
-iff it is accepted ($s\ge\tau_{\far}$) and the argmin label is correct; an unknown
-query is correct iff it is rejected. Reported at $\far\in\{1\%, 5\%\}$.
-\item \textbf{Keyword ACC:} closed-set nearest-prototype accuracy over known
-queries only (ignores rejection).
-\item \textbf{F1:} binary keyword-vs-unknown F1 at the EER threshold.
+\item \textbf{AUC} ($\uparrow$): area under the ROC of the open-set scores
+(\Cref{eq:score}); threshold-free, it measures the general separability of
+keywords from non-keywords.
+\item \textbf{EER} ($\downarrow$): equal-error rate, the operating point
+minimizing $|\far-\frr|$, reported as $(\far+\frr)/2$.
+\item \textbf{FRR@FAR} ($\downarrow$): false-reject rate at the largest threshold
+whose false-accept rate does not exceed the target (1\% or 5\%).
+\item \textbf{Open-set ACC@FAR} ($\uparrow$): the headline accuracy. A known query
+is correct iff it is accepted ($s\ge\tau_{\far}$) and the argmin label is correct;
+an unknown query is correct iff it is rejected. Reported at $\far\in\{1\%, 5\%\}$.
+\item \textbf{Keyword ACC} ($\uparrow$): closed-set nearest-prototype accuracy over
+known queries only (ignores rejection).
+\item \textbf{F1} ($\uparrow$): binary keyword-vs-unknown F1 at the EER threshold.
 \end{itemize}
 
 \textbf{Interpretation caveat.} AUC and EER are threshold-free, whereas ACC@FAR
@@ -867,8 +1176,7 @@ $\text{F1}\to0$.
 
 \section{Experimental design: what we measure}\label{sec:expdesign}
 \reviewnote{New section. It states the four questions the experiments answer
-(without giving results --- results are Chapter~4), so Chapter~4 has a clear
-narrative to report against.}
+(without giving results --- results are Chapter~4).}
 
 The experiments are organized around four questions:
 \begin{description}[leftmargin=1.6em,itemsep=2pt]
@@ -889,24 +1197,23 @@ compact operating points.
 
 \section{Deployment: streaming and demonstrator}\label{sec:deploy}
 \reviewnote{New section documenting the on-device/streaming pipeline and the web
-demo you built. Two items here need figures you should export from Colab/your
-machine --- see the red boxes.}
+demonstrator.}
 
 Beyond the core encoder, the system includes a CPU streaming pipeline and an
-offline web demonstrator. Streaming performs sliding-window detection (1\,s
-window, 0.5\,s stride) gated by Silero Voice Activity Detection (VAD): only
-windows that VAD marks as speech are embedded and matched, reducing computation
-and false activations on silence. A backend-agnostic decision \emph{state
-machine} (\Cref{alg:sm}) stabilizes raw candidates into clean events using
-majority-vote smoothing over a short window, a top-2 margin check, and a cooldown
-to suppress duplicate firings. Optional modules --- a spectral-gating/SpeechBrain
-denoiser and an ECAPA-TDNN speaker-verification gate --- follow the same
-fail-open, runtime-toggle pattern. The pipeline is designed to a per-component CPU
-budget (VAD $<5$\,ms/chunk, MFCC $<5$\,ms, encoder $<10$\,ms, classifier
-$<1$\,ms; core $<21$\,ms; $<71$\,ms with all enhancements); a measured on-device
-benchmark is left to future work.
+offline web demonstrator (\Cref{fig:demo}). Streaming performs sliding-window
+detection (1\,s window, 0.5\,s stride) gated by Silero Voice Activity Detection
+(VAD): only windows that VAD marks as speech are embedded and matched, reducing
+computation and false activations on silence. A backend-agnostic decision
+\emph{state machine} (\Cref{alg:sm}) stabilizes raw candidates into clean events
+using majority-vote smoothing over a short window, a top-2 margin check, and a
+cooldown to suppress duplicate firings. Optional modules --- a
+spectral-gating/SpeechBrain denoiser and an ECAPA-TDNN speaker-verification gate
+--- follow the same fail-open, runtime-toggle pattern. The pipeline is designed to
+a per-component CPU budget (VAD $<5$\,ms/chunk, MFCC $<5$\,ms, encoder $<10$\,ms,
+classifier $<1$\,ms; core $<21$\,ms; $<71$\,ms with all enhancements); a measured
+on-device benchmark is left to future work.
 
-\begin{algorithm}[t]
+\begin{algorithm}[H]
 \caption{Streaming decision state machine (smoothing $+$ cooldown).}
 \label{alg:sm}
 \footnotesize
@@ -928,26 +1235,44 @@ benchmark is left to future work.
 \end{algorithmic}
 \end{algorithm}
 
-\colabfig{A screenshot of the offline web demonstrator (model switcher +
-long-audio timing view). Export from your local demo at 1280$\times$720 and save
-as \code{assets/demo\_ui.png}; then replace this box with
-\code{\textbackslash includegraphics}.}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.95\linewidth]{homepage.png}
+\caption{\NEW{The offline web demonstrator: a model switcher and a long-audio
+timing view in which detected keywords are marked along the recording.
+\emph{Screenshot of the project's demo.}}}
+\label{fig:demo}
+\end{figure}
 
 %==============================================================================
 \chapter{Results and Analysis}\label{ch:results}
-\reviewnote{This entire chapter is new (your draft stopped before results). It
-reports and analyzes the measured numbers and references the result figures in
-\code{assets/}. Two optional figures (training/collapse curves) are marked as
-Colab exports.}
+\reviewnote{This entire chapter reports and analyzes the measured numbers and
+references the result figures in \code{assets/}.}
 
-All numbers are mean$\pm$std over the EdgeSpot-exact 10-shot protocol (100 runs on
-GSC test, denoted test100). Higher is better for ACC/AUC/F1/Keyword-ACC; lower is
-better for EER/FRR.
+This chapter presents and analyzes the experimental results; the metrics were
+defined in \Cref{sec:eval}, so the discussion here is purely numerical.
+\Cref{sec:res-train} first inspects the training dynamics to confirm a healthy
+optimization. The results are then organized by the four research questions from
+\Cref{sec:expdesign}: \Cref{sec:res-q1} (Q1) isolates which design axis matters;
+\Cref{sec:res-q2} (Q2) analyzes scale effects, including data saturation and the
+SCAF collapse; \Cref{sec:res-q3} (Q3) asks whether distillation can substitute for
+part of the data; and \Cref{sec:res-q4} (Q4) consolidates the best deployable
+systems. Finally, \Cref{sec:res-inference} validates the system end-to-end on a
+long recording.
+
+\paragraph{Reporting conventions.} Unless stated otherwise, all numbers are
+mean$\pm$standard deviation (std) over the EdgeSpot-exact 10-shot protocol with
+100 runs on GSC test (denoted \emph{test100}); the std reflects stability across
+enrollment-shot selections. The best number in each column is shown in
+\best{bold}. As defined in \Cref{sec:eval}, higher is better for
+ACC/AUC/F1/Keyword-ACC and lower is better for EER/FRR. Rows marked ``coll.'' are
+configurations that suffered a degenerate collapse ($\auc{\approx}50$,
+F1$\approx$0, $\frr{\approx}100\%$) and are \emph{not} treated as good results
+despite an open-set ACC near $69\%$ (which is reject-all behaviour).
 
 \section{Training dynamics}\label{sec:res-train}
 \reviewnote{New section. \Cref{fig:traincurves} is plotted from \emph{real local
-TensorBoard logs} (no re-training needed), and is the analogue of the sample
-thesis's ``Training and Validation Loss'' figures.}
+TensorBoard logs} (no re-training needed).}
 
 \Cref{fig:traincurves} shows the real training trajectory of the Microset anchor
 model (EdgeSpot-Full + SCAF+GE2E), read directly from the saved TensorBoard logs.
@@ -957,16 +1282,52 @@ around $85\%$ --- a healthy, non-overfitting trajectory. (The contrasting
 \emph{collapse} behaviour at full $37$k-class vocabulary is discussed in
 \Cref{sec:res-q2}.)
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.98\linewidth]{fig_training_curves.png}
 \caption{\NEW{Real training dynamics of the Microset anchor (EdgeSpot-Full +
 SCAF+GE2E), from local TensorBoard logs: (a) training loss; (b) validation AUC and
-GSC-dev ACC@1\%FAR over epochs. Generated with \code{make\_training\_curves.py}.}}
+GSC-dev ACC@1\%FAR over epochs.}}
 \label{fig:traincurves}
 \end{figure}
 
 \section{Q1: Which design axis matters}\label{sec:res-q1}
+
+\begin{table}[H]
+\centering
+\caption{Full 16-configuration screen on full-vocabulary MSWC (cap-620),
+GSC test100 @ 1\% FAR. Values are mean$\pm$std over 100 runs. ``coll.'' marks
+degenerate collapse ($\auc{=}50$, $\text{F1}{=}0$, $\frr{=}100\%$); std$=0$ on
+these rows reflects deterministic reject-all behaviour. Best in bold.}
+\label{tab:matrix}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{lll r r r r}
+\toprule
+\textbf{Enc.} & \textbf{Feat.} & \textbf{Loss} &
+\acc$_{1\%}$ & \auc & \eer & F1\\
+\midrule
+DSCNN & MFCC & Triplet     & 71.52$\pm$0.67 & 75.55$\pm$1.09 & 31.41$\pm$0.98 & 57.17$\pm$1.11 \\
+DSCNN & MFCC & SCAF        & 70.08$\pm$0.44 & 55.04$\pm$1.11 & 46.41$\pm$0.85 & 41.38$\pm$0.83 \\
+DSCNN & MFCC & GE2E        & 77.08$\pm$1.24 & 86.46$\pm$0.83 & 21.95$\pm$1.03 & 68.50$\pm$1.30 \\
+DSCNN & MFCC & SCAF+GE2E   & 69.04$\pm$0.41 & 47.78$\pm$1.21 & 52.15$\pm$1.67 & 35.93$\pm$1.54 \\
+DSCNN & PCEN & Triplet     & 79.98$\pm$1.11 & 90.65$\pm$0.62 & 17.57$\pm$0.93 & 74.14$\pm$1.23 \\
+DSCNN & PCEN & SCAF        & 69.44$\pm$0.00 & 50.00$\pm$0.00 & 50.00$\pm$0.00 & coll. \\
+\rowcolor{blue!7}
+DSCNN & PCEN & GE2E        & \best{82.34}$\pm$1.19 & \best{92.42}$\pm$0.54 & \best{14.89}$\pm$0.84 & \best{77.75}$\pm$1.15 \\
+DSCNN & PCEN & SCAF+GE2E   & 69.44$\pm$0.00 & 50.00$\pm$0.00 & 50.00$\pm$0.00 & coll. \\
+Edge  & MFCC & Triplet     & 69.63$\pm$0.34 & 52.84$\pm$0.95 & 48.05$\pm$1.02 & 39.79$\pm$0.98 \\
+Edge  & MFCC & SCAF        & 69.44$\pm$0.00 & 50.00$\pm$0.00 & 50.00$\pm$0.00 & coll. \\
+Edge  & MFCC & GE2E        & 70.76$\pm$0.39 & 65.30$\pm$1.12 & 39.05$\pm$1.07 & 48.82$\pm$1.12 \\
+Edge  & MFCC & SCAF+GE2E   & 69.67$\pm$1.01 & 50.88$\pm$0.90 & 50.39$\pm$0.82 & 37.57$\pm$0.76 \\
+Edge  & PCEN & Triplet     & 79.58$\pm$1.35 & 89.85$\pm$0.63 & 18.22$\pm$0.78 & 73.29$\pm$1.02 \\
+Edge  & PCEN & SCAF        & 69.44$\pm$0.00 & 50.00$\pm$0.00 & 50.00$\pm$0.00 & coll. \\
+\rowcolor{blue!7}
+Edge  & PCEN & GE2E        & \best{79.98}$\pm$0.98 & 87.23$\pm$0.75 & 20.23$\pm$0.96 & 70.68$\pm$1.23 \\
+Edge  & PCEN & SCAF+GE2E   & 69.44$\pm$0.00 & 50.00$\pm$0.00 & 50.00$\pm$0.00 & coll. \\
+\bottomrule
+\end{tabular}
+\end{table}
 
 \Cref{tab:matrix} reports the full 16-configuration screen on full-vocabulary
 MSWC (cap-620), and \Cref{fig:ranked} ranks the configurations visually. Two
@@ -975,42 +1336,7 @@ the centroid GE2E loss is the best objective for every backbone. The
 classification objective SCAF (and the SCAF$+$GE2E hybrid at full weight)
 \emph{collapses} at this scale --- a phenomenon analyzed in \Cref{sec:res-q2}.
 
-\begin{table}[t]
-\centering
-\caption{Full 16-configuration screen on full-vocabulary MSWC (cap-620),
-GSC test100 @ 1\% FAR. ``coll.'' marks degenerate collapse
-($\auc{=}50$, $\text{F1}{=}0$, $\frr{=}100\%$). Best in bold.}
-\label{tab:matrix}
-\small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{lll r r r r}
-\toprule
-\textbf{Enc.} & \textbf{Feat.} & \textbf{Loss} &
-\acc$_{1\%}$ & \auc & \eer & F1\\
-\midrule
-DSCNN & MFCC & Triplet     & 71.52 & 75.55 & 31.41 & 57.17 \\
-DSCNN & MFCC & SCAF        & 70.08 & 55.04 & 46.41 & 41.38 \\
-DSCNN & MFCC & GE2E        & 77.08 & 86.46 & 21.95 & 68.50 \\
-DSCNN & MFCC & SCAF+GE2E   & 69.04 & 47.78 & 52.15 & 35.93 \\
-DSCNN & PCEN & Triplet     & 79.98 & 90.65 & 17.57 & 74.14 \\
-DSCNN & PCEN & SCAF        & 69.44 & 50.00 & 50.00 & coll. \\
-\rowcolor{blue!7}
-DSCNN & PCEN & GE2E        & \best{82.34} & \best{92.42} & \best{14.89} & \best{77.75} \\
-DSCNN & PCEN & SCAF+GE2E   & 69.44 & 50.00 & 50.00 & coll. \\
-Edge  & MFCC & Triplet     & 69.63 & 52.84 & 48.05 & 39.79 \\
-Edge  & MFCC & SCAF        & 69.44 & 50.00 & 50.00 & coll. \\
-Edge  & MFCC & GE2E        & 70.76 & 65.30 & 39.05 & 48.82 \\
-Edge  & MFCC & SCAF+GE2E   & 69.67 & 50.88 & 50.39 & 37.57 \\
-Edge  & PCEN & Triplet     & 79.58 & 89.85 & 18.22 & 73.29 \\
-Edge  & PCEN & SCAF        & 69.44 & 50.00 & 50.00 & coll. \\
-\rowcolor{blue!7}
-Edge  & PCEN & GE2E        & \best{79.98} & 87.23 & 20.23 & 70.68 \\
-Edge  & PCEN & SCAF+GE2E   & 69.44 & 50.00 & 50.00 & coll. \\
-\bottomrule
-\end{tabular}
-\end{table}
-
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.96\linewidth]{res_ranked_bar.png}
 \caption{Configurations ranked by GSC ACC@1\%FAR (phase-1 screen on full MSWC).
@@ -1019,6 +1345,16 @@ PCEN$+$GE2E pipelines lead; colour encodes backbone$\times$front-end.
 \label{fig:ranked}
 \end{figure}
 
+\paragraph{How to read the screening table.} \Cref{tab:matrix} is a
+\emph{screening} run with a fixed training budget that is identical across all 16
+configurations, so its purpose is the \emph{relative} comparison of the design
+axes rather than absolute peak performance. The absolute values here are therefore
+systematically lower than the longer, specialized runs (ep300, checkpoint selected
+by a composite metric) consolidated in \Cref{tab:final}: for example,
+DSCNN-L$+$PCEN$+$GE2E reaches $82.34$ in the screening table but $86.36$
+($+4.02$ points) when trained fully. The \emph{ranking} of the axes is consistent
+between the two regimes.
+
 \paragraph{Paired effect deltas.}
 Isolating each axis (\Cref{tab:deltas}, \Cref{fig:deltas}) shows two robust wins.
 PCEN improves every backbone --- most dramatically the edge encoder
@@ -1026,7 +1362,7 @@ PCEN improves every backbone --- most dramatically the edge encoder
 front-end therefore carries proportionally more of the representational burden
 when the backbone is small.
 
-\begin{table}[t]
+\begin{table}[H]
 \centering
 \caption{Paired effect deltas (percentage points), full-vocabulary MSWC,
 GSC test100 @ 1\% FAR. Positive favours the first option.}
@@ -1044,7 +1380,14 @@ DSCNN $-$ Edge \;(PCEN, GE2E)    & +2.36 & +5.19  & +7.07 \\
 \end{tabular}
 \end{table}
 
-\begin{figure}[t]
+\paragraph{Practical implication.} The two ``cheap'' choices --- switching the
+front-end to PCEN and the objective to GE2E --- deliver most of the benefit without
+increasing model size. For a product team this means a device using a small edge
+encoder can substantially raise its reliability simply by changing the
+preprocessing block and the training objective, rather than moving to a larger,
+more power-hungry model.
+
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.92\linewidth]{res_effect_deltas.png}
 \caption{Key paired effect deltas. PCEN and GE2E are the two consistent
@@ -1054,6 +1397,33 @@ improvements across backbones. \emph{Project-generated result figure.}}
 
 \section{Q2: Scale --- saturation and the SCAF collapse}\label{sec:res-q2}
 
+\begin{table}[H]
+\centering
+\caption{Data-scale sweep (PCEN$+$GE2E), GSC test100, ACC at 5\% FAR. Each cap is
+a separate training run (budgets differ across caps); the cap-$\{20,50,220\}$ rows
+include std over 100 evaluation runs, while the cap-620 row is taken from a
+saturation run for which per-run std was not recorded.}
+\label{tab:scale}
+\small
+\begin{tabular}{l c r r r r}
+\toprule
+\textbf{Encoder} & \textbf{Cap} & \acc$_{5\%}$ & \auc & \eer & F1\\
+\midrule
+\multirow{4}{*}{DSCNN-L}
+ & 20  & 86.05$\pm$0.66 & 91.57$\pm$0.58 & 16.25$\pm$0.86 & 75.90$\pm$1.16 \\
+ & 50  & 84.68$\pm$0.70 & 90.45$\pm$0.68 & 17.42$\pm$1.08 & 74.34$\pm$1.43 \\
+ & 220 & 88.23$\pm$0.68 & 93.87$\pm$0.47 & 12.78$\pm$0.80 & 80.67$\pm$1.12 \\
+ & 620 & \best{88.56} & \best{94.04} & \best{12.53} & \best{81.02} \\
+\midrule
+\multirow{4}{*}{EdgeSpot}
+ & 20  & 83.06$\pm$0.82 & 87.22$\pm$0.75 & 20.40$\pm$1.01 & 70.46$\pm$1.30 \\
+ & 50  & 82.24$\pm$0.74 & 87.74$\pm$0.66 & 20.19$\pm$0.90 & 70.73$\pm$1.16 \\
+ & 220 & \best{86.03}$\pm$0.70 & 91.31$\pm$0.62 & 16.47$\pm$0.78 & 75.61$\pm$1.06 \\
+ & 620 & 86.01 & \best{91.34} & 16.64 & 75.38 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \paragraph{Accuracy saturates near 2\,M clips.}
 \Cref{fig:saturation} and \Cref{tab:scale} sweep the per-word cap for the best
 front-end/loss (PCEN$+$GE2E). There is a large jump between cap-50 and cap-220
@@ -1062,7 +1432,7 @@ cap-220 to cap-620 ($+0.33$/$-0.02$). Accuracy is effectively data-saturated at
 $\sim$2\,M training clips: beyond this point, more clips of the same words yield
 negligible cross-corpus gains.
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \includegraphics[width=0.80\linewidth]{fig_data_saturation.png}
 \caption{Cross-corpus accuracy vs.\ training-data volume (per-word caps).
@@ -1071,69 +1441,56 @@ project results.}}
 \label{fig:saturation}
 \end{figure}
 
-\begin{table}[t]
-\centering
-\caption{Data-scale sweep (PCEN$+$GE2E), GSC test100. ACC at 5\% FAR.}
-\label{tab:scale}
-\small
-\begin{tabular}{l c r r r r}
-\toprule
-\textbf{Encoder} & \textbf{Cap} & \acc$_{5\%}$ & \auc & \eer & F1\\
-\midrule
-\multirow{4}{*}{DSCNN-L}
- & 20  & 86.05 & 91.57 & 16.25 & 75.90 \\
- & 50  & 84.68 & 90.45 & 17.42 & 74.34 \\
- & 220 & 88.23 & 93.87 & 12.78 & 80.67 \\
- & 620 & \best{88.56} & \best{94.04} & \best{12.53} & \best{81.02} \\
-\midrule
-\multirow{4}{*}{EdgeSpot}
- & 20  & 83.06 & 87.22 & 20.40 & 70.46 \\
- & 50  & 82.24 & 87.74 & 20.19 & 70.73 \\
- & 220 & \best{86.03} & 91.31 & 16.47 & 75.61 \\
- & 620 & 86.01 & \best{91.34} & 16.64 & 75.38 \\
-\bottomrule
-\end{tabular}
-\end{table}
-
 \paragraph{The SCAF collapse at 37k classes.}
 The most striking result of the scale study is a qualitative failure. On the
 31-class micro-set and the $\sim$500-class Top-500 split, SCAF and SCAF$+$GE2E are
 excellent (AUC $\approx 95$; \Cref{sec:res-q4}). However, on the full
 37,387-class vocabulary with the default SCAF weight of 1.0, training collapses
-from epoch~2: validation AUC pins at 0.5000, the in-episode GE2E accuracy falls to
-$\approx 0.033$ ($\approx 1/30$, i.e.\ chance), and the GSC metrics become
-degenerate (AUC 50, F1 0, $\frr{=}100\%$, keyword ACC 9.09\%). The mechanism is a
-gradient-magnitude imbalance: the sub-center ArcFace logit scale ($s{=}30$)
-multiplied across $\sim$$3.7\times10^4$ classes produces a classification gradient
-that dwarfs the centroid/cosine terms, driving all embeddings to a trivial
-solution. The same hybrid does \emph{not} collapse under KD, where the SCAF weight
-is $5\times10^{-5}$. The practical remedies we verify are: (i) reduce the SCAF
-weight to $\sim$$5\times10^{-5}$, (ii) warm up the margin/scale, or (iii) drop the
-classification term and use GE2E or KD. This is a cautionary result: angular-margin
-classification losses that are state-of-the-art at $10^2$--$10^3$ classes do not
-transfer naively to $10^4$-class word embedding.
+from epoch~2: validation AUC pins at 0.5000 and the in-episode GE2E accuracy falls
+to $\approx 0.033$ ($\approx 1/30$, i.e.\ chance). The cross-corpus GSC metrics are
+correspondingly degenerate (\Cref{fig:scafcollapse}): AUC 50, F1 0,
+$\frr{=}100\%$, keyword ACC 9.09\% ($={}$$1/11$ classes), while the open-set
+ACC@1\%FAR stays at a \emph{misleading} 69.4\% --- a reject-all artefact that AUC,
+F1 and FRR immediately expose. The mechanism is a gradient-magnitude imbalance: the sub-center ArcFace
+logit scale ($s{=}30$) multiplied across $\sim$$3.7\times10^4$ classes produces a
+classification gradient that dwarfs the centroid/cosine terms, driving all
+embeddings to a trivial solution. The same hybrid does \emph{not} collapse under
+KD, where the SCAF weight is $5\times10^{-5}$. The practical remedies we verify
+are: (i) reduce the SCAF weight to $\sim$$5\times10^{-5}$, (ii) warm up the
+margin/scale, or (iii) drop the classification term and use GE2E or KD. This is a
+cautionary result: angular-margin classification losses that are state-of-the-art
+at $10^2$--$10^3$ classes do not transfer naively to $10^4$-class word embedding.
 
-\colabfig{Collapse curve for the \emph{full-vocabulary} SCAF$+$GE2E run (val AUC
-pinned at 0.50 from epoch~2; in-episode accuracy $\sim$0.033). This specific run's
-logs are \emph{not} in the local repo (only the Microset/Top500 logs are), so it
-must be re-run on Colab --- see the runbook the assistant provided. Once you have
-its \code{runs/} TensorBoard folder, plot it with the same
-\code{make\_training\_curves.py} and save as \code{assets/scaf\_collapse.png}.
-\textbf{Note: the healthy Microset training curve is already included as
-\Cref{fig:traincurves}; this red box is only for the contrasting collapse run.}}
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.92\linewidth]{scaf_collapse.png}
+\caption{\NEW{Collapse signature of SCAF and SCAF$+$GE2E at the full
+37{,}387-class vocabulary (cap-620, GSC test100 @ 1\% FAR), contrasted with the
+healthy DSCNN-L$+$PCEN$+$GE2E configuration. (a) Discrimination metrics floor out:
+AUC drops to chance (50), F1 to 0 and keyword ACC to 9.09\% ($={}$$1/11$). (b) The
+operating point is degenerate: the collapsed runs reject everything
+($\frr{=}100\%$), yet open-set ACC@1\%FAR stays a misleading $\sim$69\% against the
+many negatives. All values are the real cap-620 final metrics (same source as
+\Cref{tab:matrix}).}}
+\label{fig:scafcollapse}
+\end{figure}
+
+\paragraph{Practical implication.} Both Q2 findings have clear operational
+consequences. Saturation near $\sim$2\,M clips means that, beyond a certain point,
+collecting more clips per word barely improves accuracy --- so a data-collection
+budget should prioritize \emph{diversity of words and recording conditions} over
+more clips of the same word. The SCAF collapse at large scale is a cautionary
+tale: a loss that is excellent at small scale can destroy training at real scale
+unless re-tuned, so design choices must be re-validated whenever the scale
+increases rather than assumed to still hold.
 
 \section{Q3: Knowledge distillation trades teacher knowledge for data}\label{sec:res-q3}
 
-\Cref{tab:kd} distills a frozen Wav2Vec\,2.0 teacher into the compact EdgeSpot
-student. At cap-50, KD improves every metric over GE2E ($+3.60$ ACC@1\%FAR,
-$-4.78$ EER, $+6.31$ F1) and, strikingly, KD at cap-50 matches GE2E at cap-220 ---
-the same accuracy with roughly half the training clips. KD also saturates early
-(cap-50$\to$cap-220 is essentially flat), indicating that the teacher injects most
-of its useful inductive bias from limited data.
-
-\begin{table}[t]
+\begin{table}[H]
 \centering
-\caption{Knowledge distillation vs.\ GE2E (EdgeSpot student), GSC test100.}
+\caption{Knowledge distillation vs.\ GE2E (EdgeSpot student), GSC test100.
+``n/a'' means ACC@1\%FAR was not recorded for this cap-220 GE2E run (only
+ACC@5\%FAR); the cap-220 comparison therefore relies on the ACC@5\%FAR column.}
 \label{tab:kd}
 \small
 \begin{tabular}{l l r r r r}
@@ -1143,17 +1500,62 @@ of its useful inductive bias from limited data.
 50  & GE2E & 77.14 & 82.24 & 20.19 & 70.73 \\
 \rowcolor{blue!7}
 50  & KD   & \best{80.74} & \best{85.82} & \best{15.41} & \best{77.04} \\
-220 & GE2E & --    & 86.03 & 16.47 & 75.61 \\
+220 & GE2E & n/a   & 86.03 & 16.47 & 75.61 \\
 220 & KD   & 80.82 & 85.90 & 15.36 & 77.10 \\
 \bottomrule
 \end{tabular}
 \end{table}
 
+\Cref{tab:kd} distills a frozen Wav2Vec\,2.0 teacher into the compact EdgeSpot
+student. At cap-50, KD improves every metric over GE2E ($+3.60$ ACC@1\%FAR,
+$-4.78$ EER, $+6.31$ F1) and, strikingly, KD at cap-50 matches GE2E at cap-220 ---
+the same accuracy with roughly half the training clips. KD also saturates early
+(cap-50$\to$cap-220 is essentially flat), indicating that the teacher injects most
+of its useful inductive bias from limited data.
+
+\paragraph{Practical implication.} This result matters when data are scarce: a
+strong teacher model can compensate for missing data, achieving the same accuracy
+with roughly half the clips. For a development team without a large per-word
+dataset, distillation is a practical way to cut data-collection cost while keeping
+the deployed model compact.
+
 \section{Q4: Best deployable systems}\label{sec:res-q4}
 
+\begin{table}[H]
+\centering
+\caption{Consolidated best systems across data regimes (GSC test100,
+EdgeSpot-exact 10-shot, 100 runs). ``coll.''$=$ degenerate collapse; ``n/a''$=$
+ACC@1\%FAR not recorded for that run. For readability, the std ($\pm$) of the three
+headline configurations is given in the text above (roughly $\pm0.4$ to $\pm1.3$
+points); the remaining rows are a single training run per regime.}
+\label{tab:final}
+\scriptsize
+\setlength{\tabcolsep}{3pt}
+\begin{tabular}{l l l c r r r r r r}
+\toprule
+\textbf{Regime} & \textbf{Encoder} & \textbf{Loss} & \textbf{Params} &
+\acc$_{1\%}$ & \acc$_{5\%}$ & \auc & \eer & F1 & KW\\
+\midrule
+Micro (31)    & EdgeSpot & SCAF+GE2E      & 0.131M & 84.61 & 86.12 & 95.61 & 11.54 & 82.41 & 77.66 \\
+Top-500       & EdgeSpot & SCAF+GE2E\,ep13& 0.131M & 85.62 & 88.79 & 95.34 & 11.51 & 82.45 & 90.44 \\
+Top-500       & DSCNN-L  & GE2E           & 0.413M & 81.55 & 86.56 & 93.17 & 14.00 & 78.97 & 88.62 \\
+Full cap20    & DSCNN-L  & GE2E           & 0.413M & 82.10 & 86.05 & 91.57 & 16.25 & 75.90 & 88.90 \\
+Full cap220   & DSCNN-L  & GE2E           & 0.413M & n/a   & 88.23 & 93.87 & 12.78 & 80.67 & 89.82 \\
+\rowcolor{blue!7}
+Full cap620   & DSCNN-L  & GE2E\,ep300    & 0.413M & \best{86.36} & \best{89.93} & \best{95.21} & \best{11.32} & \best{82.73} & \best{92.92} \\
+Full cap620   & EdgeSpot & GE2E\,ep300    & 0.131M & 82.87 & 86.76 & 92.41 & 14.82 & 77.85 & 87.29 \\
+Full cap50    & EdgeSpot & KD             & 0.131M & 80.74 & 85.82 & 91.19 & 15.41 & 77.04 & 87.95 \\
+Full cap220   & EdgeSpot & SCAF+GE2E      & 0.131M & coll. & coll. & 50.00 & 50.00 & coll. & 9.09 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
 \Cref{tab:final} consolidates the strongest configurations per data regime, and
-\Cref{fig:detcurve,fig:heatmap} visualize the headline operating point. Three
-points stand out:
+\Cref{fig:detcurve,fig:heatmap} visualize the headline operating point. Unlike the
+fixed-budget screening table in \Cref{sec:res-q1}, the cap-620 ``ep300'' rows here
+are specialized runs that are trained fully and have their checkpoint selected by a
+composite GSC-dev metric, so they reach a higher absolute peak. Three points stand
+out:
 \begin{itemize}[leftmargin=1.3em,itemsep=2pt]
 \item \textbf{Best overall:} DSCNN-L$+$PCEN$+$GE2E (cap-620) reaches
 \best{$86.36\pm1.29$} ACC@1\%FAR and $89.93\pm0.65$ at 5\% FAR, with AUC 95.21,
@@ -1168,33 +1570,12 @@ EdgeSpot$+$PCEN$+$SCAF$+$GE2E hybrid is the strongest compact model
 \emph{when the class count is small enough not to trigger the collapse}.
 \end{itemize}
 
-\begin{table}[t]
-\centering
-\caption{Consolidated best systems across data regimes (GSC test100,
-EdgeSpot-exact 10-shot, 100 runs). ``coll.''$=$ degenerate collapse.}
-\label{tab:final}
-\small
-\setlength{\tabcolsep}{4pt}
-\begin{tabular}{l l l c r r r r r r}
-\toprule
-\textbf{Regime} & \textbf{Encoder} & \textbf{Loss} & \textbf{Params} &
-\acc$_{1\%}$ & \acc$_{5\%}$ & \auc & \eer & F1 & KW\\
-\midrule
-Micro (31)    & EdgeSpot & SCAF+GE2E      & 0.131M & 84.61 & 86.12 & 95.61 & 11.54 & 82.41 & 77.66 \\
-Top-500       & EdgeSpot & SCAF+GE2E\,ep13& 0.131M & 85.62 & 88.79 & 95.34 & 11.51 & 82.45 & 90.44 \\
-Top-500       & DSCNN-L  & GE2E           & 0.413M & 81.55 & 86.56 & 93.17 & 14.00 & 78.97 & 88.62 \\
-Full cap20    & DSCNN-L  & GE2E           & 0.413M & 82.10 & 86.05 & 91.57 & 16.25 & 75.90 & 88.90 \\
-Full cap220   & DSCNN-L  & GE2E           & 0.413M & --    & 88.23 & 93.87 & 12.78 & 80.67 & 89.82 \\
-\rowcolor{blue!7}
-Full cap620   & DSCNN-L  & GE2E\,ep300    & 0.413M & \best{86.36} & \best{89.93} & \best{95.21} & \best{11.32} & \best{82.73} & \best{92.92} \\
-Full cap620   & EdgeSpot & GE2E\,ep300    & 0.131M & 82.87 & 86.76 & 92.41 & 14.82 & 77.85 & 87.29 \\
-Full cap50    & EdgeSpot & KD             & 0.131M & 80.74 & 85.82 & 91.19 & 15.41 & 77.04 & 87.95 \\
-Full cap220   & EdgeSpot & SCAF+GE2E      & 0.131M & coll. & coll. & 50.00 & 50.00 & coll. & 9.09 \\
-\bottomrule
-\end{tabular}
-\end{table}
+\Cref{fig:res-q4} summarizes the chapter's story from two complementary angles:
+the DET curve shows that the best system keeps a low miss rate across a wide range
+of false-alarm rates, while the heat map confirms that PCEN$+$GE2E is the brightest
+region regardless of backbone.
 
-\begin{figure}[t]
+\begin{figure}[H]
 \centering
 \begin{subfigure}{0.49\linewidth}
   \centering
@@ -1208,54 +1589,54 @@ Full cap220   & EdgeSpot & SCAF+GE2E      & 0.131M & coll. & coll. & 50.00 & 50.
   \caption{ACC@1\%FAR heat map (cap-620).}
   \label{fig:heatmap}
 \end{subfigure}
-\caption{Headline operating-point views. (a) Detection-error-tradeoff curve of the
-best overall system; (b) accuracy heat map over the cap-620 configurations.
+\caption{Headline operating-point views. (a) the detection-error-tradeoff curve of
+the best overall system; (b) the ACC@1\%FAR heat map over the cap-620
+configurations, where the PCEN$+$GE2E cell is the brightest at both backbones.
 \emph{Project-generated result figures.}}
 \label{fig:res-q4}
 \end{figure}
 
+\paragraph{Practical implication.} The consolidated table gives a deployer two
+clear options depending on hardware constraints: when accuracy is the priority and
+resources allow, use DSCNN-L$+$PCEN$+$GE2E; when memory/battery are limited, the
+three-times-smaller EdgeSpot-Full is only about 3.5 points behind --- an
+acceptable trade-off for an edge device. More importantly, the same encoder serves
+unlimited downstream keyword sets without retraining, so this one-time cost is
+amortized across every application.
+
 \section{Inference on long audio}\label{sec:res-inference}
-\reviewnote{New section, the analogue of the sample thesis's ``Inference'' results.
-\Cref{fig:longinfer} is produced by actually running the trained model on a real
-multi-word recording.}
+\reviewnote{New section. \Cref{fig:longinfer} is produced by actually running the
+trained model on a real multi-word recording.}
 
 To verify that the system behaves end-to-end --- not only on isolated test clips ---
 we enroll prototypes for 17 keywords (10 shots each from GSC) and run
 nearest-prototype inference over a real, continuously spoken multi-word recording.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.98\linewidth]{fig_long_inference.png}
+\caption{\NEW{Nearest-prototype inference on a real long recording. Top: waveform
+with per-segment correct (green) / wrong (red) shading. Bottom: minimum prototype
+distance and predicted keyword per segment.}}
+\label{fig:longinfer}
+\end{figure}
+
 \Cref{fig:longinfer} overlays the predicted keyword and its prototype distance on
 the waveform for the first 16 spoken segments. The model correctly identifies
 $15/16$ segments ($\approx$94\%); the single error (``sheila'', a long, rare name)
 also has the largest prototype distance, exactly the signal the open-set threshold
 uses to flag low-confidence detections.
 
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.98\linewidth]{fig_long_inference.png}
-\caption{\NEW{Nearest-prototype inference on a real long recording. Top: waveform
-with per-segment correct (green) / wrong (red) shading. Bottom: minimum prototype
-distance and predicted keyword per segment. Generated from the local checkpoint
-with \code{make\_inference\_figures.py}.}}
-\label{fig:longinfer}
-\end{figure}
-
-\begin{figure}[t]
-\centering
-\includegraphics[width=0.82\linewidth]{res_interaction_heatmap.png}
-\caption{\NEW{Front-end $\times$ loss interaction (ACC@1\%FAR). The PCEN$+$GE2E cell
-dominates; classification-only cells degrade at full vocabulary scale.}}
-\label{fig:interaction}
-\end{figure}
-
-\paragraph{Reproducibility note on data regimes.}
-Within full-vocabulary results, three cap-620 runs use different episode budgets
-(a 40-epoch fixed screen, a 1000-episode saturation run, and a 300-episode
-composite-selection development run). They must not be conflated; each table row
-is drawn from a single consistent run, with the budget stated where it matters.
-
 %==============================================================================
 \chapter{Conclusion}\label{ch:conclusion}
-\reviewnote{This chapter is new ($\sim$2 pages as requested): current status, what
-is good, what is weak, and future work.}
+\reviewnote{This chapter ($\sim$2 pages): current status, what is good, what is
+weak, and future work.}
+
+This chapter closes the thesis by reviewing the whole arc: from the problem posed
+in \Cref{ch:intro}, through the method in \Cref{ch:method}, to the experimental
+evidence in \Cref{ch:results}. We summarize the current status of the system,
+state its strengths and weaknesses honestly, and outline the next directions that
+follow directly from the limitations observed.
 
 \section{Current status}\label{sec:status}
 
@@ -1283,20 +1664,20 @@ system can decline to answer on unknown speech and silence.
 
 \paragraph{What works.} Three findings are robust and transferable. (1) The
 trainable PCEN front-end is the most reliable single improvement, and it helps the
-smaller encoder most --- a useful lever precisely where parameter budget is
-tightest. (2) The centroid GE2E objective, which optimizes the same enroll-then-match
-computation used at deployment, consistently beats both triplet and
-classification objectives for open-set generalization. (3) A frozen Wav2Vec\,2.0
-teacher distilled with a simple cosine loss lets the compact model reach
-GE2E-level accuracy with roughly half the data, which matters when data or compute
-are limited.
+smaller encoder most --- a useful lever precisely where the parameter budget is
+tightest. (2) The centroid GE2E objective, which optimizes the same
+enroll-then-match computation used at deployment, consistently beats both triplet
+and classification objectives for open-set generalization. (3) A frozen
+Wav2Vec\,2.0 teacher distilled with a simple cosine loss lets the compact model
+reach GE2E-level accuracy with roughly half the data, which matters when data or
+compute are limited.
 
 \paragraph{What is weak / what we learned the hard way.} The clearest negative
 result is the collapse of the sub-center ArcFace (SCAF) classification objective at
 $10^4$-class scale: a loss that is excellent on tens to hundreds of classes drives
 the embedding to a trivial solution on tens of thousands of classes unless its
 weight is cut by four orders of magnitude. This is an important cautionary lesson
-for anyone scaling angular-margin losses to large label spaces. Two further
+for anyone scaling angular-margin losses to large label spaces. Two additional
 limitations bound the present claims. First, the ACC@FAR/FRR@FAR operating points
 are read from the evaluation ROC (an oracle threshold) rather than transferred
 from an independent calibration split; we mitigate this by always co-reporting
@@ -1313,7 +1694,7 @@ accuracy-vs-enrollment-effort curve, which is the metric end users actually feel
 (2) \emph{Calibrated thresholds:} learn or transfer the open-set threshold from a
 held-out split and report deployment-realistic ACC@FAR, closing the oracle gap.
 (3) \emph{On-device benchmark:} measure end-to-end latency, false-alarms-per-hour
-and miss-rate on target hardware, and an SNR-sweep denoising ablation, to validate
+and miss-rate on target hardware, plus an SNR-sweep denoising ablation, to validate
 the design budgets.
 (4) \emph{Stabilizing classification at scale:} margin/scale warm-up, curriculum,
 or sub-center pruning to recover the discriminative power of angular-margin losses

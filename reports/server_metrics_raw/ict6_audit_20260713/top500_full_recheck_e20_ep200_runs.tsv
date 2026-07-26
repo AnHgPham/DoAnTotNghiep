@@ -1,0 +1,4 @@
+kind	run_tag	model_family	frontend	loss	edge_tau	checkpoint	epochs	episodes	max_per_word	train_status	dev_status	test_status	started_at	finished_at
+evaluate_existing	edgespot_full_t4_pcen_scaf_ge2e_top500_epoch13_reval	edgespot_full	mel_pcen	scaf_ge2e	4	checkpoints/edgespot_full_t4_scaf_ge2e_top500_full_v1/epoch_13.pt	-	-	-	skipped	ok	ok	2026-06-02 15:59:20	2026-06-02 16:21:27
+train_and_eval	dscnn_pcen_ge2e_top500_full_recheck_e20_ep200	dscnn	mel_pcen	ge2e		checkpoints/dscnn_pcen_ge2e_top500_full_recheck_e20_ep200/best.pt	20	200	0	ok	ok	ok	2026-06-02 16:21:27	2026-06-02 19:46:27
+train_and_eval	edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200	edgespot_full	mel_pcen	scaf_ge2e	4	checkpoints/edgespot_full_t4_pcen_scaf_ge2e_top500_full_recheck_e20_ep200/best.pt	20	200	0	failed_rc_1	not_started	not_started	2026-06-02 19:46:27	2026-06-04 08:48:53

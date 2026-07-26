@@ -45,7 +45,9 @@ class TeacherEmbeddingStore:
             if self.normalize:
                 embeddings = F.normalize(embeddings, p=2, dim=-1)
             self.embedding_dim = int(embeddings.shape[-1])
-            for path, emb in zip(paths, embeddings, strict=True):
+            if len(paths) != len(embeddings):
+                raise RuntimeError("Teacher returned an unexpected embedding count")
+            for path, emb in zip(paths, embeddings):
                 key = normalize_path_key(path)
                 self._embeddings[key] = emb
                 try:

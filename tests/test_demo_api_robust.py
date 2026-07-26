@@ -1,3 +1,7 @@
+import asyncio
+import json
+import threading
+
 import torch
 import torch.nn.functional as F
 
@@ -63,3 +67,37 @@ def test_select_diverse_files_spreads_choices():
     selected = api_server.select_diverse_files(files, 5)
 
     assert selected == ["f0.wav", "f2.wav", "f4.wav", "f6.wav", "f8.wav"]
+
+
+def test_enroll_gsc_offloads_sync_work(monkeypatch):
+    caller_thread = threading.get_ident()
+    worker_threads = []
+
+    def fake_enroll(word_list, k):
+        worker_threads.append(threading.get_ident())
+        return {"results": [], "enrolled": 0, "timing_ms": 1.0}
+
+    monkeypatch.setattr(api_server, "_enroll_gsc_sync", fake_enroll)
+
+    result = asyncio.run(api_server.enroll_gsc(words="yes,yes,no", k=3))
+
+    assert result["timing_ms"] == 1.0
+    assert worker_threads and worker_threads[0] != caller_thread
+
+
+def test_enroll_gsc_rejects_invalid_sample_count_before_worker(monkeypatch):
+    called = False
+
+    def fake_enroll(word_list, k):
+        nonlocal called
+        called = True
+        return {}
+
+    monkeypatch.setattr(api_server, "_enroll_gsc_sync", fake_enroll)
+
+    response = asyncio.run(api_server.enroll_gsc(words="yes", k=0))
+    payload = json.loads(response.body.decode("utf-8"))
+
+    assert response.status_code == 422
+    assert "between 1 and" in payload["error"]
+    assert called is False

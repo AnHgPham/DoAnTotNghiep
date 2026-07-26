@@ -79,6 +79,29 @@ def test_build_enrollment_profile_scores_same_keyword():
     assert result.distance <= result.threshold
 
 
+def test_build_enrollment_profile_batches_views_across_keywords():
+    class CountingBackend(TinyBackend):
+        def __init__(self):
+            self.batch_sizes = []
+
+        def embed_many(self, waveforms):
+            self.batch_sizes.append(len(waveforms))
+            return super().embed_many(waveforms)
+
+    backend = CountingBackend()
+    profile = build_enrollment_profile(
+        {
+            "low": [_tone(330, 0.6), _tone(335, 0.6)],
+            "high": [_tone(660, 0.6), _tone(665, 0.6)],
+        },
+        backend,
+        views_per_sample=3,
+    )
+
+    assert set(profile.keywords) == {"low", "high"}
+    assert backend.batch_sizes == [12]
+
+
 def test_energy_segments_and_robust_engine_detect_event():
     backend = TinyBackend()
     profile = build_enrollment_profile(
@@ -99,3 +122,41 @@ def test_energy_segments_and_robust_engine_detect_event():
     assert len(events) == 1
     assert events[0]["keyword"] == "tone"
     assert events[0]["confidence"] > 0
+    assert events[0]["top_3"][0]["word"] == "tone"
+
+
+def test_process_file_batches_candidate_windows_across_segments():
+    class CountingBackend(TinyBackend):
+        def __init__(self):
+            self.embed_many_calls = 0
+
+        def embed_many(self, waveforms):
+            self.embed_many_calls += 1
+            return super().embed_many(waveforms)
+
+    backend = CountingBackend()
+    profile = build_enrollment_profile(
+        {"tone": [_tone(440, 0.6), _tone(445, 0.62), _tone(435, 0.58)]},
+        backend,
+    )
+    backend.embed_many_calls = 0
+    wav = torch.cat(
+        [
+            torch.zeros(1, SR // 2),
+            _tone(440, 0.6),
+            torch.zeros(1, SR),
+            _tone(440, 0.6),
+            torch.zeros(1, SR // 2),
+        ],
+        dim=-1,
+    )
+    engine = RobustStreamingKWS(
+        backend,
+        profile,
+        config=StreamingDecisionConfig(cooldown_ms=100),
+    )
+
+    engine.process_file(wav)
+
+    assert len(energy_segments(wav, engine.config)) == 2
+    assert backend.embed_many_calls == 1

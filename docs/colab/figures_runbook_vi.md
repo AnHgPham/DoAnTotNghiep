@@ -4,12 +4,20 @@ Tài liệu này cho biết **ảnh nào còn thiếu** trong `report_ict2026_en
 chính xác từng ảnh**. Copy-paste từng cell vào Google Colab (hoặc chạy local) theo
 đúng thứ tự.
 
-## Tóm tắt: report cần đúng 2 ảnh bổ sung
+## Tóm tắt: report cần đúng 1 ảnh bổ sung (demo UI)
 
-| Ảnh | Nguồn | Vì sao chưa có sẵn |
+| Ảnh | Nguồn | Tình trạng |
 |---|---|---|
-| `assets/scaf_collapse.png` | **Colab** (vẽ từ log) | Cần log training thật của run SCAF+GE2E ở **full vocabulary 37k lớp** (log không nằm trong repo local). |
+| `assets/scaf_collapse.png` | **Local** (`make_collapse_figure.py`) | **ĐÃ TẠO.** Vẽ từ chỉ số cuối thật cap-620 (cùng nguồn `tab:matrix`), không cần Colab/train lại. |
 | `assets/demo_ui.png` | **Máy local** (chụp màn hình) | Chỉ là ảnh chụp web demo đang chạy. |
+
+> **Cập nhật 30/06:** `scaf_collapse.png` không còn cần Colab. Vì log per-epoch của
+> run SCAF+GE2E full-vocab không nằm trong repo, ta **không** vẽ đường-theo-epoch
+> (sẽ phải bịa số). Thay vào đó hình mới hiển thị **dấu hiệu sụp đổ** từ chỉ số GSC
+> test100 cuối cùng thật: AUC=50 (ngẫu nhiên), F1=0, keyword ACC=9,09% ($=1/11$),
+> FRR=100% (từ chối tất cả), trong khi ACC@1%FAR vẫn ~69% (gây hiểu nhầm). Tạo lại
+> bằng: `python docs/thesis/make_collapse_figure.py`. Phần Colab bên dưới chỉ còn
+> hữu ích **nếu** bạn muốn đường-theo-epoch thật và đã có log trên Drive.
 
 > Tất cả 18 ảnh còn lại (audio features, mel filterbank, kiến trúc DSCNN/EdgeSpot,
 > training curves Microset, ranked bar, effect deltas, data saturation, DET curve,

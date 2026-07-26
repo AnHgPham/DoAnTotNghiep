@@ -199,20 +199,33 @@ class EmbeddingBackend:
         self.sample_rate = sample_rate
         self.encoder.to(self.device).eval()
 
-    @torch.no_grad()
-    def embed(self, waveform: torch.Tensor) -> torch.Tensor:
+    @torch.inference_mode()
+    def embed_with_features(
+        self,
+        waveform: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Embed one waveform and return the already-computed feature map."""
         wav = pad_or_trim(waveform, self.sample_rate)
-        features = self.feature_extractor.extract(wav).unsqueeze(0).to(self.device)
-        emb = self.encoder(features)
+        features = self.feature_extractor.extract(wav)
+        emb = self.encoder(features.unsqueeze(0).to(self.device))
         emb = F.normalize(emb, p=2, dim=-1)
-        return emb.squeeze(0).cpu()
+        return emb.squeeze(0).cpu(), features.cpu()
 
-    @torch.no_grad()
+    @torch.inference_mode()
+    def embed(self, waveform: torch.Tensor) -> torch.Tensor:
+        embedding, _ = self.embed_with_features(waveform)
+        return embedding
+
+    @torch.inference_mode()
     def embed_many(self, waveforms: Sequence[torch.Tensor]) -> torch.Tensor:
-        return torch.stack([self.embed(w) for w in waveforms])
+        return self.embed_batch(waveforms)
 
-    @torch.no_grad()
-    def embed_batch(self, waveforms: Sequence[torch.Tensor]) -> torch.Tensor:
+    @torch.inference_mode()
+    def embed_batch(
+        self,
+        waveforms: Sequence[torch.Tensor],
+        batch_size: int = 64,
+    ) -> torch.Tensor:
         """Embed several waveforms in a single batched encoder forward.
 
         Numerically identical to calling :meth:`embed` on each waveform
@@ -221,15 +234,30 @@ class EmbeddingBackend:
         Returns a ``(N, d)`` tensor of L2-normalized embeddings on CPU.
         """
         if not waveforms:
-            return torch.empty(0)
-        feats = [
-            self.feature_extractor.extract(pad_or_trim(w, self.sample_rate)).unsqueeze(0)
-            for w in waveforms
-        ]
-        batch = torch.cat(feats, dim=0).to(self.device)
-        emb = self.encoder(batch)
-        emb = F.normalize(emb, p=2, dim=-1)
-        return emb.cpu()
+            embedding_dim = int(getattr(self.encoder, "embedding_dim", 0))
+            return torch.empty((0, embedding_dim), dtype=torch.float32)
+
+        if batch_size < 1:
+            raise ValueError("batch_size must be positive")
+
+        extract_batch = getattr(self.feature_extractor, "extract_batch", None)
+        outputs = []
+        for start in range(0, len(waveforms), batch_size):
+            batch = waveforms[start:start + batch_size]
+            prepared = torch.stack(
+                [pad_or_trim(w, self.sample_rate) for w in batch],
+                dim=0,
+            )
+            if callable(extract_batch):
+                features = extract_batch(prepared)
+            else:
+                features = torch.stack(
+                    [self.feature_extractor.extract(w) for w in prepared],
+                    dim=0,
+                )
+            emb = self.encoder(features.to(self.device))
+            outputs.append(F.normalize(emb, p=2, dim=-1).cpu())
+        return torch.cat(outputs, dim=0)
 
 
 @dataclass
@@ -374,7 +402,8 @@ def build_enrollment_profile(
             impostor_views.append(pad_or_trim(cropped, backend.sample_rate))
         impostor_embeddings = backend.embed_many(impostor_views) if impostor_views else None
 
-    keyword_profiles: dict[str, KeywordProfile] = {}
+    views_by_label: dict[str, list[torch.Tensor]] = {}
+    qualities_by_label: dict[str, list[AudioQuality]] = {}
     for label, wavs in samples.items():
         views: list[torch.Tensor] = []
         qualities: list[AudioQuality] = []
@@ -386,7 +415,19 @@ def build_enrollment_profile(
         if not views:
             continue
 
-        exemplars = backend.embed_many(views)
+        views_by_label[label] = views
+        qualities_by_label[label] = qualities
+
+    all_views = [view for views in views_by_label.values() for view in views]
+    all_embeddings = backend.embed_many(all_views) if all_views else None
+    keyword_profiles: dict[str, KeywordProfile] = {}
+    offset = 0
+    for label, views in views_by_label.items():
+        if all_embeddings is None:
+            break
+
+        exemplars = all_embeddings[offset:offset + len(views)]
+        offset += len(views)
         prototype = F.normalize(exemplars.mean(dim=0), p=2, dim=0)
         support_dists = torch.cdist(exemplars, prototype.view(1, -1)).squeeze(1)
         mean_d = float(support_dists.mean().item())
@@ -406,7 +447,7 @@ def build_enrollment_profile(
             threshold=threshold,
             support_distance_mean=mean_d,
             support_distance_std=std_d,
-            qualities=qualities,
+            qualities=qualities_by_label[label],
         )
 
     return EnrollmentProfile(keyword_profiles)

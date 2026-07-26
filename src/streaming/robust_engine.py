@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable
 
 import torch
@@ -56,8 +56,10 @@ class StreamingEvent:
     second_label: str | None
     speech_start_sec: float
     speech_end_sec: float
+    distances: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict:
+        ordered = sorted(self.distances.items(), key=lambda item: item[1])
         return {
             "state": "detected",
             "keyword": self.keyword,
@@ -72,6 +74,13 @@ class StreamingEvent:
             "second_label": self.second_label,
             "speech_start_sec": self.speech_start_sec,
             "speech_end_sec": self.speech_end_sec,
+            "all_distances": {
+                label: float(distance) for label, distance in ordered
+            },
+            "top_3": [
+                {"word": label, "dist": float(distance)}
+                for label, distance in ordered[:3]
+            ],
             "timestamp": time.time(),
         }
 
@@ -100,11 +109,9 @@ def energy_segments(
     if total < frame:
         return [(0, total)]
 
-    starts = list(range(0, total - frame + 1, hop))
-    energies = torch.tensor([
-        torch.sqrt(torch.mean(wav[s:s + frame].pow(2)) + 1e-8).item()
-        for s in starts
-    ])
+    frames = wav.unfold(0, frame, hop)
+    energies = torch.sqrt(frames.square().mean(dim=-1) + 1e-8)
+    starts = torch.arange(energies.numel(), dtype=torch.long) * hop
     max_energy = float(energies.max().item()) if energies.numel() else 0.0
     if max_energy <= 1e-6:
         return []
@@ -112,14 +119,14 @@ def energy_segments(
     threshold = max(0.0005, max_energy * cfg.energy_ratio)
     active: list[tuple[int, int]] = []
     cur_start: int | None = None
-    for start, energy in zip(starts, energies.tolist(), strict=True):
+    for start, energy in zip(starts.tolist(), energies.tolist()):
         if energy >= threshold and cur_start is None:
             cur_start = start
         elif energy < threshold and cur_start is not None:
             active.append((cur_start, start + frame))
             cur_start = None
     if cur_start is not None:
-        active.append((cur_start, starts[-1] + frame))
+        active.append((cur_start, int(starts[-1].item()) + frame))
 
     gap = int(cfg.sample_rate * 0.25)
     merged: list[tuple[int, int]] = []
@@ -199,45 +206,49 @@ class RobustStreamingKWS:
                 pass
         return energy_segments(waveform, self.config)
 
-    def _score_segment(
-        self,
-        waveform: torch.Tensor,
-        segment: tuple[int, int],
-    ) -> tuple[StreamingEvent | None, list[MatchResult]]:
-        wav = _mono(waveform)
-        total = wav.shape[-1]
-        candidates = _candidate_windows(segment, total, self.config)
-        scored: list[tuple[tuple[int, int], MatchResult]] = []
-
-        if candidates:
-            # Single batched forward over all candidate windows. This is
-            # numerically identical to scoring each window with backend.embed
-            # (encoder runs in eval mode -> batch-invariant outputs) but
-            # amortizes feature-extraction and forward-pass overhead.
-            windows = [wav[..., start:end] for start, end in candidates]
-            embeddings = self.backend.embed_batch(windows)
-            for (start, end), emb in zip(candidates, embeddings, strict=True):
-                result = self.profile.score(
-                    emb,
-                    min_margin=self.config.min_margin,
-                    threshold_scale=self.config.threshold_scale,
+    def _embed_windows(self, windows: list[torch.Tensor]) -> torch.Tensor:
+        if not windows:
+            return torch.empty((0, 0), dtype=torch.float32)
+        embed_batch = getattr(self.backend, "embed_batch", None)
+        if callable(embed_batch):
+            embeddings = embed_batch(windows)
+        else:
+            embed_many = getattr(self.backend, "embed_many", None)
+            if not callable(embed_many):
+                raise TypeError(
+                    "Embedding backend must provide embed_batch() or embed_many()"
                 )
-                scored.append(((start, end), result))
+            embeddings = embed_many(windows)
+        if len(windows) != len(embeddings):
+            raise RuntimeError(
+                "Embedding backend returned a different number of embeddings "
+                f"({len(embeddings)}) than candidate windows ({len(windows)})"
+            )
+        return embeddings
 
+    def _event_from_scored(
+        self,
+        segment: tuple[int, int],
+        scored: list[tuple[tuple[int, int], MatchResult]],
+    ) -> tuple[StreamingEvent | None, list[MatchResult]]:
         if not scored:
             return None, []
 
-        accepted = [(w, r) for w, r in scored if r.detected]
+        accepted = [(window, result) for window, result in scored if result.detected]
         if not accepted:
-            return None, [r for _, r in scored]
+            return None, [result for _, result in scored]
 
-        votes = Counter(r.label for _, r in accepted)
+        votes = Counter(result.label for _, result in accepted)
         best_label, vote_count = votes.most_common(1)[0]
         if vote_count < min(self.config.min_votes, len(accepted)):
-            return None, [r for _, r in scored]
+            return None, [result for _, result in scored]
 
         best_window, best_result = max(
-            [(w, r) for w, r in accepted if r.label == best_label],
+            [
+                (window, result)
+                for window, result in accepted
+                if result.label == best_label
+            ],
             key=lambda item: item[1].confidence,
         )
         start, end = best_window
@@ -254,8 +265,36 @@ class RobustStreamingKWS:
             second_label=best_result.second_label,
             speech_start_sec=seg_start / sr,
             speech_end_sec=seg_end / sr,
+            distances=best_result.distances,
         )
-        return event, [r for _, r in scored]
+        return event, [result for _, result in scored]
+
+    def _score_segment(
+        self,
+        waveform: torch.Tensor,
+        segment: tuple[int, int],
+    ) -> tuple[StreamingEvent | None, list[MatchResult]]:
+        wav = _mono(waveform)
+        total = wav.shape[-1]
+        candidates = _candidate_windows(segment, total, self.config)
+        scored: list[tuple[tuple[int, int], MatchResult]] = []
+
+        if candidates:
+            # Single batched forward over all candidate windows. This is
+            # numerically identical to scoring each window with backend.embed
+            # (encoder runs in eval mode -> batch-invariant outputs) but
+            # amortizes feature-extraction and forward-pass overhead.
+            windows = [wav[..., start:end] for start, end in candidates]
+            embeddings = self._embed_windows(windows)
+            for (start, end), emb in zip(candidates, embeddings):
+                result = self.profile.score(
+                    emb,
+                    min_margin=self.config.min_margin,
+                    threshold_scale=self.config.threshold_scale,
+                )
+                scored.append(((start, end), result))
+
+        return self._event_from_scored(segment, scored)
 
     def process_file(self, waveform: torch.Tensor) -> list[dict]:
         """Detect keywords in a complete audio tensor."""
@@ -263,9 +302,31 @@ class RobustStreamingKWS:
         events: list[StreamingEvent] = []
         cooldown = int(self.config.sample_rate * self.config.cooldown_ms / 1000)
         last_event_end = -10**12
+        total = wav.shape[-1]
+        groups = [
+            (segment, _candidate_windows(segment, total, self.config))
+            for segment in self._segments(wav)
+        ]
+        all_windows = [
+            wav[..., start:end]
+            for _, candidates in groups
+            for start, end in candidates
+        ]
+        all_embeddings = self._embed_windows(all_windows)
+        offset = 0
 
-        for segment in self._segments(wav):
-            event, _ = self._score_segment(wav, segment)
+        for segment, candidates in groups:
+            segment_embeddings = all_embeddings[offset:offset + len(candidates)]
+            offset += len(candidates)
+            scored = []
+            for window, embedding in zip(candidates, segment_embeddings):
+                result = self.profile.score(
+                    embedding,
+                    min_margin=self.config.min_margin,
+                    threshold_scale=self.config.threshold_scale,
+                )
+                scored.append((window, result))
+            event, _ = self._event_from_scored(segment, scored)
             if event is None:
                 continue
             event_start_sample = int(event.start_sec * self.config.sample_rate)

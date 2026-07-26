@@ -1,0 +1,13 @@
+run_tag	model_family	frontend	loss	edge_tau	epochs	episodes	status	started_at	finished_at
+dscnn_mfcc_triplet_full_mswc_12_combo_manifest20_smoke_e1_ep20	dscnn	mfcc	triplet		1	20	ok	2026-05-29 20:23:12	2026-05-29 20:26:08
+dscnn_mfcc_scaf_full_mswc_12_combo_manifest20_smoke_e1_ep20	dscnn	mfcc	scaf		1	20	ok	2026-05-29 20:26:08	2026-05-29 20:30:40
+dscnn_mfcc_ge2e_full_mswc_12_combo_manifest20_smoke_e1_ep20	dscnn	mfcc	ge2e		1	20	ok	2026-05-29 20:30:40	2026-05-29 20:34:35
+dscnn_mfcc_scaf_ge2e_full_mswc_12_combo_manifest20_smoke_e1_ep20	dscnn	mfcc	scaf_ge2e		1	20	ok	2026-05-29 20:34:35	2026-05-29 20:38:35
+dscnn_pcen_triplet_full_mswc_12_combo_manifest20_smoke_e1_ep20	dscnn	mel_pcen	triplet		1	20	ok	2026-05-29 20:38:35	2026-05-29 20:42:15
+dscnn_pcen_scaf_full_mswc_12_combo_manifest20_smoke_e1_ep20	dscnn	mel_pcen	scaf		1	20	ok	2026-05-29 20:42:15	2026-05-29 20:46:11
+dscnn_pcen_ge2e_full_mswc_12_combo_manifest20_smoke_e1_ep20	dscnn	mel_pcen	ge2e		1	20	ok	2026-05-29 20:46:12	2026-05-29 20:50:02
+dscnn_pcen_scaf_ge2e_full_mswc_12_combo_manifest20_smoke_e1_ep20	dscnn	mel_pcen	scaf_ge2e		1	20	ok	2026-05-29 20:50:02	2026-05-29 20:54:00
+edgespot_full_t4_pcen_triplet_full_mswc_12_combo_manifest20_smoke_e1_ep20	edgespot_full	mel_pcen	triplet	4	1	20	ok	2026-05-29 20:54:00	2026-05-29 20:57:43
+edgespot_full_t4_pcen_scaf_full_mswc_12_combo_manifest20_smoke_e1_ep20	edgespot_full	mel_pcen	scaf	4	1	20	ok	2026-05-29 20:57:43	2026-05-29 21:02:12
+edgespot_full_t4_pcen_ge2e_full_mswc_12_combo_manifest20_smoke_e1_ep20	edgespot_full	mel_pcen	ge2e	4	1	20	ok	2026-05-29 21:02:12	2026-05-29 21:05:52
+edgespot_full_t4_pcen_scaf_ge2e_full_mswc_12_combo_manifest20_smoke_e1_ep20	edgespot_full	mel_pcen	scaf_ge2e	4	1	20	ok	2026-05-29 21:05:52	2026-05-29 21:09:36

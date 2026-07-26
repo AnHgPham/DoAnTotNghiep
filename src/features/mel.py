@@ -102,6 +102,10 @@ class MelSpectrogramExtractor:
         self.center = center
 
         self.mel_filterbank = make_mel_filterbank(sample_rate, n_fft, n_mels)
+        self._tensor_cache: dict[
+            tuple[torch.device, torch.dtype],
+            tuple[torch.Tensor, torch.Tensor],
+        ] = {}
 
     def _pad_or_trim(self, waveform: torch.Tensor) -> torch.Tensor:
         if waveform.dim() == 1:
@@ -117,12 +121,31 @@ class MelSpectrogramExtractor:
             waveform = waveform[..., : self.target_length]
         return waveform
 
-    def extract(self, waveform: torch.Tensor) -> torch.Tensor:
-        """Extract a single mel feature map as ``(1, 40, 101)``."""
-        waveform = self._pad_or_trim(waveform)
-        window = torch.hann_window(self.win_length, device=waveform.device, dtype=waveform.dtype)
+    def _runtime_tensors(
+        self,
+        waveform: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        """Return cached STFT tensors for the input device and dtype."""
+        key = (waveform.device, waveform.dtype)
+        cached = self._tensor_cache.get(key)
+        if cached is None:
+            cached = (
+                torch.hann_window(
+                    self.win_length,
+                    device=waveform.device,
+                    dtype=waveform.dtype,
+                ),
+                self.mel_filterbank.to(device=waveform.device, dtype=waveform.dtype),
+            )
+            self._tensor_cache[key] = cached
+        return cached
+
+    def _extract_prepared(self, waveform: torch.Tensor) -> torch.Tensor:
+        window, fb = self._runtime_tensors(waveform)
+        leading_shape = waveform.shape[:-1]
+        flat_waveform = waveform.reshape(-1, waveform.shape[-1])
         spec = torch.stft(
-            waveform,
+            flat_waveform,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
             win_length=self.win_length,
@@ -134,12 +157,23 @@ class MelSpectrogramExtractor:
             return_complex=True,
         )
         power = spec.abs().pow(2.0)
-        fb = self.mel_filterbank.to(device=waveform.device, dtype=waveform.dtype)
         mel = torch.matmul(fb, power).clamp_min(1e-8)
         if self.log:
             mel = mel.log()
-        return mel
+        return mel.reshape(*leading_shape, mel.shape[-2], mel.shape[-1])
+
+    def extract(self, waveform: torch.Tensor) -> torch.Tensor:
+        """Extract a single mel feature map as ``(1, 40, 101)``."""
+        return self._extract_prepared(self._pad_or_trim(waveform))
 
     def extract_batch(self, waveforms: torch.Tensor) -> torch.Tensor:
         """Extract a batch as ``(B, 1, 40, 101)``."""
-        return torch.stack([self.extract(waveforms[i]) for i in range(waveforms.shape[0])])
+        if waveforms.dim() == 1:
+            waveforms = waveforms.unsqueeze(0).unsqueeze(0)
+        elif waveforms.dim() == 2:
+            waveforms = waveforms.unsqueeze(1)
+        elif waveforms.dim() != 3:
+            raise ValueError(
+                "waveforms must have shape (T,), (B, T), or (B, 1, T)"
+            )
+        return self._extract_prepared(self._pad_or_trim(waveforms))

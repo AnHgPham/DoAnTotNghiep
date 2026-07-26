@@ -1,5 +1,36 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import {
+  AlertCircle,
+  AudioLines,
+  AudioWaveform,
+  BarChart3,
+  BrainCircuit,
+  CheckCircle2,
+  CircleStop,
+  CircleX,
+  Cpu,
+  Download,
+  FileText,
+  FileUp,
+  FlaskConical,
+  Info,
+  Lightbulb,
+  Mic,
+  Microscope,
+  Play,
+  Radar,
+  RadioTower,
+  RefreshCw,
+  SearchCheck,
+  SlidersHorizontal,
+  Trash2,
+  Upload,
+  UserCheck,
+  X,
+  Zap,
+  type LucideIcon
+} from 'lucide-react';
 import { apiGet, apiPostForm, formFromObject } from './api';
 import { t } from './i18n';
 import type { TextKey } from './i18n';
@@ -109,8 +140,48 @@ function parseTimingJson(text: string): Timing[] {
 
 /* ------------------------------ Primitives ------------------------------ */
 
+const iconMap: Record<string, LucideIcon> = {
+  assessment: BarChart3,
+  biotech: Microscope,
+  bolt: Zap,
+  cancel: CircleX,
+  check_circle: CheckCircle2,
+  close: X,
+  delete: Trash2,
+  description: FileText,
+  download: Download,
+  error: AlertCircle,
+  graphic_eq: AudioLines,
+  how_to_reg: UserCheck,
+  info: Info,
+  lightbulb: Lightbulb,
+  memory: Cpu,
+  mic: Mic,
+  model_training: BrainCircuit,
+  play_arrow: Play,
+  radar: Radar,
+  record_voice_over: AudioWaveform,
+  refresh: RefreshCw,
+  science: FlaskConical,
+  search_check: SearchCheck,
+  settings_input_antenna: RadioTower,
+  stop_circle: CircleStop,
+  sync: RefreshCw,
+  tune: SlidersHorizontal,
+  upload: Upload,
+  upload_file: FileUp
+};
+
 function Icon({ name, className = '', fill = false }: { name: string; className?: string; fill?: boolean }) {
-  return <span className={`material-symbols-outlined ${fill ? 'fill' : ''} ${className}`.trim()}>{name}</span>;
+  const Component = iconMap[name] ?? Info;
+  return (
+    <Component
+      aria-hidden="true"
+      className={className}
+      size="1em"
+      strokeWidth={fill ? 2.5 : 2}
+    />
+  );
 }
 
 function Card({ title, actions, icon, children, className = '' }: {
@@ -121,7 +192,7 @@ function Card({ title, actions, icon, children, className = '' }: {
   className?: string;
 }) {
   return (
-    <section className={`glass-card rounded-xl p-5 md:p-stack-lg ${className}`}>
+    <section className={`glass-card min-w-0 rounded-xl p-5 md:p-stack-lg ${className}`}>
       {(title || actions) && (
         <div className="flex items-center justify-between gap-4 mb-stack-md flex-wrap">
           {title && (
@@ -236,14 +307,14 @@ function ModelCard({ profile, active, lang, onSelect }: {
       aria-current={active ? 'true' : undefined}
       disabled={!profile.exists}
       onClick={onSelect}
-      className={`text-left grid gap-3 min-h-[196px] p-5 rounded-xl border bg-surface-container-lowest transition-all hover-lift disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none ${active ? 'border-primary ring-2 ring-primary/25' : 'border-outline-variant'} ${profile.exists ? '' : 'border-dashed'}`}
+      className={`text-left grid w-full min-w-0 overflow-hidden gap-3 min-h-[196px] p-5 rounded-xl border bg-surface-container-lowest transition-all hover-lift disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-none ${active ? 'border-primary ring-2 ring-primary/25' : 'border-outline-variant'} ${profile.exists ? '' : 'border-dashed'}`}
     >
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex min-w-0 items-center justify-between gap-2">
         <Badge tone={active ? 'primary' : profile.exists ? 'success' : 'danger'}>
           <Icon name={active ? 'check_circle' : profile.exists ? 'bolt' : 'error'} className="text-[14px]" />
           {active ? t(lang, 'active') : profile.exists ? t(lang, 'ready') : t(lang, 'missing')}
         </Badge>
-        <span className="inline-flex max-w-[55%] items-center gap-1 px-2.5 py-1 rounded-full border border-outline-variant/60 bg-surface-container-high text-on-surface-variant font-metric-value text-metric-value" title={profile.checkpoint_name || 'checkpoint'}>
+        <span className="inline-flex min-w-0 max-w-[55%] overflow-hidden items-center gap-1 px-2.5 py-1 rounded-full border border-outline-variant/60 bg-surface-container-high text-on-surface-variant font-metric-value text-metric-value" title={profile.checkpoint_name || 'checkpoint'}>
           <span className="truncate">{profile.checkpoint_name || 'checkpoint'}</span>
         </span>
       </div>
@@ -251,7 +322,7 @@ function ModelCard({ profile, active, lang, onSelect }: {
       <p className="font-body-sm text-body-sm text-on-surface-variant line-clamp-2" title={profileText(profile, lang, 'description') || profileText(profile, lang, 'notes')}>{profileText(profile, lang, 'notes') || profileText(profile, lang, 'description')}</p>
       <div className="flex flex-wrap gap-2 mt-auto">
         {(profile.metrics || []).slice(0, 3).map((metric) => (
-          <span key={metric.label} className="inline-flex items-baseline gap-1 rounded-full border border-outline-variant bg-surface-container-low px-2.5 py-1 font-metric-value text-metric-value text-on-surface-variant">
+          <span key={metric.label} className="inline-flex min-w-0 max-w-full items-baseline gap-1 rounded-full border border-outline-variant bg-surface-container-low px-2.5 py-1 font-metric-value text-metric-value text-on-surface-variant">
             <strong className="text-primary">{metric.value}</strong>{metric.label}
           </span>
         ))}
@@ -304,6 +375,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<Tab>('enroll');
   const [profiles, setProfiles] = useState<ModelProfile[]>([]);
   const [activeProfile, setActiveProfile] = useState('');
+  const [showAllModels, setShowAllModels] = useState(false);
   const [profileToSwitch, setProfileToSwitch] = useState<ModelProfile | null>(null);
   const [enrollment, setEnrollment] = useState<EnrollmentStatus | null>(null);
   const [presets, setPresets] = useState<PresetResponse | null>(null);
@@ -353,6 +425,12 @@ export default function App() {
   const activeModel = useMemo(
     () => profiles.find((profile) => profile.id === activeProfile) || null,
     [profiles, activeProfile]
+  );
+  const visibleProfiles = useMemo(
+    () => showAllModels
+      ? profiles
+      : profiles.filter((profile) => profile.featured || profile.id === activeProfile),
+    [activeProfile, profiles, showAllModels]
   );
 
   const activeTabMeta = tabs.find((tab) => tab.id === activeTab) || tabs[0];
@@ -497,7 +575,7 @@ export default function App() {
 
   function openSetForm(): FormData {
     return formFromObject({
-      preset: 'gsc_17_17',
+      preset: 'manual',
       known_words: openKnown,
       unknown_words: openUnknown,
       samples_per_word: openK,
@@ -699,8 +777,8 @@ export default function App() {
               </button>
             }
           >
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">
-              {profiles.map((profile) => (
+            <div className="grid min-w-0 grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-gutter">
+              {visibleProfiles.map((profile) => (
                 <ModelCard
                   key={profile.id}
                   profile={profile}
@@ -710,6 +788,20 @@ export default function App() {
                 />
               ))}
             </div>
+            {profiles.length > visibleProfiles.length && (
+              <div className="mt-4 flex justify-center">
+                <button type="button" onClick={() => setShowAllModels(true)} className={btnGhost}>
+                  {t(lang, 'showAll')} {profiles.length}
+                </button>
+              </div>
+            )}
+            {showAllModels && profiles.some((profile) => !profile.featured) && (
+              <div className="mt-4 flex justify-center">
+                <button type="button" onClick={() => setShowAllModels(false)} className={btnGhost}>
+                  {t(lang, 'collapse')}
+                </button>
+              </div>
+            )}
             {activeModel && <p className="font-body-sm text-body-sm text-on-surface-variant mt-stack-md">{profileText(activeModel, lang, 'description')}</p>}
 
             <div className="mt-stack-md rounded-xl border border-outline-variant bg-surface-container-low p-4">
@@ -1029,10 +1121,11 @@ function DetectionResult({ result, lang, compact = false }: { result: DetectResu
           <Icon name={ok ? 'check_circle' : 'cancel'} className="text-[14px]" />{ok ? 'OK' : 'UNKNOWN'}
         </Badge>
       </div>
-      <div className="grid grid-cols-3 gap-3">
+      <div className={`grid gap-3 ${result.timing_ms ? 'grid-cols-2 md:grid-cols-4' : 'grid-cols-3'}`}>
         <Metric label="L2" value={num(result.distance, 4)} />
         <Metric label={t(lang, 'threshold')} value={num(result.threshold, 3)} />
         <Metric label="Margin" value={num(result.margin, 4)} />
+        {result.timing_ms && <Metric label={t(lang, 'latency')} value={`${num(result.timing_ms.total, 0)} ms`} tone="good" />}
       </div>
       <div className="rounded-lg border border-outline-variant bg-surface-container-low p-4">
         <strong className="font-metric-label text-metric-label uppercase text-primary">{t(lang, 'topCandidates')}</strong>
@@ -1232,15 +1325,19 @@ function LongResultView({ result, labels, timings, matches, lang }: {
     };
   });
   const missedRows = matches.rows.filter((row) => !row.ok);
+  const processingSpeed = result.timing_ms?.total
+    ? (result.duration * 1000) / result.timing_ms.total
+    : undefined;
 
   return (
     <div className="grid gap-stack-md mt-stack-md">
-      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
         <Metric label="Duration" value={`${num(result.duration, 1)}s`} />
         <Metric label="Expected" value={expectedCount || '-'} />
         <Metric label="Detected" value={result.results.length} />
         <Metric label="Matched" value={timings.length ? `${matches.matched}/${timings.length}` : '-'} tone={allAcc && allAcc > 0.8 ? 'good' : 'warn'} />
         <Metric label="Accuracy" value={allAcc === undefined ? '-' : pct(allAcc)} tone={metricTone(allAcc)} />
+        <Metric label={t(lang, 'processingSpeed')} value={processingSpeed ? `${num(processingSpeed, 1)}x` : '-'} tone={processingSpeed && processingSpeed >= 1 ? 'good' : 'warn'} />
       </div>
       <PolicyCards settings={result.settings} lang={lang} />
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

@@ -15,11 +15,6 @@
   }
 }
 
-/* Material Symbols fill variant (base class comes from the material-symbols package) */
-.material-symbols-outlined.fill {
-  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
-}
-
 /* Refined glassmorphism card */
 .glass-card {
   background: rgba(255, 255, 255, 0.72);

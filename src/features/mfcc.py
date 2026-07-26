@@ -44,6 +44,10 @@ class MFCCExtractor:
 
         self.mel_filterbank = make_mel_filterbank(sample_rate, self.n_fft, n_mfcc)
         self.dct_mat = self._make_dct(n_mfcc, n_mfcc)
+        self._tensor_cache: dict[
+            tuple[torch.device, torch.dtype],
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+        ] = {}
 
     @staticmethod
     def _make_dct(n_mfcc: int, n_mels: int) -> torch.Tensor:
@@ -76,20 +80,32 @@ class MFCCExtractor:
 
         return waveform
 
-    def extract(self, waveform: torch.Tensor) -> torch.Tensor:
-        """Extract MFCC features from a single waveform.
+    def _runtime_tensors(
+        self,
+        waveform: torch.Tensor,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Return device/dtype-specific tensors without rebuilding them per clip."""
+        key = (waveform.device, waveform.dtype)
+        cached = self._tensor_cache.get(key)
+        if cached is None:
+            cached = (
+                torch.hann_window(
+                    self.win_length,
+                    device=waveform.device,
+                    dtype=waveform.dtype,
+                ),
+                self.mel_filterbank.to(device=waveform.device, dtype=waveform.dtype),
+                self.dct_mat.to(device=waveform.device, dtype=waveform.dtype),
+            )
+            self._tensor_cache[key] = cached
+        return cached
 
-        Args:
-            waveform: (1, T) raw audio at sample_rate Hz.
-
-        Returns:
-            (1, T_frames, num_features) tensor.
-            For 1-sec audio: (1, 47, 10).
-        """
-        waveform = self._pad_or_trim(waveform)
-        window = torch.hann_window(self.win_length, device=waveform.device, dtype=waveform.dtype)
+    def _extract_prepared(self, waveform: torch.Tensor) -> torch.Tensor:
+        window, fb, dct = self._runtime_tensors(waveform)
+        leading_shape = waveform.shape[:-1]
+        flat_waveform = waveform.reshape(-1, waveform.shape[-1])
         spec = torch.stft(
-            waveform,
+            flat_waveform,
             n_fft=self.n_fft,
             hop_length=self.hop_length,
             win_length=self.win_length,
@@ -101,14 +117,16 @@ class MFCCExtractor:
             return_complex=True,
         )
         power = spec.abs().pow(2.0)
-        fb = self.mel_filterbank.to(device=waveform.device, dtype=waveform.dtype)
         mel = torch.matmul(fb, power).clamp_min(1e-10)
         log_mel = 10.0 * torch.log10(mel)
-        dct = self.dct_mat.to(device=waveform.device, dtype=waveform.dtype)
-        mfcc = torch.matmul(dct, log_mel)  # (1, n_mfcc, T_frames)
-        mfcc = mfcc.narrow(dim=-2, start=0, length=self.num_features)  # (1, 10, T_frames)
-        mfcc = mfcc.mT  # (1, T_frames, 10)
-        return mfcc
+        mfcc = torch.matmul(dct, log_mel)
+        mfcc = mfcc.narrow(dim=-2, start=0, length=self.num_features)
+        mfcc = mfcc.transpose(-2, -1)
+        return mfcc.reshape(*leading_shape, mfcc.shape[-2], mfcc.shape[-1])
+
+    def extract(self, waveform: torch.Tensor) -> torch.Tensor:
+        """Extract one waveform as ``(1, T_frames, num_features)``."""
+        return self._extract_prepared(self._pad_or_trim(waveform))
 
     def extract_batch(self, waveforms: torch.Tensor) -> torch.Tensor:
         """Extract MFCC features from a batch of waveforms.
@@ -120,9 +138,12 @@ class MFCCExtractor:
             (B, 1, T_frames, num_features) tensor.
             For 1-sec audio: (B, 1, 47, 10).
         """
-        batch_size = waveforms.shape[0]
-        results = []
-        for i in range(batch_size):
-            mfcc = self.extract(waveforms[i])  # (1, T_frames, num_features)
-            results.append(mfcc)
-        return torch.stack(results, dim=0)  # (B, 1, T_frames, num_features)
+        if waveforms.dim() == 1:
+            waveforms = waveforms.unsqueeze(0).unsqueeze(0)
+        elif waveforms.dim() == 2:
+            waveforms = waveforms.unsqueeze(1)
+        elif waveforms.dim() != 3:
+            raise ValueError(
+                "waveforms must have shape (T,), (B, T), or (B, 1, T)"
+            )
+        return self._extract_prepared(self._pad_or_trim(waveforms))

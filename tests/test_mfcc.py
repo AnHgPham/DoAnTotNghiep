@@ -30,6 +30,8 @@ def test_mfcc_batch():
     wavs = torch.randn(4, 1, 16000)
     mfcc = ext.extract_batch(wavs)
     assert mfcc.shape == (4, 1, 47, 10)
+    expected = torch.stack([ext.extract(wav) for wav in wavs])
+    assert torch.allclose(mfcc, expected, atol=1e-5, rtol=1e-5)
 
 
 def test_mfcc_num_features():

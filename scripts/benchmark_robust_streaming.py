@@ -15,6 +15,7 @@ import argparse
 import json
 import random
 import sys
+import time
 from pathlib import Path
 
 import torch
@@ -26,7 +27,9 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.features.mfcc import MFCCExtractor
+from src.features.mel import MelSpectrogramExtractor
 from src.models.dscnn import DSCNN
+from src.models.edgespot_full import EdgeSpotFull
 from src.streaming.enrollment import EmbeddingBackend, build_enrollment_profile
 from src.streaming.robust_engine import RobustStreamingKWS, StreamingDecisionConfig
 
@@ -159,6 +162,66 @@ def match_events(events: list[dict], timeline: list[dict], tolerance_sec: float 
     }
 
 
+def build_backend(
+    checkpoint: dict,
+    device: torch.device,
+    edge_tau: int,
+) -> tuple[EmbeddingBackend, str, str]:
+    """Build the checkpoint-matched model and feature frontend."""
+    model_family = str(checkpoint.get("model_family", "dscnn"))
+    frontend_type = checkpoint.get("frontend_type")
+    if not frontend_type:
+        feature_type = checkpoint.get("feature_type", "mfcc")
+        if feature_type == "mfcc":
+            frontend_type = "mfcc"
+        elif model_family == "dscnn":
+            frontend_type = "mel"
+        else:
+            frontend_type = "mel_pcen"
+    if frontend_type == "pcen":
+        frontend_type = "mel_pcen"
+    if frontend_type not in {"mfcc", "mel", "mel_pcen"}:
+        raise ValueError(f"Unsupported frontend_type: {frontend_type}")
+
+    use_pcen = frontend_type == "mel_pcen"
+    if model_family == "dscnn":
+        input_shape = (47, 10) if frontend_type == "mfcc" else (40, 101)
+        encoder = DSCNN(
+            model_size="L",
+            feature_mode="NORM",
+            input_shape=input_shape,
+            use_pcen=use_pcen,
+        )
+    elif model_family == "edgespot_full":
+        encoder = EdgeSpotFull(
+            tau=edge_tau,
+            embedding_dim=int(checkpoint.get("embedding_dim", 64)),
+            use_pcen=use_pcen,
+        )
+    else:
+        raise ValueError(
+            "Streaming benchmark supports dscnn and edgespot_full checkpoints; "
+            f"got {model_family!r}"
+        )
+
+    encoder.load_state_dict(checkpoint["model_state_dict"])
+    extractor = (
+        MFCCExtractor()
+        if frontend_type == "mfcc"
+        else MelSpectrogramExtractor()
+    )
+    backend = EmbeddingBackend(encoder, extractor, device=device)
+    backend.embed(torch.zeros(1, SR, dtype=torch.float32))
+    return backend, model_family, frontend_type
+
+
+def parse_int_tuple(raw: str) -> tuple[int, ...]:
+    values = tuple(int(value.strip()) for value in raw.split(",") if value.strip())
+    if not values:
+        raise argparse.ArgumentTypeError("expected at least one comma-separated integer")
+    return values
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Benchmark robust streaming KWS")
     parser.add_argument("--checkpoint", type=Path, required=True)
@@ -170,6 +233,18 @@ def main() -> None:
     parser.add_argument("--threshold-scale", type=float, default=1.0)
     parser.add_argument("--min-margin", type=float, default=0.05)
     parser.add_argument("--min-votes", type=int, default=2)
+    parser.add_argument("--edge-tau", type=int, default=4)
+    parser.add_argument("--device", choices=["auto", "cpu", "cuda"], default="auto")
+    parser.add_argument(
+        "--candidate-window-ms",
+        type=parse_int_tuple,
+        default=(600, 800, 1000, 1200),
+    )
+    parser.add_argument(
+        "--candidate-offsets-ms",
+        type=parse_int_tuple,
+        default=(-120, 0, 120),
+    )
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--output", type=Path, default=Path("results/robust_streaming_benchmark.json"))
     args = parser.parse_args()
@@ -177,11 +252,20 @@ def main() -> None:
     target_words = [w.strip().lower() for w in args.words.split(",") if w.strip()]
     unknown_words = [w for w in GSC_ALL_35 if w not in set(target_words)]
 
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    encoder = DSCNN(model_size="L").to(device)
+    if args.device == "cuda" and not torch.cuda.is_available():
+        raise RuntimeError("--device cuda requested but CUDA is unavailable")
+    device_name = (
+        "cuda" if args.device == "auto" and torch.cuda.is_available()
+        else "cpu" if args.device == "auto"
+        else args.device
+    )
+    device = torch.device(device_name)
     ckpt = torch.load(str(args.checkpoint), map_location=device, weights_only=False)
-    encoder.load_state_dict(ckpt["model_state_dict"])
-    encoder.eval()
+    backend, model_family, frontend_type = build_backend(
+        ckpt,
+        device=device,
+        edge_tau=args.edge_tau,
+    )
 
     stream, support, timeline = build_stream(
         args.gsc_dir,
@@ -193,20 +277,33 @@ def main() -> None:
         seed=args.seed,
     )
 
-    backend = EmbeddingBackend(encoder, MFCCExtractor(), device=device)
+    enrollment_started = time.perf_counter()
     profile = build_enrollment_profile(support, backend, views_per_sample=5)
+    enrollment_sec = time.perf_counter() - enrollment_started
     cfg = StreamingDecisionConfig(
         threshold_scale=args.threshold_scale,
         min_margin=args.min_margin,
         min_votes=args.min_votes,
+        candidate_window_ms=args.candidate_window_ms,
+        candidate_offsets_ms=args.candidate_offsets_ms,
     )
     engine = RobustStreamingKWS(backend, profile, config=cfg)
+    inference_started = time.perf_counter()
     events = engine.process_file(stream)
+    inference_sec = time.perf_counter() - inference_started
     metrics = match_events(events, timeline)
+    duration_sec = float(metrics["duration_sec"])
+    metrics["enrollment_wall_sec"] = enrollment_sec
+    metrics["inference_wall_sec"] = inference_sec
+    metrics["real_time_factor"] = inference_sec / max(duration_sec, 1e-6)
+    metrics["audio_x_realtime"] = duration_sec / max(inference_sec, 1e-6)
 
     payload = {
         "checkpoint": str(args.checkpoint),
         "epoch": ckpt.get("epoch"),
+        "model_family": model_family,
+        "frontend_type": frontend_type,
+        "device": str(device),
         "target_words": target_words,
         "k_shot": args.k_shot,
         "queries_per_word": args.queries_per_word,
@@ -214,6 +311,8 @@ def main() -> None:
             "threshold_scale": args.threshold_scale,
             "min_margin": args.min_margin,
             "min_votes": args.min_votes,
+            "candidate_window_ms": args.candidate_window_ms,
+            "candidate_offsets_ms": args.candidate_offsets_ms,
         },
         "metrics": metrics,
         "events": events,
