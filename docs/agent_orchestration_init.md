@@ -301,7 +301,7 @@ Before finalizing a non-trivial task:
 Known access pattern:
 
 ```bash
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
 tmux ls
 tmux attach -t kws_full_mswc

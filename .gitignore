@@ -97,7 +97,23 @@ reports/project_status/
 
 # ──────────────── Temp / external / scratch ────────────────
 .codex_tmp/
+.codex_tmp*/
 CodexPlusPlus/
+tmp/
+*.prebak
+
+# ──────────────── Local-only prep material (not for publication) ────────────────
+docs/learning/
+docs/presentation/
+docs/homepage.png
+docs/scaf_collapse.png
+docs/thesis/en_check-01.png
+docs/thesis/test_vi_out2.txt
+docs/thesis/thesis_en_2026_6.5cm.pdf
+docs/thesis/thesis_en_2026_9cm.pdf
+docs/thesis/thesis_en_2026_dr_noprof.pdf
+reports/colab_cap620_fixed_raw/
+reports/slide_audit_kws_2026/
 
 # LaTeX scratch & build artifacts in thesis dir
 docs/thesis/*.aux

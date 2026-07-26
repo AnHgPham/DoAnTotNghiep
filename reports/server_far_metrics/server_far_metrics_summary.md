@@ -1,6 +1,6 @@
 ﻿# Server FAR Metrics Summary
 
-Source: JSON files copied from ict6 `/storage/student4/an_kws/DoAnTotNghiep/results`.
+Source: JSON files copied from ict6 `/storage/<user>/an_kws/DoAnTotNghiep/results`.
 
 | Dataset/Run | Pipeline | Split | ACC@1%FAR | ACC@5%FAR | FRR@1%FAR | FRR@5%FAR | AUC | EER | F1 | Keyword ACC |
 |---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|

@@ -17,9 +17,9 @@ QUAN TRỌNG - trước khi chạy Colab: phải push 2 file mới/sửa lên Gi
 Đăng nhập và chạy nền trong tmux (K80 chậm nhưng miễn phí):
 
 ```bash
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
-cd /storage/student4/an_kws/DoAnTotNghiep
+cd /storage/<user>/an_kws/DoAnTotNghiep
 conda activate kws_cu102
 export CUDA_VISIBLE_DEVICES=4   # đổi sang GPU rảnh nếu cần (5/6/7 thường trống)
 
@@ -29,11 +29,11 @@ tmux new -s kws_top500_dscnn_scafge2e
 Trong tmux:
 
 ```bash
-cd /storage/student4/an_kws/DoAnTotNghiep
+cd /storage/<user>/an_kws/DoAnTotNghiep
 conda activate kws_cu102
 export CUDA_VISIBLE_DEVICES=4
 
-LOG=/storage/student4/an_kws/logs/top500_dscnn_scafge2e_e20_ep200.log
+LOG=/storage/<user>/an_kws/logs/top500_dscnn_scafge2e_e20_ep200.log
 TAG=dscnn_pcen_scafge2e_top500_full_e20_ep200
 
 python scripts/train.py --config configs/default.yaml \

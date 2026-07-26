@@ -75,9 +75,9 @@ Kết quả server: `3 passed`, bash syntax OK.
 Trạng thái đã quan sát trên ict6:
 
 - tmux session: `kws_manifest50_fixed`
-- runner: `/storage/student4/an_kws/DoAnTotNghiep/server/run_full_mswc_shortlist_manifest50.sh`
-- bootstrap log: `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_bootstrap.log`
-- wait log: `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_wait_gpu.log`
+- runner: `/storage/<user>/an_kws/DoAnTotNghiep/server/run_full_mswc_shortlist_manifest50.sh`
+- bootstrap log: `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_bootstrap.log`
+- wait log: `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_wait_gpu.log`
 - GPU: `4`
 - manifest mode: `source=clips`
 - manifest cap: `max_per_word=50`
@@ -149,7 +149,7 @@ Mốc có thể kiểm tra:
 
 - Sau manifest: xuất hiện `train_files_max50.json`, `val_files_max50.json`, `file_manifest_summary_max50.json`.
 - Khi train bắt đầu: log có dòng `Starting experiment: dscnn_pcen_ge2e...`.
-- Khi xong hoàn toàn: TSV có 2 dòng `ok/ok/ok` tại `/storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv`.
+- Khi xong hoàn toàn: TSV có 2 dòng `ok/ok/ok` tại `/storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv`.
 
 ## 8. Nội dung có thể báo cáo cho thầy hiện tại
 
@@ -171,12 +171,12 @@ Không nên báo cáo:
 ## 9. Lệnh kiểm tra tiếp
 
 ```bash
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
 tmux ls | grep kws_manifest50_fixed
-tail -n 80 /storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_bootstrap.log
-ls -lh /storage/student4/an_kws/DoAnTotNghiep/data/mswc_en/splits/*max50*
-cat /storage/student4/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv
+tail -n 80 /storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_bootstrap.log
+ls -lh /storage/<user>/an_kws/DoAnTotNghiep/data/mswc_en/splits/*max50*
+cat /storage/<user>/an_kws/logs/full_mswc_shortlist_manifest50_clips_e20_ep200_runs.tsv
 ```
 
 ## 10. Quyết định sau khi có kết quả `max50`

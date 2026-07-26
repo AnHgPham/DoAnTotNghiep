@@ -203,7 +203,7 @@ Các lần hỏng/chết đã gặp (ít nhất 5 loại):
 5. PyTorch 1.12 không hỗ trợ `torch.load(weights_only=False)` → phải patch `load_checkpoint` để fallback; relaunch phase-1 resume.
 6. ict14 vào được nhưng không có GPU/CUDA env phù hợp → không dùng để train được.
 
-Số liệu server lấy từ: `reports/server_far_metrics/server_far_metrics.csv` và log `/storage/student4/an_kws/logs/*.tsv` / `*.log`.
+Số liệu server lấy từ: `reports/server_far_metrics/server_far_metrics.csv` và log `/storage/<user>/an_kws/logs/*.tsv` / `*.log`.
 
 ## 10. Bảng tổng hợp cuối cùng (GSC test100)
 

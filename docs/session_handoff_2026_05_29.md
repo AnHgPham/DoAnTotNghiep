@@ -322,7 +322,7 @@ Mục tiêu matrix:
 Từ Windows:
 
 ```powershell
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ```
 
 Sau đó từ `frontend`:
@@ -334,7 +334,7 @@ ssh ict6
 Hoặc dùng ProxyJump trực tiếp từ local:
 
 ```powershell
-ssh -J student4@ictlab.usth.edu.vn:22222 student4@ict6
+ssh -J <user>@<lab-gateway>:<port> <user>@ict6
 ```
 
 ### 7.2. Working Directory
@@ -342,7 +342,7 @@ ssh -J student4@ictlab.usth.edu.vn:22222 student4@ict6
 Trên ict6:
 
 ```bash
-cd /storage/student4/an_kws/DoAnTotNghiep
+cd /storage/<user>/an_kws/DoAnTotNghiep
 ```
 
 ### 7.3. Conda Env Đúng
@@ -352,7 +352,7 @@ Không dùng base env vì PyTorch trong base là CUDA mới, driver server cũ k
 Env đúng:
 
 ```bash
-source /home/student4/anaconda3/etc/profile.d/conda.sh
+source /home/<user>/anaconda3/etc/profile.d/conda.sh
 conda activate kws_cu102
 export CUDA_VISIBLE_DEVICES=4
 ```
@@ -407,7 +407,7 @@ Session tmux:
 Full archive:
 
 ```text
-/storage/student4/an_kws/DoAnTotNghiep/data/mswc_en/en.tar.gz
+/storage/<user>/an_kws/DoAnTotNghiep/data/mswc_en/en.tar.gz
 size: 33G
 downloaded at: 2026-05-29 10:58
 ```
@@ -451,7 +451,7 @@ Ctrl+B rồi D
 Không nên dùng:
 
 ```bash
-du -sh /storage/student4/an_kws/DoAnTotNghiep/data/mswc_en/clips
+du -sh /storage/<user>/an_kws/DoAnTotNghiep/data/mswc_en/clips
 ```
 
 Lý do:
@@ -472,7 +472,7 @@ ssh: Could not resolve hostname ict14
 Cách đúng:
 
 ```powershell
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
 ```
 
@@ -557,7 +557,7 @@ Vấn đề nghiêm trọng:
 Vào server:
 
 ```powershell
-ssh -p 22222 student4@ictlab.usth.edu.vn
+ssh -p <port> <user>@<lab-gateway>
 ssh ict6
 ```
 
@@ -582,14 +582,14 @@ ps -p 2962205 -o pid,ppid,stat,etime,%cpu,%mem,wchan:24,cmd
 Xem tail log:
 
 ```bash
-tail -n 80 /storage/student4/an_kws/logs/kws_full_mswc.log
-tail -n 40 /storage/student4/an_kws/logs/kws_wait_then_matrix.log
+tail -n 80 /storage/<user>/an_kws/logs/kws_full_mswc.log
+tail -n 40 /storage/<user>/an_kws/logs/kws_wait_then_matrix.log
 ```
 
 Kiểm tra archive:
 
 ```bash
-ls -lh /storage/student4/an_kws/DoAnTotNghiep/data/mswc_en/en.tar.gz*
+ls -lh /storage/<user>/an_kws/DoAnTotNghiep/data/mswc_en/en.tar.gz*
 ```
 
 Không khuyến nghị dùng `du -sh clips` trong lúc extract.
@@ -616,7 +616,7 @@ Do `data/download_mswc.py` đã sửa, nếu lỗi sẽ fail thật.
 Cần kiểm tra:
 
 ```bash
-tail -n 120 /storage/student4/an_kws/logs/kws_full_mswc.log
+tail -n 120 /storage/<user>/an_kws/logs/kws_full_mswc.log
 ```
 
 Nếu lỗi NFS `Transport endpoint is not connected` tái diễn:
@@ -627,7 +627,7 @@ Nếu lỗi NFS `Transport endpoint is not connected` tái diễn:
 
 ```bash
 tmux kill-session -t kws_full_mswc 2>/dev/null || true
-tmux new-session -d -s kws_full_mswc "env MSWC_MIRROR=alibaba RUN_FIXED_FULL_MSWC_TRAIN=0 bash /storage/student4/an_kws/server_setup_full_mswc.sh"
+tmux new-session -d -s kws_full_mswc "env MSWC_MIRROR=alibaba RUN_FIXED_FULL_MSWC_TRAIN=0 bash /storage/<user>/an_kws/server_setup_full_mswc.sh"
 ```
 
 ### 11.3. Khi Matrix Bắt Đầu
@@ -635,8 +635,8 @@ tmux new-session -d -s kws_full_mswc "env MSWC_MIRROR=alibaba RUN_FIXED_FULL_MSW
 Theo dõi:
 
 ```bash
-tail -f /storage/student4/an_kws/logs/full_mswc_phase1_matrix.log
-tail -f /storage/student4/an_kws/logs/full_mswc_phase1_matrix_runs.tsv
+tail -f /storage/<user>/an_kws/logs/full_mswc_phase1_matrix.log
+tail -f /storage/<user>/an_kws/logs/full_mswc_phase1_matrix_runs.tsv
 ```
 
 Mục tiêu phase 1 nên là chạy ngắn/smoke trước nếu script có cấu hình nhỏ, vì full 16 tổ hợp có thể rất tốn GPU.
