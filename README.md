@@ -1,368 +1,175 @@
 # Few-Shot Open-Set Keyword Spotting
 
-## Locked Microset Result
+Bachelor thesis project (USTH — University of Science and Technology of Hanoi, defended July 2026).
+A keyword spotting system where a user enrolls a new keyword from only a few voice samples —
+no retraining — and the model both recognizes enrolled keywords and **rejects everything else**
+(open-set rejection), including in live microphone streaming.
 
-The current thesis baseline/result is locked on **MSWC Microset English official
-CSV split**. Do not tune against GSC test100 after this point.
+📄 **Thesis:** [docs/thesis/PhamHoangAn_23BI14002.pdf](docs/thesis/PhamHoangAn_23BI14002.pdf) ·
+🇻🇳 [Vietnamese version](docs/thesis/thesis_vi_2026.pdf) ·
+🎤 [Defense script](docs/defense_presentation_script_en.md)
 
-- Final model: `EdgeSpotFull T4 + SCAF+GE2E`.
-- Final checkpoint: `epoch_05.pt`.
-- Final GSC test100: `ACC@5% FAR = 86.12%`, `KW-ACC = 77.66%`, `F1 = 82.41%`.
-- Canonical manifest: `reports/microset/locked_results_manifest.json`.
-- Generated tables: `reports/microset/result_table.md`, `.csv`, `.tex`.
-- Thesis chapter draft: `docs/thesis_experiment_chapter_vi.md`.
+![Demo UI](docs/thesis/assets/homepage.png)
 
-Regenerate the result table after copying Colab JSON folders locally:
+## Results
 
-```bash
-python scripts/make_result_table.py --results-dir results --out-dir reports/microset --profile microset_en
+Evaluated on Google Speech Commands v2 with the `gsc_edgespot_exact` protocol:
+10-shot enrollment, word-disjoint train/eval vocabulary, mean ± std over 100 repeated runs
+(`test100`). Main metric is open-set accuracy at 1% false-accept rate.
+
+| Model | Encoder params | ACC@1%FAR | AUC | EER | F1 |
+|---|---|---|---|---|---|
+| **DSCNN-L + PCEN + GE2E** (flagship) | 413k | **86.36 ± 1.29** | 95.21 ± 0.45 | 11.32 ± 0.78 | 82.73 ± 1.11 |
+| **EdgeSpotFull T4 + PCEN + GE2E** (compact) | 131k | **82.87 ± 1.22** | 92.41 ± 0.44 | 14.82 ± 0.70 | 77.85 ± 0.97 |
+
+- Trained on **MSWC English** at scale: ~2.99M training clips across 37,387 words
+  (Colab A100 40GB), evaluated on GSC v2 with DEMAND noise augmentation.
+- The compact 131k-parameter model is competitive with, and slightly above, the
+  published EdgeSpot-4 reference mean (82.0 ACC@1%FAR, arXiv 2601.16316) under our
+  protocol — within run-to-run variance, and not claimed as a paper reproduction.
+- Architecture selection came from a **fixed 16-pipeline comparison**
+  ({DSCNN-L, EdgeSpotFull T4} × {MFCC, PCEN} × {Triplet, SCAF, GE2E, SCAF+GE2E})
+  under one frozen protocol, including an honest negative result: SCAF-based
+  objectives collapse to reject-all at 37k-class vocabulary scale
+  ([table](docs/reports/cap620_16_pipeline_test100_far1_compact_table_vi.md),
+  [collapse figure](docs/thesis/assets/scaf_collapse.png)).
+
+Key evidence documents:
+
+- [Final development-run summary](docs/reports/cap620_development_20260612_summary_vi.md) — headline numbers for both flagships
+- [16-pipeline screening table](docs/reports/cap620_16_pipeline_test100_far1_compact_table_vi.md)
+- [April–July training audit](docs/reports/project_timeline_training_audit_2026_04_to_07_vi.md) — evidence-graded log of ~66 training jobs across a Tesla K80 lab server and Colab A100
+- [Production demo verification](docs/session_handoff_2026_07_11_production_demo.md) — latency benchmarks, test counts
+
+## How It Works
+
+```text
+audio (16 kHz) ──► feature frontend ──► encoder ──► L2-normalized embedding
+                   (MFCC / mel /         (DSCNN-L or
+                    trainable PCEN)       EdgeSpotFull T4)
+enrollment: 3–10 samples per keyword ──► prototype embedding (mean)
+inference:  nearest-prototype L2 distance ──► threshold ──► keyword | reject
 ```
 
-## Current Training Workflow
+- **Few-shot enrollment** — new keywords from 3–5 recordings in the demo
+  (10-shot in benchmarks); prototypes only, no retraining.
+- **Open-set rejection** — global or per-keyword calibrated thresholds;
+  evaluated with ACC@FAR, AUC, EER, and DET curves.
+- **Metric learning** — episodic training with Triplet / GE2E / SCAF objectives;
+  trainable PCEN frontend + GE2E won for both encoders.
+- **Streaming engine** — VAD/energy segmentation, multi-window scoring, voting,
+  margin and cooldown for live microphone use ([src/streaming/](src/streaming/)).
+- **Knowledge-distillation infrastructure** (Wav2Vec2 teacher) exists in the
+  codebase but was not part of the defended headline results.
 
-Current recommended Colab workflow is command-based, not notebook-driven:
-
-- Use a blank Colab notebook as an A100/GPU terminal.
-- Copy cells from `docs/colab_microset_runbook_vi.md`.
-- Current temporary data profile: `MSWC Microset English`.
-- This is NOT Top500 full, NOT full MSWC, and NOT an EdgeSpot paper reproduction claim.
-- `notebooks/02_train_enhanced.ipynb` is legacy/experimental for now.
-- The current status note is in `docs/current_training_profile_vi.md`.
-
-Hệ thống nhận diện từ khóa few-shot cho đồ án tốt nghiệp: người dùng chỉ cần
-thu 3-5 mẫu cho mỗi từ khóa, hệ thống tạo prototype embedding và nhận diện từ
-khóa trong audio tĩnh hoặc luồng microphone streaming. Trọng tâm của project là
-open-set KWS: nhận đúng từ đã đăng ký và biết từ chối âm thanh không thuộc bộ từ
-khóa.
-
-## Điểm Chính
-
-- Few-shot enrollment: thêm từ mới bằng 3-5 mẫu WAV/microphone, không cần train
-  lại toàn bộ model.
-- Open-set rejection: dùng khoảng cách L2/prototype, threshold toàn cục hoặc
-  threshold riêng từng từ để giảm false alarm.
-- Streaming KWS: VAD/energy segmentation, multi-window scoring, voting, margin
-  và cooldown để dùng với microphone thực tế.
-- Model baseline: DSCNN-L + MFCC, ổn định cho báo cáo và demo.
-- Model thử nghiệm: EdgeSpot-lite với mel 40x101, trainable PCEN và temporal
-  attention, dùng để tiếp cận hướng EdgeSpot.
-- Training data: MSWC English cho train, Google Speech Commands v2 cho đánh giá,
-  DEMAND noise cho augmentation.
-- Colab workflow: cache MSWC WAV trên Google Drive để lần sau không phải convert
-  lại OPUS sang WAV.
-
-## Trạng Thái Khuyến Nghị
-
-- Train hien tai: dung Colab notebook trong va copy cells tu
-  `docs/colab_microset_runbook_vi.md`.
-- Data profile hien tai: `MSWC Microset English` tam thoi de tiet kiem
-  Colab units/disk. Day khong phai Top500 full, khong phai full MSWC,
-  va khong phai EdgeSpot paper reproduction.
-- `notebooks/02_train_enhanced.ipynb` va `notebooks/03_tier1_edgespot_colab.ipynb`
-  chi con la legacy/experimental references, khong phai workflow train chinh.
-- Khi co may/disk on dinh, tao runbook rieng cho `top500_full`; khong sua lan
-  vao runbook Microset.
-- Demo/eval: luon lay `best.pt` trong run tot nhat, khong dung `latest.pt` neu
-  checkpoint train tiep bi degrade.
-- Artifact lớn như `data/`, `checkpoints/`, `results/`, `outputs/`, `*.zip` không
-  được commit vào Git. Lưu chúng ở Google Drive hoặc ổ local.
-
-## Cài Đặt Local
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -U pip
-pip install -r requirements.txt
-```
-
-Nếu chạy trên máy không có GPU, project vẫn chạy được demo/eval nhỏ bằng CPU,
-nhưng training MSWC nên chạy trên Colab hoặc máy có CUDA.
-
-## Chuẩn Bị Dữ Liệu
-
-Google Speech Commands v2 dùng cho benchmark:
-
-```bash
-python data/download_gsc.py
-```
-
-MSWC Top500 local:
-
-```bash
-python data/download_mswc.py --top500-splits --max-per-word 0
-python data/convert_opus.py --delete-opus
-```
-
-MSWC cache trên Google Drive cho Colab:
-
-```bash
-python data/mswc_drive_cache.py \
-  --drive-project /content/drive/MyDrive/DoAnTotNghiep_output \
-  --split-mode top500 \
-  --max-per-word 0 \
-  --workers 2
-```
-
-Cache hợp lệ cần có `clips/<word>/*.wav`, `splits/train_words.json`,
-`splits/val_words.json` và coverage đủ cao cho train/val words. Khi cache hit,
-notebook symlink/copy dữ liệu về `data/mswc_en` để API training không đổi.
-
-MSWC Microset chinh thuc cua MLCommons, dung khi Colab/o dia khong du cho Top500/full:
-
-```bash
-python data/download_mswc_microset.py --language en --workers 2
-python scripts/mswc_data_report.py --data-dir data/mswc_microset_en
-```
-
-Train nhanh tren Microset:
-
-```bash
-python scripts/train.py \
-  --config configs/default.yaml \
-  --data-dir data/mswc_microset_en \
-  --model-family edgespot_full \
-  --edge-tau 4 \
-  --loss scaf_ge2e \
-  --run-tag edgespot_full_t4_scaf_ge2e_microset_en \
-  --epochs 20 \
-  --episodes 100 \
-  --num-workers 2
-```
-
-## Training
-
-Research/publication roadmap:
-
-```bash
-python scripts/research_readiness.py --data-profile microset_en
-python scripts/research_readiness.py --data-profile top500_full \
-  --results-root results \
-  --checkpoints-root checkpoints
-```
-
-DSCNN baseline sạch:
-
-```bash
-python scripts/train.py \
-  --config configs/default.yaml \
-  --model-family dscnn \
-  --loss triplet \
-  --run-tag dscnn_top500_full_clean \
-  --epochs 35 \
-  --episodes 200 \
-  --num-workers 2 \
-  --early-stop-patience 8 \
-  --early-stop-min-delta 0.001
-```
-
-Hard-pair ablation sau khi có confusion matrix:
-
-```bash
-python scripts/train.py \
-  --config configs/default.yaml \
-  --model-family dscnn \
-  --loss triplet \
-  --run-tag dscnn_top500_full_hard02 \
-  --hard-pairs-path results/hard_pairs.json \
-  --hard-pair-prob 0.2
-```
-
-EdgeSpot-lite thử nghiệm:
-
-```bash
-python scripts/train.py \
-  --config configs/default.yaml \
-  --model-family edgespot_lite \
-  --loss scaf \
-  --run-tag edgespot_lite_top500_scaf \
-  --epochs 35 \
-  --episodes 200 \
-  --num-workers 2
-```
-
-Tier-1 EdgeSpot reproduction:
-
-```bash
-# Model/parameter report for EdgeSpot-4 style encoder
-python scripts/model_report.py --family edgespot_full --tau 4
-
-# Train EdgeSpotFull with SCAF
-python scripts/train.py \
-  --config configs/default.yaml \
-  --model-family edgespot_full \
-  --edge-tau 4 \
-  --loss scaf \
-  --run-tag edgespot_full_t4_scaf \
-  --epochs 40 \
-  --episodes 600 \
-  --num-workers 2
-
-# GE2E hybrid objective
-python scripts/train.py \
-  --config configs/default.yaml \
-  --model-family edgespot_full \
-  --edge-tau 4 \
-  --loss scaf_ge2e \
-  --run-tag edgespot_full_t4_scaf_ge2e
-```
-
-Wav2Vec2 teacher KD workflow:
-
-```bash
-python scripts/precompute_teacher_embeddings.py \
-  --data-dir data/mswc_en \
-  --split train \
-  --output-dir outputs/teacher_w2v2_train \
-  --batch-size 16
-
-python scripts/train.py \
-  --config configs/default.yaml \
-  --model-family edgespot_full \
-  --edge-tau 4 \
-  --loss kd_scaf_ge2e \
-  --teacher-embeddings-dir outputs/teacher_w2v2_train \
-  --run-tag edgespot_full_t4_kd_scaf_ge2e
-```
-
-## Evaluation
-
-Đánh giá few-shot open-set trên GSC:
-
-```bash
-python scripts/evaluate.py \
-  --config configs/default.yaml \
-  --checkpoint checkpoints/<run_tag>/best.pt \
-  --protocol gsc_fixed \
-  --k-shot 5 \
-  --plot-det
-
-python scripts/evaluate.py \
-  --config configs/default.yaml \
-  --checkpoint checkpoints/<run_tag>/best.pt \
-  --protocol gsc_random \
-  --k-shot 5 \
-  --plot-det
-```
-
-Benchmark streaming/robustness:
-
-```bash
-python scripts/benchmark_robust_streaming.py \
-  --checkpoint checkpoints/<run_tag>/best.pt \
-  --gsc-dir data/gsc_v2 \
-  --k-shot 5
-```
-
-Canonical EdgeSpot-style benchmark with true silence:
-
-```bash
-python scripts/evaluate_edgespot_protocol.py \
-  --checkpoint checkpoints/<run_tag>/best.pt \
-  --model-family edgespot_full \
-  --edge-tau 4 \
-  --k-shot 10 \
-  --n-runs 100 \
-  --gsc-query-split test \
-  --output-dir results/edgespot_exact/<run_tag>
-
-python scripts/make_research_tables.py results/edgespot_exact/<run_tag>/*_results.json
-```
-
-Các metric quan trọng:
-
-- `keyword_acc`: độ chính xác khi audio là một keyword đã biết.
-- `open_set_acc@5% FAR`: độ chính xác open-set tại false accept rate 5%.
-- `FRR@5% FAR`: tỉ lệ bỏ sót keyword khi FAR được cố định ở 5%.
-- `false_alarms_per_hour`: số lần báo nhầm trong streaming.
-- `miss_rate`: tỉ lệ không phát hiện keyword trong audio dài.
-- `latency_ms`: độ trễ từ lúc nói xong đến lúc hệ thống phát hiện.
-
-## Demo
-
-Gradio demo:
-
-```bash
-python src/demo/app.py
-```
-
-FastAPI + web UI:
+## Demo (FastAPI + React)
 
 ```bash
 python -m src.demo.api_server
 ```
 
-Sau đó mở `http://127.0.0.1:8000`.
+Then open `http://127.0.0.1:8000`. Measured on a local CPU: ~30 ms median
+single-utterance inference; a 23 s file processed at ~8.5× real-time via batched
+long-audio detection.
 
-Demo hỗ trợ:
+- Enroll keywords from GSC samples or live microphone; save/load profiles
+- Single, batch, and long-audio detection with per-response latency metrics
+- Live microphone streaming over WebSocket
+- Open-set testing and per-keyword threshold calibration
+- Two verified model profiles switchable at runtime (flagship / compact)
+- Bilingual EN/VI, responsive desktop + mobile UI
 
-- enroll keyword từ GSC hoặc microphone;
-- lưu/load enrollment profile;
-- detect audio ngắn;
-- detect file dài;
-- streaming microphone qua WebSocket;
-- open-set test với threshold toàn cục hoặc threshold riêng từng từ.
+Frontend dev build (React 19 + TypeScript + Vite + Tailwind):
 
-## Cấu Trúc Repo
+```bash
+cd src/demo/ui
+npm install
+npm run build
+```
+
+## Quickstart
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+python -m pytest tests -q   # 165 tests
+```
+
+Dataset preparation (datasets are **not** committed to the repo):
+
+```bash
+python data/download_gsc.py                          # GSC v2 (evaluation)
+python data/download_mswc_microset.py --language en  # small MSWC subset (quick start)
+```
+
+Training and evaluation (full options in `scripts/train.py --help`):
+
+```bash
+# Train (episodic few-shot, e.g. flagship pipeline)
+python scripts/train.py --config configs/default.yaml \
+  --model-family dscnn --loss ge2e --run-tag dscnn_pcen_ge2e_demo
+
+# Canonical open-set benchmark
+python scripts/evaluate_edgespot_protocol.py \
+  --checkpoint checkpoints/<run_tag>/best.pt \
+  --model-family dscnn --k-shot 10 --n-runs 100 \
+  --gsc-query-split test --output-dir results/edgespot_exact/<run_tag>
+
+# Streaming robustness benchmark
+python scripts/benchmark_robust_streaming.py \
+  --checkpoint checkpoints/<run_tag>/best.pt --gsc-dir data/gsc_v2 --k-shot 5
+```
+
+Full-scale MSWC training ran on Colab A100 — runbooks under [docs/colab/](docs/colab/).
+
+## Repository Structure
 
 ```text
-configs/              YAML cấu hình model, data, training, evaluation
-data/                 Script download/cache dataset, không commit dataset thật
-docs/                 Tài liệu báo cáo, proposal, phân tích thí nghiệm
-notebooks/            Legacy/experimental notebooks; workflow hien tai o docs/colab_microset_runbook_vi.md
-scripts/              Train, evaluate, benchmark, confusion analysis
+configs/       YAML configs for model, data, training, evaluation
+data/          Dataset download/cache scripts (no raw data committed)
+docs/          Thesis (EN/VI + LaTeX sources), defense script, reports, runbooks
+scripts/       Train, evaluate, benchmark, analysis, figure generation
 src/
-  classifiers/        OpenNCM, OpenMAX, energy OOD classifiers
-  data/               Dataset loaders cho MSWC/GSC
-  demo/               Gradio app, FastAPI backend, static web UI
-  enhancements/       Denoising và speaker verification optional
-  evaluation/         Protocols, metrics, DET curves
-  features/           MFCC, mel, PCEN, augmentation, SpecAugment
-  models/             DSCNN, BCResNetFS, EdgeSpot-lite/full, Triplet/ArcFace/SCAF/GE2E
-  streaming/          VAD/energy streaming engines
-tests/                Unit tests và smoke tests
+  classifiers/   OpenNCM, OpenMAX, energy OOD classifiers
+  data/          MSWC/GSC dataset loaders
+  demo/          FastAPI backend + React web UI (+ legacy Gradio app)
+  evaluation/    Protocols, metrics, DET curves
+  features/      MFCC, mel, trainable PCEN, augmentation, SpecAugment
+  models/        DSCNN, BCResNetFS, EdgeSpot-lite/full; Triplet/ArcFace/SCAF/GE2E heads
+  streaming/     VAD/energy streaming engines
+tests/         165 unit + integration tests
+reports/       Committed result tables and raw evaluation evidence
 ```
+
+## Tech Stack
+
+PyTorch + torchaudio · FastAPI + uvicorn (WebSocket streaming) ·
+React 19 + TypeScript + Vite + Tailwind CSS · pytest ·
+Datasets: MSWC English (train), Google Speech Commands v2 (eval), DEMAND (noise) ·
+Training hardware: Colab A100 40GB (final runs), Tesla K80 lab server (screening,
+code kept Python 3.9 compatible)
 
 ## Artifact Policy
 
-Không commit các thư mục/file sau:
+Datasets, checkpoints (`*.pt`), and training outputs are intentionally not
+committed — the repo contains source code, configs, tests, documentation, and
+lightweight result evidence only.
 
-- `data/gsc_v2`, `data/mswc_en`, `data/demand`
-- `checkpoints/`
-- `results/`
-- `outputs/`
-- `runs/`, `wandb/`, `logs/`
-- `*.pt`, `*.pth`, `*.ckpt`, `*.zip`, `*.rar`
-- `__pycache__/`, `*.pyc`
+---
 
-Khi cần chia sẻ model hoặc kết quả, nén riêng artifact hoặc lưu trên Google
-Drive. Git chỉ nên chứa source code, config, notebook, test và tài liệu nhẹ.
+## Tóm tắt (Tiếng Việt)
 
-## Test
+Đồ án tốt nghiệp (USTH, bảo vệ 07/2026): hệ thống nhận diện từ khóa few-shot
+open-set — người dùng thu 3–5 mẫu giọng nói để đăng ký từ khóa mới (không cần
+train lại), hệ thống nhận đúng từ đã đăng ký và từ chối âm thanh lạ, hoạt động
+cả với microphone streaming. Kết quả chính: DSCNN-L + PCEN + GE2E đạt
+**86.36% ACC@1%FAR** trên GSC test100, train trên ~3 triệu clip MSWC tiếng Anh
+(Colab A100). Kèm demo production FastAPI + React (suy luận ~30 ms trên CPU),
+bộ thí nghiệm 16 pipeline có kiểm soát, và luận văn song ngữ Anh–Việt trong
+[docs/thesis/](docs/thesis/).
 
-```bash
-python -m pytest tests -q
-```
+## References
 
-Nhóm test hiện kiểm tra feature shapes, model forward, metrics, open-set
-classifier, MSWC Drive cache và streaming engine.
-
-## Hướng Phát Triển
-
-Ưu tiên thực tế để tăng chất lượng demo:
-
-1. Hoàn thiện streaming state machine và threshold calibration theo từng từ.
-2. Thêm benchmark audio dài: false alarm/hour, miss rate, latency, duplicate
-   detection.
-3. Train lại trên streaming-style augmentation: silence, noise, unknown speech,
-   keyword offset ngẫu nhiên.
-4. Dùng hard negative/impostor bank cho enrollment 3-5 mẫu.
-5. Sau khi baseline ổn, mở phase EdgeSpot đầy đủ với Wav2Vec2 teacher KD.
-
-## Tham Khảo
-
-- EdgeSpot: Efficient and High-Performance Few-Shot Model for Keyword Spotting,
-  arXiv 2601.16316.
-- Google Speech Commands v2.
-- Multilingual Spoken Words Corpus.
-- Few-shot open-set KWS và query-by-example KWS literature.
+- EdgeSpot: Efficient and High-Performance Few-Shot Model for Keyword Spotting — arXiv 2601.16316
+- Google Speech Commands v2 · Multilingual Spoken Words Corpus (MSWC) · DEMAND noise corpus
